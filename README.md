@@ -18,8 +18,7 @@ info!("Your rust version is {}", version)?;
 
 ## Complete example
 
-```rust
-mod cmd_lib;
+```rustmod cmd_lib;
 use cmd_lib::{info, output, run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
@@ -29,7 +28,7 @@ fn foo() -> CmdResult {
 }
 
 fn get_year() -> FunResult {
-    run_fun!("ls /")
+    run_fun!("date +%Y")
 }
 
 fn main() -> CmdResult {
@@ -37,7 +36,7 @@ fn main() -> CmdResult {
         info!("Failed to run foo()");
     }
 
-    if get_year()? == "2019" {
+    if get_year()?.trim() == "2019" {
         info!("You are in year 2019");
     } else {
         info!("Which year are you in ?");
@@ -53,8 +52,8 @@ Running ["sleep", "3"] ...
 Running ["ls", "/nofile"] ...
 ls: cannot access '/nofile': No such file or directory
 Failed to run foo()
-Running ["ls", "/"] ...
-Which year are you in ?
+Running ["date", "+%Y"] ...
+You are in year 2019
 ```
 
 ## Related
