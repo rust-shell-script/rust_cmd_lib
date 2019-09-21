@@ -7,19 +7,19 @@ easy in rust programming language.
 ## run_cmd! --> CmdResult
 ```
 let name = "rust";
-run_cmd!("hello, {}", name);
+run_cmd!("echo hello, {}", name);
 ```
 
 ## run_fun! --> FunResult
 ```
 let version = run_fun!("rustc --version")?;
-info!("Your rust version is {}", version)?;
+info!("Your rust version is {}", version);
 ```
 
 ## Complete example
 
 ```rustmod cmd_lib;
-use cmd_lib::{info, output, run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     run_cmd!("sleep 3")?;
