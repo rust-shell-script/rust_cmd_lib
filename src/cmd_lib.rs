@@ -16,7 +16,7 @@ macro_rules! info {
 #[macro_export]
 macro_rules! output {
     ($($arg:tt)*) => {
-        $create::cmd_lib::output(format!($($arg)*))
+        $crate::cmd_lib::output(format!($($arg)*))
     }
 }
 
