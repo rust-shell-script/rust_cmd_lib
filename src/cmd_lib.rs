@@ -23,16 +23,14 @@ macro_rules! output {
 #[macro_export]
 macro_rules! run_cmd {
     ($($arg:tt)*) => {
-        $crate::cmd_lib::run_cmd(
-            $crate::cmd_lib::split_cmd_args(&mut format!($($arg)*)).as_ref());
+        $crate::cmd_lib::run_cmd(format!($($arg)*));
     }
 }
 
 #[macro_export]
 macro_rules! run_fun {
     ($($arg:tt)*) => {
-        $crate::cmd_lib::run_fun(
-            $crate::cmd_lib::split_cmd_args(&mut format!($($arg)*)).as_ref());
+        $crate::cmd_lib::run_fun(format!($($arg)*));
     }
 }
 
@@ -53,28 +51,28 @@ where
 }
 
 #[doc(hidden)]
-pub fn run_cmd(full_command: &[&str]) -> CmdResult {
-    info!("Running {:?} ...", full_command);
-    let command = &full_command[0];
-    let status = process::Command::new(command)
-        .args(&full_command[1..])
-        .status()?;
+pub fn run_cmd(full_command: String) -> CmdResult {
+    let args = parse_args(&full_command);
+    let argv = parse_argv(&args);
+
+    info!("Running {:?} ...", argv);
+    let status = process::Command::new(&argv[0]).args(&argv[1..]).status()?;
     if !status.success() {
-        Err(to_io_error(command, status))
+        Err(to_io_error(&argv[0], status))
     } else {
         Ok(())
     }
 }
 
 #[doc(hidden)]
-pub fn run_fun(full_command: &[&str]) -> FunResult {
-    info!("Running {:?} ...", full_command);
-    let command = &full_command[0];
-    let output = process::Command::new(command)
-        .args(&full_command[1..])
-        .output()?;
+pub fn run_fun(full_command: String) -> FunResult {
+    let args = parse_args(&full_command);
+    let argv = parse_argv(&args);
+
+    info!("Running {:?} ...", argv);
+    let output = process::Command::new(&argv[0]).args(&argv[1..]).output()?;
     if !output.status.success() {
-        Err(to_io_error(command, output.status))
+        Err(to_io_error(&argv[0], output.status))
     } else {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
@@ -88,12 +86,28 @@ fn to_io_error(command: &str, status: ExitStatus) -> Error {
     }
 }
 
-#[doc(hidden)]
-pub fn split_cmd_args(s: &mut str) -> Vec<&str> {
-    let s = s.trim_start();
-    let first_space = s.find(char::is_whitespace);
-    match first_space {
-        None => vec![s],
-        Some(c) => vec![&s[..c], s[c..].trim_start()],
-    }
+fn parse_args(s: &str) -> String {
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    s.chars()
+        .map(|c| {
+            if c == '"' && !in_single_quote {
+                in_double_quote = !in_double_quote;
+                '\n'
+            } else if c == '\'' && !in_double_quote {
+                in_single_quote = !in_single_quote;
+                '\n'
+            } else if !in_single_quote && !in_double_quote && char::is_whitespace(c) {
+                '\n'
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+fn parse_argv(s: &str) -> Vec<&str> {
+    s.split("\n")
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<&str>>()
 }
