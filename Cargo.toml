@@ -1,6 +1,14 @@
 [package]
 name = "cmd_lib"
-version = "0.1.0"
+description = "Common rust commandline macros and utils, to write shell script like tasks easily"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/rust-shell-script/rust_cmd_lib"
+repository = "https://github.com/rust-shell-script/rust_cmd_lib"
+documentation = "https://docs.rs/cmd_lib"
+keywords = ["shell", "scripts", "commandline", "cli", "pipe"]
+categories = ["command-line-interface", "command-line-utilities"]
+readme = "README.md"
+version = "0.1.5"
 authors = ["rust-shell-script <rust-shell-script@gmail.com>"]
 edition = "2018"
 

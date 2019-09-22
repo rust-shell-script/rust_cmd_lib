@@ -1,7 +1,7 @@
-# rust_cmd_lib - Rust command line library
+# cmd_lib - Rust command line library
 
 Common rust command line macros and utils, to write shell script like tasks
-easy in rust programming language.
+easily in rust programming language.
 
 
 ## run_cmd! --> CmdResult
@@ -26,8 +26,7 @@ info!("There are {} words in above sentence", n.trim());
 ## Complete example
 
 ```rust
-mod cmd_lib;
-use cmd_lib::{CmdResult, FunResult};
+use cmd_lib::{info, run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     run_cmd!("sleep 3")?;
