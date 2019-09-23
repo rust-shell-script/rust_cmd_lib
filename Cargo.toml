@@ -8,7 +8,7 @@ documentation = "https://docs.rs/cmd_lib"
 keywords = ["shell", "scripts", "commandline", "cli", "pipe"]
 categories = ["command-line-interface", "command-line-utilities"]
 readme = "README.md"
-version = "0.2.3"
+version = "0.2.5"
 authors = ["rust-shell-script <rust-shell-script@gmail.com>"]
 edition = "2018"
 

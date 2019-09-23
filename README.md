@@ -26,6 +26,30 @@ let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w")?;
 info!("There are {} words in above sentence", n.trim());
 ```
 
+## run_cmds! --> CmdResult
+
+Run multiple commands in one block. If any command fails, just return Err(...).
+Each command should end with ';'.
+
+```rust
+run_cmds! {
+    ls / | wc -w;
+    echo "bad cmd";
+    ls -l /nofile;
+    date;
+}
+```
+output:
+```bash
+INFO: Running "ls  /| wc  -w" ...
+31
+INFO: Running "echo "bad cmd"" ...
+bad cmd
+INFO: Running "ls  -l  /nofile" ...
+ls: cannot access '/nofile': No such file or directory
+Error: Custom { kind: Other, error: " ls  -l  /nofile  exit with 2" }
+```
+
 ## Easy Reporting
 ```rust
 info!("Running command xxx ...");
@@ -44,7 +68,7 @@ FATAL: Command exit unexpectedly: disk is full
 ## Complete Example
 
 ```rust
-use cmd_lib::{run, CmdResult, FunResult};
+use cmd_lib::{run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     run_cmd!("sleep 3")?;
