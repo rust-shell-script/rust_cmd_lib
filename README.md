@@ -5,7 +5,7 @@ easily in rust programming language.
 
 
 ## run_cmd! --> CmdResult
-```
+```rust
 let name = "rust";
 run_cmd!("echo hello, {}", name);
 
@@ -17,7 +17,7 @@ run_cmd!(du -ah . | sort -hr | head -n 10);
 ```
 
 ## run_fun! --> FunResult
-```
+```rust
 let version = run_fun!("rustc --version")?;
 info!("Your rust version is {}", version.trim());
 
@@ -26,10 +26,25 @@ let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w")?;
 info!("There are {} words in above sentence", n.trim());
 ```
 
-## Complete example
+## Easy Reporting
+```rust
+info!("Running command xxx ...");
+warn!("Running command failed");
+err!("Copying failed");
+die!("Command exit unexpectedly: {}", reason);
+```
+output:
+```bash
+INFO: Running command xxx ...
+WARN: Running command failed
+ERROR: Copying file failed
+FATAL: Command exit unexpectedly: disk is full
+```
+
+## Complete Example
 
 ```rust
-use cmd_lib::{info, run, CmdResult, FunResult};
+use cmd_lib::{run, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     run_cmd!("sleep 3")?;
@@ -46,7 +61,7 @@ fn main() -> CmdResult {
     info!("Top 5 directories:\n{}", result.trim());
 
     if !foo().is_ok() {
-        info!("Failed to run foo()");
+        warn!("Failed to run foo()");
     }
 
     if get_year()?.trim() == "2019" {
@@ -61,19 +76,19 @@ fn main() -> CmdResult {
 
 output:
 ```bash
-Running "du -ah . | sort -hr | head -n 5" ...
-Top 5 directories:
-18M .
+INFO: Running "du -ah . | sort -hr | head -n 5" ...
+INFO: Top 5 directories:
+5.1M    .
 2.7M    ./main
-2.6M    ./pipe3
-2.6M    ./pipe2
-2.6M    ./echo
-Running "sleep 3" ...
-Running "ls /nofile" ...
+2.4M    ./main2
+8.0K    ./lib.rs
+4.0K    ./main.rs
+INFO: Running "sleep 3" ...
+INFO: Running "ls /nofile" ...
 ls: cannot access '/nofile': No such file or directory
-Failed to run foo()
-Running "date +%Y" ...
-You are in year 2019
+WARN: Failed to run foo()
+INFO: Running "date +%Y" ...
+INFO: You are in year 2019
 ```
 
 ## Related

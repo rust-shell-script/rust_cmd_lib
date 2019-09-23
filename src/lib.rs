@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::io::{Read, Error, ErrorKind};
 use std::process::{Command, Stdio, ExitStatus,Child, ChildStdout};
 use std::collections::VecDeque;
@@ -7,14 +6,48 @@ pub type FunResult = Result<String, std::io::Error>;
 pub type CmdResult = Result<(), std::io::Error>;
 type PipeResult = Result<(Child, ChildStdout), std::io::Error>;
 
-/// To display information to stderr, no return value
+/// To print warning information to stderr, no return value
 /// ```rust
 /// info!("Running command xxx ...");
 /// ```
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
-        $crate::info(format!($($arg)*))
+        eprintln!("INFO: {}", format!($($arg)*));
+    }
+}
+
+/// To print warning information to stderr, no return value
+/// ```rust
+/// warn!("Running command failed");
+/// ```
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)*) => {
+        eprintln!("WARN: {}", format!($($arg)*));
+    }
+}
+
+/// To print error information to stderr, no return value
+/// ```rust
+/// err!("Copying file failed");
+/// ```
+#[macro_export]
+macro_rules! err {
+    ($($arg:tt)*) => {
+        eprintln!("ERROR: {}", format!($($arg)*));
+    }
+}
+
+/// To print information to stderr, and exit current process with non-zero
+/// ```rust
+/// die!("command failed: {}", reason);
+/// ```
+#[macro_export]
+macro_rules! die {
+    ($($arg:tt)*) => {
+        eprintln!("FATAL: {}", format!($($arg)*));
+        std::process::exit(1);
     }
 }
 
@@ -27,7 +60,7 @@ macro_rules! info {
 #[macro_export]
 macro_rules! output {
     ($($arg:tt)*) => {
-        $crate::output(format!($($arg)*))
+        Ok(format!($($arg)*)) as FunResult
     }
 }
 
@@ -104,22 +137,6 @@ macro_rules! run_fun {
     ($($arg:tt)*) => {
         $crate::run(format!($($arg)*))
     };
-}
-
-#[doc(hidden)]
-pub fn info<S>(msg: S)
-where
-    S: Into<String> + Display,
-{
-    eprintln!("{}", msg);
-}
-
-#[doc(hidden)]
-pub fn output<S>(msg: S) -> FunResult
-where
-    S: Into<String>,
-{
-    Ok(msg.into())
 }
 
 #[doc(hidden)]
