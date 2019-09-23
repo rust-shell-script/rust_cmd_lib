@@ -39,12 +39,21 @@ macro_rules! output {
 ///
 /// // pipe commands are also supported
 /// run_cmd!("du -ah . | sort -hr | head -n 10");
+///
+/// // work without string quote
+/// run_cmd!(du -ah . | sort -hr | head -n 10);
 /// ```
 #[macro_export]
 macro_rules! run_cmd {
-    ($($arg:tt)*) => {
-        $crate::run_cmd(format!($($arg)*))
-    }
+   ($($arg:tt)*) => {
+       match run_fun!($($arg)*) {
+           Err(e) => Err(e),
+           Ok(s) => {
+               print!("{}", s);
+               Ok(())
+           }
+       }
+   };
 }
 
 /// ## run_fun! --> FunResult
@@ -55,12 +64,46 @@ macro_rules! run_cmd {
 /// // with pipes
 /// let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w")?;
 /// info!("There are {} words in above sentence", n.trim());
+///
+/// // without string quote
+/// let files = run_fun!(du -ah . | sort -hr | head -n 10)?;
 /// ```
 #[macro_export]
 macro_rules! run_fun {
+    // use {{ to work around bug:
+    // https://github.com/rust-lang/rust/issues/53667
+    ($x:ident $($other:tt)*) => {{
+        let mut s = String::from(stringify!($x));
+        run_fun!(&s; $($other)*)
+    }};
+    (&$s:expr; $x:ident $($other:tt)*) => {{
+        $s += " ";
+        $s += stringify!($x);
+        run_fun!(&$s; $($other)*)
+    }};
+    (&$s:expr; --$x:ident $($other:tt)*) => {{
+        $s += " --";
+        $s += stringify!($x);
+        run_fun!(&$s; $($other)*)
+    }};
+    (&$s:expr; -$x:ident $($other:tt)*) => {{
+        $s += " -";
+        $s += stringify!($x);
+        run_fun!(&$s; $($other)*)
+    }};
+    (&$s:expr; $x:tt $($other:tt)*) => {{
+        $s += " ";
+        $s += stringify!($x);
+        run_fun!(&$s; $($other)*)
+    }};
+    (&$s:expr;) => {
+        $crate::run($s)
+    };
+
+    // normal: start with string
     ($($arg:tt)*) => {
-        $crate::run_fun(format!($($arg)*))
-    }
+        $crate::run(format!($($arg)*))
+    };
 }
 
 #[doc(hidden)]
@@ -115,21 +158,7 @@ pub fn run_pipe(full_command: &str) -> PipeResult {
 }
 
 #[doc(hidden)]
-pub fn run_cmd(full_command: String) -> CmdResult {
-    let (mut proc, mut output) = run_pipe(&full_command)?;
-    let status = proc.wait()?;
-    if !status.success() {
-        Err(to_io_error(&full_command, status))
-    } else {
-        let mut s = String::new();
-        output.read_to_string(&mut s)?;
-        print!("{}", s);
-        Ok(())
-    }
-}
-
-#[doc(hidden)]
-pub fn run_fun(full_command: String) -> FunResult {
+pub fn run(full_command: String) -> FunResult {
     let (mut proc, mut output) = run_pipe(&full_command)?;
     let status = proc.wait()?;
     if !status.success() {

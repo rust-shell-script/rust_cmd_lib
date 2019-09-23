@@ -11,6 +11,9 @@ run_cmd!("echo hello, {}", name);
 
 // pipe commands are also supported
 run_cmd!("du -ah . | sort -hr | head -n 10");
+
+// also work without string quote
+run_cmd!(du -ah . | sort -hr | head -n 10);
 ```
 
 ## run_fun! --> FunResult
@@ -26,7 +29,7 @@ info!("There are {} words in above sentence", n.trim());
 ## Complete example
 
 ```rust
-use cmd_lib::{info, run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{info, run, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     run_cmd!("sleep 3")?;
