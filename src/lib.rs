@@ -273,42 +273,47 @@ fn filter_spaces(s: &str) -> String {
     let mut is_dash = false;
     let mut is_slash = false;
     let mut is_plus = false;
+    let mut is_dot = false;
+    let mut is_star = false;
     s.chars()
-        .map(|c| {
-            if c == '"' && !in_single_quote {
+        .filter(|c| {
+            if *c == '"' && !in_single_quote {
                 in_double_quote = !in_double_quote;
-            } else if c == '\'' && !in_double_quote {
+            } else if *c == '\'' && !in_double_quote {
                 in_single_quote = !in_single_quote;
             }
 
             if !in_single_quote && !in_double_quote {
-                if c == '+' {
-                    is_plus = true;
-                    ' '
-                } else if c == '-' {
-                    is_dash = true;
-                    ' '
-                } else if c == '/' {
-                    is_slash = true;
-                    ' '
-                } else if c == ' ' {
-                    if is_plus {
-                        is_plus = false;
-                        '+'
-                    } else if is_dash {
-                        is_dash = false;
-                        '-'
-                    } else if is_slash {
-                        is_slash = false;
-                        '/'
-                    } else {
-                        c
-                    }
-                } else {
-                    c
+                match *c {
+                    '.' => { is_dot = true; true},
+                    '+' => { is_plus = true; true},
+                    '-' => { is_dash = true; true},
+                    '*' => { is_star = true; true},
+                    '/' => { is_slash = true; true},
+                    ' ' => {
+                        if is_dot {
+                            is_dot = false;
+                            false
+                        } else if is_plus {
+                            is_plus = false;
+                            false
+                        } else if is_dash {
+                            is_dash = false;
+                            false
+                        } else if is_star {
+                            is_star = false;
+                            false
+                        } else if is_slash {
+                            is_slash = false;
+                            false
+                        } else {
+                            true
+                        }
+                    },
+                    _ => true,
                 }
             } else {
-                c
+                true
             }
         })
         .collect()
