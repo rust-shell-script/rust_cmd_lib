@@ -32,22 +32,29 @@ Run multiple commands in one block. If any command fails, just return Err(...).
 Each command should end with ';'.
 
 ```rust
-run_cmds! {
+if ! run_cmds! {
     ls / | wc -w;
     echo "bad cmd";
     ls -l /nofile;
     date;
+}.is_ok() {
+    warn!("Run group command failed");
 }
 ```
+
 output:
 ```bash
+INFO: Running "ls  /| wc  -w" ...
+31
+INFO: Running "date" ...
+Mon Sep 23 23:10:55 PDT 2019
 INFO: Running "ls  /| wc  -w" ...
 31
 INFO: Running "echo "bad cmd"" ...
 bad cmd
 INFO: Running "ls  -l  /nofile" ...
 ls: cannot access '/nofile': No such file or directory
-Error: Custom { kind: Other, error: " ls  -l  /nofile  exit with 2" }
+WARN: run group command failed
 ```
 
 ## Easy Reporting

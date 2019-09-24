@@ -139,12 +139,12 @@ macro_rules! run_cmds {
         run_cmds!(&$s; $($other)*)
     }};
     (&$s:expr;) => {
-        $crate::run_cmds(&$s, true)?;
+        $crate::run_cmds(&$s, true)
     };
 
     // normal: start with string
     ($($arg:tt)*) => {
-        $crate::run_cmds(&format!($($arg)*), false)?;
+        $crate::run_cmds(&format!($($arg)*), false)
     };
 }
 
