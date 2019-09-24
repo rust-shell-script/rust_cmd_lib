@@ -100,51 +100,39 @@ macro_rules! run_fun {
 /// // work without string quote
 /// run_cmd!(du -ah . | sort -hr | head -n 10);
 /// ```
-#[macro_export]
-macro_rules! run_cmd {
-   ($cmd:ident $($arg:tt)*) => {
-       $crate::run_cmd(&format!("{} {}", stringify!($cmd), stringify!($($arg)*)), true)
-   };
-   ($($arg:tt)*) => {
-       $crate::run_cmd(&format!($($arg)*), false)
-   };
-}
-
-///
-/// ## run_cmds! --> CmdResult
-/// if any command fails, just return Err(...)
-/// ```rust
-/// run_cmds!{
-///     date
-///     ls -l /file
+/// // or a group of commands
+/// // if any command fails, just return Err(...)
+/// run_cmd!{
+///     date;
+///     ls -l /file;
 /// }
 /// ```
 #[macro_export]
-macro_rules! run_cmds {
+macro_rules! run_cmd {
     // use {{ to work around bug:
     // https://github.com/rust-lang/rust/issues/53667
     ($x:ident $($other:tt)*) => {{
         let mut s = String::from(stringify!($x));
-        run_cmds!(&s; $($other)*)
+        run_cmd!(&s; $($other)*)
     }};
     (&$s:expr; $x:tt $($other:tt)*) => {{
         $s += " ";
         $s += stringify!($x);
-        run_cmds!(&$s; $($other)*)
+        run_cmd!(&$s; $($other)*)
     }};
     (&$s:expr; $x:tt; $($other:tt)*) => {{
         $s += " ";
         $s += stringify!($x);
         $s += ";";
-        run_cmds!(&$s; $($other)*)
+        run_cmd!(&$s; $($other)*)
     }};
     (&$s:expr;) => {
-        $crate::run_cmds(&$s, true)
+        $crate::run_cmd(&$s, true)
     };
 
     // normal: start with string
     ($($arg:tt)*) => {
-        $crate::run_cmds(&format!($($arg)*), false)
+        $crate::run_cmd(&format!($($arg)*), false)
     };
 }
 
@@ -206,23 +194,7 @@ pub fn run_fun(full_cmd: &str, need_filter: bool) -> FunResult {
 }
 
 #[doc(hidden)]
-pub fn run_cmd(full_cmd: &str, need_filter: bool) -> CmdResult {
-    let full_cmd = if need_filter {
-        filter_spaces(full_cmd)
-    } else {
-        full_cmd.into()
-    };
-    match run(&full_cmd) {
-        Err(e) => Err(e),
-        Ok(s) => {
-            print!("{}", s);
-            Ok(())
-        }
-    }
-}
-
-#[doc(hidden)]
-pub fn run_cmds(cmds: &str, need_filter: bool) -> CmdResult {
+pub fn run_cmd(cmds: &str, need_filter: bool) -> CmdResult {
     let cmds = if need_filter {
         filter_spaces(cmds)
     } else {
