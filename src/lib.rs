@@ -144,9 +144,12 @@ macro_rules! macro_str {
 /// ```
 #[macro_export]
 macro_rules! run_fun {
-    ($($arg:tt)*) => {
-        $crate::run_fun(&macro_str!(run_fun))
-    };
+   ($cmd:ident $($arg:tt)*) => {
+       $crate::run_fun(&macro_str!(run_fun))
+   };
+   ($($arg:tt)*) => {
+       $crate::run_fun(&format!($($arg)*))
+   };
 }
 
 
@@ -171,9 +174,12 @@ macro_rules! run_fun {
 /// ```
 #[macro_export]
 macro_rules! run_cmd {
-    ($($arg:tt)*) => {
-        $crate::run_cmd(&macro_str!(run_cmd))
-    };
+   ($cmd:ident $($arg:tt)*) => {
+       $crate::run_cmd(&macro_str!(run_cmd))
+   };
+   ($($arg:tt)*) => {
+       $crate::run_cmd(&format!($($arg)*))
+   };
 }
 
 #[doc(hidden)]
