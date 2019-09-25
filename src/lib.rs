@@ -66,6 +66,8 @@ macro_rules! output {
 
 // XX: hack here to return orignal macro string
 // In future, use proc macro or wait for std provide such a macro
+#[doc(hidden)]
+#[macro_export]
 macro_rules! macro_str {
     ($macro:ident) => {{
         let macro_name = stringify!($macro);
@@ -163,7 +165,7 @@ macro_rules! run_fun {
 ///
 /// // work without string quote
 /// run_cmd!(du -ah . | sort -hr | head -n 10);
-/// ```
+///
 /// // or a group of commands
 /// // if any command fails, just return Err(...)
 /// run_cmd!{
