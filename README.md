@@ -55,7 +55,7 @@ FATAL: Command exit unexpectedly: disk is full
 ## Complete Example
 
 ```rust
-use cmd_lib::{info, warn, run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{info, warn, output, run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     run_cmd!("sleep 3")?;
@@ -64,7 +64,8 @@ fn foo() -> CmdResult {
 }
 
 fn get_year() -> FunResult {
-    run_fun!("date +%Y")
+    let year = run_fun!("date +%Y")?;
+    output!("{}", year.trim())
 }
 
 fn main() -> CmdResult {
@@ -75,7 +76,7 @@ fn main() -> CmdResult {
         warn!("Failed to run foo()");
     }
 
-    if get_year()?.trim() == "2019" {
+    if get_year()? == "2019" {
         info!("You are in year 2019");
     } else {
         info!("Which year are you in ?");
