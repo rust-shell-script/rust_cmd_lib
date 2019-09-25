@@ -66,7 +66,6 @@ macro_rules! output {
 
 // XX: hack here to return orignal macro string
 // In future, use proc macro or wait for std provide such a macro
-#[macro_export]
 macro_rules! macro_str {
     ($macro:ident) => {{
         let macro_name = stringify!($macro);
@@ -145,7 +144,7 @@ macro_rules! macro_str {
 #[macro_export]
 macro_rules! run_fun {
    ($cmd:ident $($arg:tt)*) => {
-       $crate::run_fun(&macro_str!(run_fun))
+       $crate::run_fun(&$crate::macro_str!(run_fun))
    };
    ($($arg:tt)*) => {
        $crate::run_fun(&format!($($arg)*))
@@ -175,7 +174,7 @@ macro_rules! run_fun {
 #[macro_export]
 macro_rules! run_cmd {
    ($cmd:ident $($arg:tt)*) => {
-       $crate::run_cmd(&macro_str!(run_cmd))
+       $crate::run_cmd(&$crate::macro_str!(run_cmd))
    };
    ($($arg:tt)*) => {
        $crate::run_cmd(&format!($($arg)*))

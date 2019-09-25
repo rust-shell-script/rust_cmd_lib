@@ -55,7 +55,7 @@ FATAL: Command exit unexpectedly: disk is full
 ## Complete Example
 
 ```rust
-use cmd_lib::{info, warn, macro_str, run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{info, warn, run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     run_cmd!("sleep 3")?;
