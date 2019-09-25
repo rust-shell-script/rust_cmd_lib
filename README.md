@@ -18,10 +18,10 @@ run_cmd!(du -ah . | sort -hr | head -n 10);
 // or a group of commands
 // if any command fails, just return Err(...)
 if run_cmd! {
-    ls / | wc -w;
-    echo "bad cmd";
-    ls -l /nofile;
-    date;
+    ls / | wc -w
+    echo "bad cmd"
+    ls -l /nofile
+    date
 }.is_err() {
     warn!("Run group command failed");
 }

@@ -64,6 +64,72 @@ macro_rules! output {
     }
 }
 
+// XX: hack here to return orignal macro string
+// In future, use proc macro or wait for std provide such a macro
+#[macro_export]
+macro_rules! macro_str {
+    ($macro:ident) => {{
+        let macro_name = stringify!($macro);
+        let mut macro_str = String::new();
+        let src = String::from(format!("{}/{}",
+                                       env!("CARGO_MANIFEST_DIR"),
+                                       file!()));
+        let target_line = line!() as usize;
+	let file: Vec<char> = std::fs::read_to_string(src)
+	    .expect("error reading file")
+	    .chars()
+	    .collect();
+	let len = file.len();
+        let mut i: usize = 0;
+        let mut line = 1;
+	while i < len {
+            if file[i] == '\n' {
+                line += 1;
+            }
+            if line == target_line {
+                let cmp_str: String = file[i..i+macro_name.len()].iter().collect();
+                if cmp_str == macro_name {
+                    i += macro_name.len()+1;
+                    while file[i] != '{' && file[i] != '(' {
+                        i += 1;
+                    }
+                    i += 1;
+                    let with_quote = file[i] == '"';
+                    let mut in_single_quote = false;
+                    let mut in_double_quote = false;
+                    if with_quote {
+                        in_double_quote = true;
+                        i += 1;
+                    }
+                    loop {
+                        if (file[i] == '}' ||
+                            file[i] == ')') &&
+                           !in_single_quote &&
+                           !in_double_quote {
+                            break;
+                        }
+
+                        if file[i] == '"' && !in_single_quote {
+                            in_double_quote = !in_double_quote;
+                        } else if file[i] == '\'' && !in_double_quote {
+                            in_single_quote = !in_single_quote;
+                        }
+
+                        macro_str.push(file[i]);
+                        i += 1;
+                    }
+                    if with_quote {
+                        macro_str.pop();
+                    }
+                    break;
+                }
+            }
+            i += 1;
+        }
+        macro_str
+    }}
+}
+
 /// ## run_fun! --> FunResult
 /// ```rust
 /// let version = run_fun!("rustc --version")?;
@@ -78,15 +144,11 @@ macro_rules! output {
 /// ```
 #[macro_export]
 macro_rules! run_fun {
-   // without string quotes
-   ($cmd:ident $($arg:tt)*) => {
-       $crate::run_fun(&format!("{} {}", stringify!($cmd), stringify!($($arg)*)), true)
-   };
-   // normal: start with string
-   ($($arg:tt)*) => {
-       $crate::run_fun(&format!($($arg)*), false)
-   };
+    ($($arg:tt)*) => {
+        $crate::run_fun(&macro_str!(run_fun))
+    };
 }
+
 
 ///
 /// ## run_cmd! --> CmdResult
@@ -103,36 +165,14 @@ macro_rules! run_fun {
 /// // or a group of commands
 /// // if any command fails, just return Err(...)
 /// run_cmd!{
-///     date;
-///     ls -l /file;
+///     date
+///     ls -l /file
 /// }
 /// ```
 #[macro_export]
 macro_rules! run_cmd {
-    // use {{ to work around bug:
-    // https://github.com/rust-lang/rust/issues/53667
-    ($x:ident $($other:tt)*) => {{
-        let mut s = String::from(stringify!($x));
-        run_cmd!(&s; $($other)*)
-    }};
-    (&$s:expr; $x:tt $($other:tt)*) => {{
-        $s += " ";
-        $s += stringify!($x);
-        run_cmd!(&$s; $($other)*)
-    }};
-    (&$s:expr; $x:tt; $($other:tt)*) => {{
-        $s += " ";
-        $s += stringify!($x);
-        $s += ";";
-        run_cmd!(&$s; $($other)*)
-    }};
-    (&$s:expr;) => {
-        $crate::run_cmd(&$s, true)
-    };
-
-    // normal: start with string
     ($($arg:tt)*) => {
-        $crate::run_cmd(&format!($($arg)*), false)
+        $crate::run_cmd(&macro_str!(run_cmd))
     };
 }
 
@@ -184,23 +224,13 @@ fn run(full_cmd: &str) -> FunResult {
 }
 
 #[doc(hidden)]
-pub fn run_fun(full_cmd: &str, need_filter: bool) -> FunResult {
-    let full_cmd = if need_filter {
-        filter_spaces(full_cmd)
-    } else {
-        full_cmd.into()
-    };
-    run(&full_cmd)
+pub fn run_fun(full_cmd: &str) -> FunResult {
+    run(full_cmd)
 }
 
 #[doc(hidden)]
-pub fn run_cmd(cmds: &str, need_filter: bool) -> CmdResult {
-    let cmds = if need_filter {
-        filter_spaces(cmds)
-    } else {
-        cmds.into()
-    };
-    let cmd_args = parse_cmds(&cmds);
+pub fn run_cmd(cmds: &str) -> CmdResult {
+    let cmd_args = parse_cmds(cmds);
     let cmd_argv = parse_argv(&cmd_args);
     for cmd in cmd_argv {
         match run(cmd) {
@@ -262,58 +292,6 @@ fn parse_seps(s: &str, sep: char) -> String {
                 '\n'
             } else {
                 c
-            }
-        })
-        .collect()
-}
-
-fn filter_spaces(s: &str) -> String {
-    let mut in_single_quote = false;
-    let mut in_double_quote = false;
-    let mut is_dash = false;
-    let mut is_slash = false;
-    let mut is_plus = false;
-    let mut is_dot = false;
-    let mut is_star = false;
-    s.chars()
-        .filter(|c| {
-            if *c == '"' && !in_single_quote {
-                in_double_quote = !in_double_quote;
-            } else if *c == '\'' && !in_double_quote {
-                in_single_quote = !in_single_quote;
-            }
-
-            if !in_single_quote && !in_double_quote {
-                match *c {
-                    '.' => { is_dot = true; true},
-                    '+' => { is_plus = true; true},
-                    '-' => { is_dash = true; true},
-                    '*' => { is_star = true; true},
-                    '/' => { is_slash = true; true},
-                    ' ' => {
-                        if is_dot {
-                            is_dot = false;
-                            false
-                        } else if is_plus {
-                            is_plus = false;
-                            false
-                        } else if is_dash {
-                            is_dash = false;
-                            false
-                        } else if is_star {
-                            is_star = false;
-                            false
-                        } else if is_slash {
-                            is_slash = false;
-                            false
-                        } else {
-                            true
-                        }
-                    },
-                    _ => true,
-                }
-            } else {
-                true
             }
         })
         .collect()
