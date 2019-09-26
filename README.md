@@ -18,10 +18,12 @@ run_cmd!(du -ah . | sort -hr | head -n 10);
 // or a group of commands
 // if any command fails, just return Err(...)
 if run_cmd! {
-    ls / | wc -w
-    echo "bad cmd"
-    ls -l /nofile
-    date
+    use keyword, file;
+
+    cat ${file} | grep ${keyword};
+    echo "bad cmd";
+    ls -l /nofile;
+    date;
 }.is_err() {
     warn!("Run group command failed");
 }
@@ -58,9 +60,12 @@ FATAL: Command exit unexpectedly: disk is full
 use cmd_lib::{info, warn, output, run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
-    run_cmd!("sleep 3")?;
-    run_cmd!("ls /nofile")?;
-    Ok(())
+    let f = "/var/tmp/nofile";
+    run_cmd!{
+        use f;
+        sleep 3;
+        ls ${f};
+    }
 }
 
 fn get_year() -> FunResult {
@@ -69,6 +74,9 @@ fn get_year() -> FunResult {
 }
 
 fn main() -> CmdResult {
+    let name = "rust";
+    run_cmd!("echo hello, {}", name);
+
     let result = run_fun!("du -ah . | sort -hr | head -n 5")?;
     info!("Top 5 directories:\n{}", result.trim());
 
@@ -88,16 +96,18 @@ fn main() -> CmdResult {
 
 output:
 ```bash
+INFO: Running "echo hello, rust" ...
+hello, rust
 INFO: Running "du -ah . | sort -hr | head -n 5" ...
 INFO: Top 5 directories:
-5.1M    .
-2.7M    ./main
-2.4M    ./main2
-8.0K    ./lib.rs
-4.0K    ./main.rs
+318M    .
+313M    ./target
+205M    ./target/debug
+127M    ./target/debug/incremental
+91M ./target/package
 INFO: Running "sleep 3" ...
-INFO: Running "ls /nofile" ...
-ls: cannot access '/nofile': No such file or directory
+INFO: Running "ls "/var/tmp/nofile"" ...
+ls: cannot access '/var/tmp/nofile': No such file or directory
 WARN: Failed to run foo()
 INFO: Running "date +%Y" ...
 INFO: You are in year 2019

@@ -1,6 +1,7 @@
 use std::io::{Read, Error, ErrorKind};
 use std::process::{Command, Stdio, ExitStatus,Child, ChildStdout};
 use std::collections::VecDeque;
+use std::collections::HashMap;
 
 pub type FunResult = Result<String, std::io::Error>;
 pub type CmdResult = Result<(), std::io::Error>;
@@ -45,10 +46,11 @@ macro_rules! err {
 /// ```
 #[macro_export]
 macro_rules! die {
-    ($($arg:tt)*) => {
+    ($($arg:tt)*) => {{
+        use std::process::exit;
         eprintln!("FATAL: {}", format!($($arg)*));
-        std::process::exit(1);
-    }
+        exit(1);
+    }}
 }
 
 /// To return FunResult
@@ -83,6 +85,7 @@ macro_rules! macro_str {
 	let len = file.len();
         let mut i: usize = 0;
         let mut line = 1;
+        let mut level = 0;
 	while i < len {
             if file[i] == '\n' {
                 line += 1;
@@ -95,6 +98,8 @@ macro_rules! macro_str {
                         i += 1;
                     }
                     i += 1;
+                    level += 1;
+
                     let with_quote = file[i] == '"';
                     let mut in_single_quote = false;
                     let mut in_double_quote = false;
@@ -103,11 +108,17 @@ macro_rules! macro_str {
                         i += 1;
                     }
                     loop {
-                        if (file[i] == '}' ||
-                            file[i] == ')') &&
-                           !in_single_quote &&
+                        if !in_single_quote &&
                            !in_double_quote {
-                            break;
+                            if file[i] == '}' || file[i] == ')' {
+                                level -= 1;
+                            } else if file[i] == '{' || file[i] == '(' {
+                                level += 1;
+                            }
+
+                            if level == 0 {
+                                break;
+                            }
                         }
 
                         if file[i] == '"' && !in_single_quote {
@@ -169,18 +180,33 @@ macro_rules! run_fun {
 /// // or a group of commands
 /// // if any command fails, just return Err(...)
 /// run_cmd!{
-///     date
-///     ls -l /file
+///     use file;
+///
+///     date;
+///     ls -l ${file};
 /// }
 /// ```
 #[macro_export]
 macro_rules! run_cmd {
-   ($cmd:ident $($arg:tt)*) => {
-       $crate::run_cmd(&$crate::macro_str!(run_cmd))
-   };
-   ($($arg:tt)*) => {
-       $crate::run_cmd(&format!($($arg)*))
-   };
+    (use $($arg:tt)*) => {{
+        let mut sym_table = ::std::collections::HashMap::new();
+        run_cmd!(&sym_table; $($arg)*)
+    }};
+    (&$st:expr; $var:ident, $($arg:tt)*) => {{
+        $st.insert(stringify!($var).into(), format!("{}", $var));
+        run_cmd!(&$st; $($arg)*)
+    }};
+    (&$st:expr; $var:ident; $($arg:tt)*) => {{
+        $st.insert(stringify!($var).into(), format!("{}", $var));
+        let src = $crate::macro_str!(run_cmd);
+        $crate::run_cmd(&$crate::resolve_name(&src, &$st, &file!(), line!()))
+    }};
+    ($cmd:ident $($arg:tt)*) => {{
+        $crate::run_cmd(&$crate::macro_str!(run_cmd))
+    }};
+    ($($arg:tt)*) => {{
+        $crate::run_cmd(&format!($($arg)*))
+    }};
 }
 
 #[doc(hidden)]
@@ -306,7 +332,71 @@ fn parse_seps(s: &str, sep: char) -> String {
 
 fn parse_argv(s: &str) -> Vec<&str> {
     s.split("\n")
-        .filter(|s| !s.is_empty())
+        .filter(|s| !s.trim().is_empty())
         .collect::<Vec<&str>>()
 }
+
+#[doc(hidden)]
+pub fn resolve_name(src: &str, st: &HashMap<String,String>, file: &str, line: u32) -> String {
+    let mut output = String::new();
+    let input: Vec<char> = src.chars().collect();
+    let len = input.len();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+
+    let mut i = 0;
+    while i < len {
+        if i == 0 { // skip variable declaration part
+            while input[i] == ' ' || input[i] == '\t' || input[i] == '\n' {
+                i += 1;
+            }
+            let first = input[i..i+4].iter().collect::<String>();
+            if i < len-4 && first == "use " || first == "use\t" {
+                while input[i] != ';' {
+                    i += 1;
+                }
+            }
+        }
+
+        if input[i] == '"' && !in_single_quote {
+            in_double_quote = !in_double_quote;
+        } else if input[i] == '\'' && !in_double_quote {
+            in_single_quote = !in_single_quote;
+        }
+
+        if !in_single_quote && i < len-2 &&
+           input[i] == '$' && input[i+1] == '{' {
+            i += 2;
+            let mut var = String::new();
+            while input[i] != '}' {
+                var.push(input[i]);
+                if input[i] == ';' || input[i] == '\n' || i == len-1 {
+                    die!("invalid name {}, {}:{}\n{}", var, file, line, src);
+                }
+                i += 1;
+            }
+            match st.get(&var) {
+                None => {
+                    die!("resolve {} failed, {}:{}\n{}", var, file, line, src);
+                },
+                Some(v) => {
+                    if in_double_quote {
+                        output += v;
+                    } else {
+                        output += "\"";
+                        output += v;
+                        output += "\"";
+                    }
+                }
+            }
+        } else {
+            output.push(input[i]);
+        }
+        i += 1;
+    }
+
+    output
+}
+
+
 
