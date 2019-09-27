@@ -47,7 +47,7 @@ parameters could be passed much clearer in this style
 Process::new("du -ah .")?
     .pipe("sort -hr")?
     .pipe("head -n 5")?
-    .wait_cmd_result();
+    .wait::<CmdResult>();
 // the same run_cmd! macro
 run_cmd!("du -ah . | sort -hr | head -n 10");
 ```

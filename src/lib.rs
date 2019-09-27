@@ -207,12 +207,17 @@ macro_rules! run_cmd {
     }};
 }
 
+#[doc(hidden)]
+pub trait ProcessResult {
+    fn get_result(process: Process) -> Self;
+}
+
 ///
 /// Low level process API, std::process::Child wrapper
 ///
 /// Pipe command could also lauched in builder style
 /// ```rust
-/// Process::new("du -ah .")?.pipe("sort -hr")?.pipe("head -n 5")?.wait_cmd_result()
+/// Process::new("du -ah .")?.pipe("sort -hr")?.pipe("head -n 5")?.wait::<CmdResult>()
 /// ```
 ///
 pub struct Process {
@@ -249,19 +254,27 @@ impl Process {
         })
     }
 
-    pub fn wait_cmd_result(self) -> CmdResult {
-        // wait() without reading seems not working
-        result_fun_to_cmd(self.wait_fun_result())
+    pub fn wait<T:ProcessResult>(self) -> T {
+        T::get_result(self)
     }
+}
 
-    pub fn wait_fun_result(self) ->FunResult {
-        info!("Running \"{}\" ...", self.full_cmd.trim());
-        let output = self.last_proc.wait_with_output()?;
+impl ProcessResult for FunResult {
+    fn get_result(process: Process) -> Self {
+        info!("Running \"{}\" ...", process.full_cmd.trim());
+        let output = process.last_proc.wait_with_output()?;
         if !output.status.success() {
-            Err(to_io_error(&self.full_cmd, output.status))
+            Err(to_io_error(&process.full_cmd, output.status))
         } else {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         }
+    }
+}
+
+impl ProcessResult for CmdResult {
+    // wait() without reading seems not working
+    fn get_result(process: Process) -> Self {
+        result_fun_to_cmd(FunResult::get_result(process))
     }
 }
 
@@ -280,7 +293,7 @@ fn run_pipe_fun(full_command: &str) -> FunResult {
         }
     }
 
-    last_proc.wait_fun_result()
+    last_proc.wait::<FunResult>()
 }
 
 #[doc(hidden)]
