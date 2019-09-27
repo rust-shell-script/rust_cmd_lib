@@ -1,10 +1,9 @@
-use std::io::{Error, ErrorKind};
+use std::io::{Result, Error, ErrorKind};
 use std::process::{Command, Stdio, ExitStatus, Child};
 use std::collections::HashMap;
 
-pub type FunResult = Result<String, std::io::Error>;
-pub type CmdResult = Result<(), std::io::Error>;
-type PipeResult = Result<Pipe, std::io::Error>;
+pub type FunResult = Result<String>;
+pub type CmdResult = Result<()>;
 
 /// To print warning information to stderr, no return value
 /// ```rust
@@ -209,22 +208,24 @@ macro_rules! run_cmd {
 }
 
 ///
-/// pipe command could also lauched in builder style
+/// Low level process API, std::process::Child wrapper
+///
+/// Pipe command could also lauched in builder style
 /// ```rust
-/// Pipe::new("du -ah .")?.pipe("sort -hr")?.pipe("head -n 5")?.wait_cmd_result()
+/// Process::new("du -ah .")?.pipe("sort -hr")?.pipe("head -n 5")?.wait_cmd_result()
 /// ```
 ///
-pub struct Pipe {
+pub struct Process {
     last_proc: Child,
     full_cmd: String,
 }
 
-impl Pipe {
-    pub fn new(pipe_cmd: &str) -> PipeResult {
+impl Process {
+    pub fn new(pipe_cmd: &str) -> Result<Process> {
         let args = parse_args(pipe_cmd);
         let argv = parse_argv(&args);
 
-        Ok(Pipe {
+        Ok(Self {
             last_proc: Command::new(&argv[0])
                         .args(&argv[1..])
                         .stdout(Stdio::piped())
@@ -233,7 +234,7 @@ impl Pipe {
         })
     }
 
-    pub fn pipe(&mut self, pipe_cmd: &str) -> PipeResult {
+    pub fn pipe(&mut self, pipe_cmd: &str) -> Result<Process> {
         let args = parse_args(pipe_cmd);
         let argv = parse_argv(&args);
         let new_proc = Command::new(&argv[0])
@@ -242,9 +243,9 @@ impl Pipe {
                         .stdout(Stdio::piped())
                         .spawn()?;
         self.last_proc.wait()?;
-        Ok(Pipe {
+        Ok(Self {
             last_proc: new_proc,
-            full_cmd: format!("{} | {}", self.full_cmd, pipe_cmd),
+            full_cmd: format!("{} | {}", self.full_cmd.trim(), pipe_cmd.trim()),
         })
     }
 
@@ -272,7 +273,7 @@ fn run_pipe_fun(full_command: &str) -> FunResult {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(&pipe_args);
 
-    let mut last_proc = Pipe::new(pipe_argv[0])?;
+    let mut last_proc = Process::new(pipe_argv[0])?;
     for (i, pipe_cmd) in pipe_argv.iter().enumerate() {
         if i != 0 {
             last_proc = last_proc.pipe(pipe_cmd)?;

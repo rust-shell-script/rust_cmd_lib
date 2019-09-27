@@ -2,6 +2,7 @@
 
 Common rust command line macros and utils, to write shell script like tasks
 easily in rust programming language.
+Available at [cargo](https://crates.io/crates/cmd_lib).
 
 
 ## run_cmd! --> CmdResult
@@ -43,7 +44,7 @@ info!("There are {} words in above sentence", n.trim());
 
 parameters could be passed much clearer in this style
 ```rust
-Pipe::new("du -ah .")?
+Process::new("du -ah .")?
     .pipe("sort -hr")?
     .pipe("head -n 5")?
     .wait_cmd_result();
@@ -87,7 +88,7 @@ fn get_year() -> FunResult {
 
 fn main() -> CmdResult {
     let name = "rust";
-    run_cmd!("echo hello, {}", name);
+    run_cmd!("echo hello, {}", name)?;
 
     let result = run_fun!("du -ah . | sort -hr | head -n 5")?;
     info!("Top 5 directories:\n{}", result.trim());
@@ -112,11 +113,11 @@ INFO: Running "echo hello, rust" ...
 hello, rust
 INFO: Running "du -ah . | sort -hr | head -n 5" ...
 INFO: Top 5 directories:
-318M    .
-313M    ./target
-205M    ./target/debug
-127M    ./target/debug/incremental
-91M ./target/package
+362M    .
+360M    ./target
+216M    ./target/debug
+131M    ./target/debug/incremental
+117M    ./target/package
 INFO: Running "sleep 3" ...
 INFO: Running "ls "/var/tmp/nofile"" ...
 ls: cannot access '/var/tmp/nofile': No such file or directory
