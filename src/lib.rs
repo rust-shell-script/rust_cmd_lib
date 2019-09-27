@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 pub type FunResult = Result<String, std::io::Error>;
 pub type CmdResult = Result<(), std::io::Error>;
-type PipeResult = Result<Child, std::io::Error>;
+type PipeResult = Result<Pipe, std::io::Error>;
 
 /// To print warning information to stderr, no return value
 /// ```rust
@@ -208,56 +208,83 @@ macro_rules! run_cmd {
     }};
 }
 
-fn pipe(last_proc: Option<Child>, pipe_cmd: &str) -> PipeResult {
-    let args = parse_args(pipe_cmd);
-    let argv = parse_argv(&args);
-    match last_proc {
-        None => {
-            Command::new(&argv[0])
-                .args(&argv[1..])
-                .stdout(Stdio::piped())
-                .spawn()
-        },
-        Some(p) =>  {
-            let mut last_proc = p;
-            let new_proc = Command::new(&argv[0])
-                            .args(&argv[1..])
-                            .stdin(last_proc.stdout.take().unwrap())
-                            .stdout(Stdio::piped())
-                            .spawn();
-            last_proc.wait()?;
-            new_proc
+///
+/// pipe command could also lauched in builder style
+/// ```rust
+/// Pipe::new("du -ah .")?.pipe("sort -hr")?.pipe("head -n 5")?.wait_cmd_result()
+/// ```
+/// 
+pub struct Pipe {
+    last_proc: Child,
+    last_cmd: String,
+}
+
+impl Pipe {
+    pub fn new(pipe_cmd: &str) -> PipeResult {
+        let args = parse_args(pipe_cmd);
+        let argv = parse_argv(&args);
+
+        Ok(Pipe {
+            last_proc: Command::new(&argv[0])
+                        .args(&argv[1..])
+                        .stdout(Stdio::piped())
+                        .spawn()?,
+            last_cmd: pipe_cmd.into(),
+        })
+    }
+
+    pub fn pipe(&mut self, pipe_cmd: &str) -> PipeResult {
+        let args = parse_args(pipe_cmd);
+        let argv = parse_argv(&args);
+        let new_proc = Command::new(&argv[0])
+                        .args(&argv[1..])
+                        .stdin(self.last_proc.stdout.take().unwrap())
+                        .stdout(Stdio::piped())
+                        .spawn()?;
+        self.last_proc.wait()?;
+        Ok(Pipe {
+            last_proc: new_proc,
+            last_cmd: pipe_cmd.into(),
+        })
+    }
+
+    pub fn wait_cmd_result(self) -> CmdResult {
+        // wait() without reading seems not working
+        result_fun_to_cmd(self.wait_fun_result())
+    }
+
+    pub fn wait_fun_result(self) ->FunResult {
+        let output = self.last_proc.wait_with_output()?;
+        if !output.status.success() {
+            Err(to_io_error(&self.last_cmd, output.status))
+        } else {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
         }
     }
 }
 
-#[doc(hidden)]
-pub fn run_pipe(full_command: &str) -> PipeResult {
+fn run_pipe_cmd(full_command: &str) -> CmdResult {
+    result_fun_to_cmd(run_pipe_fun(full_command))
+}
+
+fn run_pipe_fun(full_command: &str) -> FunResult {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(&pipe_args);
 
     info!("Running \"{}\" ...", full_command.trim());
-    let mut last_proc: Option<Child> = None;
-    for pipe_cmd in pipe_argv {
-        last_proc = Some(pipe(last_proc, pipe_cmd)?);
+    let mut last_proc = Pipe::new(pipe_argv[0])?;
+    for (i, pipe_cmd) in pipe_argv.iter().enumerate() {
+        if i != 0 {
+            last_proc = last_proc.pipe(pipe_cmd)?;
+        }
     }
 
-   Ok(last_proc.unwrap())
-}
-
-fn run(full_cmd: &str) -> FunResult {
-    let last_proc = run_pipe(full_cmd)?;
-    let output = last_proc.wait_with_output()?;
-    if !output.status.success() {
-        Err(to_io_error(full_cmd, output.status))
-    } else {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    }
+    last_proc.wait_fun_result()
 }
 
 #[doc(hidden)]
-pub fn run_fun(full_cmd: &str) -> FunResult {
-    run(full_cmd)
+pub fn run_fun(cmds: &str) -> FunResult {
+    run_pipe_fun(cmds)
 }
 
 #[doc(hidden)]
@@ -265,12 +292,21 @@ pub fn run_cmd(cmds: &str) -> CmdResult {
     let cmd_args = parse_cmds(cmds);
     let cmd_argv = parse_argv(&cmd_args);
     for cmd in cmd_argv {
-        match run(cmd) {
-            Err(e) => return Err(e),
-            Ok(s) => print!("{}", s),
+        if let Err(e) = run_pipe_cmd(cmd) {
+            return Err(e);
         }
     }
     Ok(())
+}
+
+fn result_fun_to_cmd(res: FunResult) -> CmdResult {
+    match res {
+        Err(e) => Err(e),
+        Ok(s) => {
+            print!("{}", s);
+            Ok(())
+        }
+    }
 }
 
 fn to_io_error(command: &str, status: ExitStatus) -> Error {

@@ -39,6 +39,18 @@ let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w")?;
 info!("There are {} words in above sentence", n.trim());
 ```
 
+## Run pipe commands in builder style
+
+parameters could be passed much clearer in this style
+```rust
+Pipe::new("du -ah .")?
+    .pipe("sort -hr")?
+    .pipe("head -n 5")?
+    .wait_cmd_result();
+// the same run_cmd! macro
+run_cmd!("du -ah . | sort -hr | head -n 10");
+```
+
 ## Easy Reporting
 ```rust
 info!("Running command xxx ...");
