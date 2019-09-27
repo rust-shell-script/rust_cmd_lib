@@ -213,10 +213,10 @@ macro_rules! run_cmd {
 /// ```rust
 /// Pipe::new("du -ah .")?.pipe("sort -hr")?.pipe("head -n 5")?.wait_cmd_result()
 /// ```
-/// 
+///
 pub struct Pipe {
     last_proc: Child,
-    last_cmd: String,
+    full_cmd: String,
 }
 
 impl Pipe {
@@ -229,7 +229,7 @@ impl Pipe {
                         .args(&argv[1..])
                         .stdout(Stdio::piped())
                         .spawn()?,
-            last_cmd: pipe_cmd.into(),
+            full_cmd: pipe_cmd.into(),
         })
     }
 
@@ -244,7 +244,7 @@ impl Pipe {
         self.last_proc.wait()?;
         Ok(Pipe {
             last_proc: new_proc,
-            last_cmd: pipe_cmd.into(),
+            full_cmd: format!("{} | {}", self.full_cmd, pipe_cmd),
         })
     }
 
@@ -254,9 +254,10 @@ impl Pipe {
     }
 
     pub fn wait_fun_result(self) ->FunResult {
+        info!("Running \"{}\" ...", self.full_cmd.trim());
         let output = self.last_proc.wait_with_output()?;
         if !output.status.success() {
-            Err(to_io_error(&self.last_cmd, output.status))
+            Err(to_io_error(&self.full_cmd, output.status))
         } else {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         }
@@ -271,7 +272,6 @@ fn run_pipe_fun(full_command: &str) -> FunResult {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(&pipe_args);
 
-    info!("Running \"{}\" ...", full_command.trim());
     let mut last_proc = Pipe::new(pipe_argv[0])?;
     for (i, pipe_cmd) in pipe_argv.iter().enumerate() {
         if i != 0 {
