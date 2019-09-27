@@ -1,11 +1,10 @@
-use std::io::{Read, Error, ErrorKind};
-use std::process::{Command, Stdio, ExitStatus,Child, ChildStdout};
-use std::collections::VecDeque;
+use std::io::{Error, ErrorKind};
+use std::process::{Command, Stdio, ExitStatus, Child};
 use std::collections::HashMap;
 
 pub type FunResult = Result<String, std::io::Error>;
 pub type CmdResult = Result<(), std::io::Error>;
-type PipeResult = Result<(Child, ChildStdout), std::io::Error>;
+type PipeResult = Result<Child, std::io::Error>;
 
 /// To print warning information to stderr, no return value
 /// ```rust
@@ -209,50 +208,50 @@ macro_rules! run_cmd {
     }};
 }
 
+fn pipe(last_proc: Option<Child>, pipe_cmd: &str) -> PipeResult {
+    let args = parse_args(pipe_cmd);
+    let argv = parse_argv(&args);
+    match last_proc {
+        None => {
+            Command::new(&argv[0])
+                .args(&argv[1..])
+                .stdout(Stdio::piped())
+                .spawn()
+        },
+        Some(p) =>  {
+            let mut last_proc = p;
+            let new_proc = Command::new(&argv[0])
+                            .args(&argv[1..])
+                            .stdin(last_proc.stdout.take().unwrap())
+                            .stdout(Stdio::piped())
+                            .spawn();
+            last_proc.wait()?;
+            new_proc
+        }
+    }
+}
+
 #[doc(hidden)]
 pub fn run_pipe(full_command: &str) -> PipeResult {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(&pipe_args);
-    let n = pipe_argv.len();
-    let mut pipe_procs = VecDeque::with_capacity(n);
-    let mut pipe_outputs = VecDeque::with_capacity(n);
 
     info!("Running \"{}\" ...", full_command.trim());
-    for (i, pipe_cmd) in pipe_argv.iter().enumerate() {
-        let args = parse_args(pipe_cmd);
-        let argv = parse_argv(&args);
+    let mut last_proc: Option<Child> = None;
+    for pipe_cmd in pipe_argv {
+        last_proc = Some(pipe(last_proc, pipe_cmd)?);
+    }
 
-        if i == 0 {
-            pipe_procs.push_back(Command::new(&argv[0])
-                .args(&argv[1..])
-                .stdout(Stdio::piped())
-                .spawn()?);
-        } else {
-            pipe_procs.push_back(Command::new(&argv[0])
-                .args(&argv[1..])
-                .stdin(pipe_outputs.pop_front().unwrap())
-                .stdout(Stdio::piped())
-                .spawn()?);
-            pipe_procs.pop_front().unwrap().wait()?;
-        }
-
-        pipe_outputs.push_back(pipe_procs.back_mut().unwrap().stdout.take().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Broken pipe")
-        })?);
-   }
-
-   Ok((pipe_procs.pop_front().unwrap(), pipe_outputs.pop_front().unwrap()))
+   Ok(last_proc.unwrap())
 }
 
 fn run(full_cmd: &str) -> FunResult {
-    let (mut proc, mut output) = run_pipe(full_cmd)?;
-    let status = proc.wait()?;
-    if !status.success() {
-        Err(to_io_error(full_cmd, status))
+    let last_proc = run_pipe(full_cmd)?;
+    let output = last_proc.wait_with_output()?;
+    if !output.status.success() {
+        Err(to_io_error(full_cmd, output.status))
     } else {
-        let mut s = String::new();
-        output.read_to_string(&mut s)?;
-        Ok(s)
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 }
 
