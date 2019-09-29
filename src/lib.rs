@@ -1,7 +1,7 @@
-use std::io::{Result, Error, ErrorKind};
-use std::process::{Child, Command, Stdio, ExitStatus};
-use std::collections::HashMap;
 use std::borrow::Borrow;
+use std::collections::HashMap;
+use std::io::{Error, ErrorKind, Result};
+use std::process::{Child, Command, ExitStatus, Stdio};
 
 pub type FunResult = Result<String>;
 pub type CmdResult = Result<()>;
@@ -73,26 +73,24 @@ macro_rules! macro_str {
     ($macro:ident) => {{
         let macro_name = stringify!($macro);
         let mut macro_str = String::new();
-        let src = String::from(format!("{}/{}",
-                                       env!("CARGO_MANIFEST_DIR"),
-                                       file!()));
+        let src = String::from(format!("{}/{}", env!("CARGO_MANIFEST_DIR"), file!()));
         let target_line = line!() as usize;
-	let file: Vec<char> = std::fs::read_to_string(src)
-	    .expect("error reading file")
-	    .chars()
-	    .collect();
-	let len = file.len();
+        let file: Vec<char> = std::fs::read_to_string(src)
+            .expect("error reading file")
+            .chars()
+            .collect();
+        let len = file.len();
         let mut i: usize = 0;
         let mut line = 1;
         let mut level = 0;
-	while i < len {
+        while i < len {
             if file[i] == '\n' {
                 line += 1;
             }
             if line == target_line {
-                let cmp_str: String = file[i..i+macro_name.len()].iter().collect();
+                let cmp_str: String = file[i..i + macro_name.len()].iter().collect();
                 if cmp_str == macro_name {
-                    i += macro_name.len()+1;
+                    i += macro_name.len() + 1;
                     while file[i] != '{' && file[i] != '(' {
                         i += 1;
                     }
@@ -107,8 +105,7 @@ macro_rules! macro_str {
                         i += 1;
                     }
                     loop {
-                        if !in_single_quote &&
-                           !in_double_quote {
+                        if !in_single_quote && !in_double_quote {
                             if file[i] == '}' || file[i] == ')' {
                                 level -= 1;
                             } else if file[i] == '{' || file[i] == '(' {
@@ -138,7 +135,7 @@ macro_rules! macro_str {
             i += 1;
         }
         macro_str
-    }}
+    }};
 }
 
 /// ## run_fun! --> FunResult
@@ -162,7 +159,6 @@ macro_rules! run_fun {
        $crate::run_fun(&format!($($arg)*))
    };
 }
-
 
 ///
 /// ## run_cmd! --> CmdResult
@@ -211,7 +207,7 @@ macro_rules! run_cmd {
 /// Envrionment settings
 pub struct Env {
     current_dir: String,
-    variables: HashMap<String,String>,
+    variables: HashMap<String, String>,
 }
 
 impl Env {
@@ -287,7 +283,7 @@ impl<'a> Process<'a> {
         self
     }
 
-    pub fn wait<T:ProcessResult>(&mut self) -> T {
+    pub fn wait<T: ProcessResult>(&mut self) -> T {
         T::get_result(self)
     }
 }
@@ -336,24 +332,24 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
     };
     info!("Running \"{}\" ...", full_cmd_str);
     let mut last_proc = Command::new(&first_cmd[0])
-                        .current_dir(cur_dir)
-                        .args(&first_cmd[1..])
-                        .stdout(if pipe_last || process.full_cmd.len() > 1 {
-                            Stdio::piped()
-                        } else {
-                            Stdio::inherit()
-                        })
-                        .spawn()?;
+        .current_dir(cur_dir)
+        .args(&first_cmd[1..])
+        .stdout(if pipe_last || process.full_cmd.len() > 1 {
+            Stdio::piped()
+        } else {
+            Stdio::inherit()
+        })
+        .spawn()?;
     for (i, cmd) in process.full_cmd.iter().skip(1).enumerate() {
         let new_proc = Command::new(&cmd[0])
-                        .args(&cmd[1..])
-                        .stdin(last_proc.stdout.take().unwrap())
-                        .stdout(if !pipe_last && i == process.full_cmd.len()-2 {
-                            Stdio::inherit()
-                        } else {
-                            Stdio::piped()
-                        })
-                        .spawn()?;
+            .args(&cmd[1..])
+            .stdin(last_proc.stdout.take().unwrap())
+            .stdout(if !pipe_last && i == process.full_cmd.len() - 2 {
+                Stdio::inherit()
+            } else {
+                Stdio::piped()
+            })
+            .spawn()?;
         last_proc = new_proc;
     }
 
@@ -366,7 +362,7 @@ fn run_pipe_cmd(full_command: &str) -> CmdResult {
 
     let mut last_proc = Process::new(pipe_argv[0].clone());
     for pipe_cmd in pipe_argv.iter().skip(1) {
-	last_proc.pipe(pipe_cmd.clone());
+        last_proc.pipe(pipe_cmd.clone());
     }
 
     last_proc.wait::<CmdResult>()
@@ -378,7 +374,7 @@ fn run_pipe_fun(full_command: &str) -> FunResult {
 
     let mut last_proc = Process::new(pipe_argv[0].clone());
     for pipe_cmd in pipe_argv.iter().skip(1) {
-	last_proc.pipe(pipe_cmd.clone());
+        last_proc.pipe(pipe_cmd.clone());
     }
 
     last_proc.wait::<FunResult>()
@@ -465,7 +461,7 @@ fn parse_argv(s: String) -> Vec<String> {
 }
 
 #[doc(hidden)]
-pub fn resolve_name(src: &str, st: &HashMap<String,String>, file: &str, line: u32) -> String {
+pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u32) -> String {
     let mut output = String::new();
     let input: Vec<char> = src.chars().collect();
     let len = input.len();
@@ -474,12 +470,13 @@ pub fn resolve_name(src: &str, st: &HashMap<String,String>, file: &str, line: u3
 
     let mut i = 0;
     while i < len {
-        if i == 0 { // skip variable declaration part
+        if i == 0 {
+            // skip variable declaration part
             while input[i] == ' ' || input[i] == '\t' || input[i] == '\n' {
                 i += 1;
             }
-            let first = input[i..i+4].iter().collect::<String>();
-            if i < len-4 && first == "use " || first == "use\t" {
+            let first = input[i..i + 4].iter().collect::<String>();
+            if i < len - 4 && first == "use " || first == "use\t" {
                 while input[i] != ';' {
                     i += 1;
                 }
@@ -492,13 +489,12 @@ pub fn resolve_name(src: &str, st: &HashMap<String,String>, file: &str, line: u3
             in_single_quote = !in_single_quote;
         }
 
-        if !in_single_quote && i < len-2 &&
-           input[i] == '$' && input[i+1] == '{' {
+        if !in_single_quote && i < len - 2 && input[i] == '$' && input[i + 1] == '{' {
             i += 2;
             let mut var = String::new();
             while input[i] != '}' {
                 var.push(input[i]);
-                if input[i] == ';' || input[i] == '\n' || i == len-1 {
+                if input[i] == ';' || input[i] == '\n' || i == len - 1 {
                     die!("invalid name {}, {}:{}\n{}", var, file, line, src);
                 }
                 i += 1;
@@ -506,7 +502,7 @@ pub fn resolve_name(src: &str, st: &HashMap<String,String>, file: &str, line: u3
             match st.get(&var) {
                 None => {
                     die!("resolve {} failed, {}:{}\n{}", var, file, line, src);
-                },
+                }
                 Some(v) => {
                     if in_double_quote {
                         output += v;
@@ -525,6 +521,3 @@ pub fn resolve_name(src: &str, st: &HashMap<String,String>, file: &str, line: u3
 
     output
 }
-
-
-
