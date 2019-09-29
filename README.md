@@ -40,7 +40,7 @@ let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w")?;
 info!("There are {} words in above sentence", n.trim());
 ```
 
-## Run pipe commands in builder style
+## Run pipe commands in the builder style
 
 parameters could be passed much clearer in this style
 ```rust
@@ -50,6 +50,18 @@ Process::new("du -ah .")
     .wait::<CmdResult>()?;
 // the same run_cmd! macro
 run_cmd!("du -ah . | sort -hr | head -n 10")?;
+```
+
+## Run commands in different environment settings
+```rust
+Env::new()
+    .cd("/src/rust-shell-script/")
+    .exec("du -ah")
+    .pipe("sort -hr")
+    .pipe("head -n 5")
+    .wait::<CmdResult>()?;
+
+let res = Env::new().cd("/home").exec("ls").wait::<FunResult>()?;
 ```
 
 ## Easy Reporting

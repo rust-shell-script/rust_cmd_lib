@@ -1,5 +1,5 @@
 use std::io::{Result, Error, ErrorKind};
-use std::process::{Command, Stdio, ExitStatus};
+use std::process::{Child, Command, Stdio, ExitStatus};
 use std::collections::HashMap;
 use std::borrow::Borrow;
 
@@ -208,6 +208,39 @@ macro_rules! run_cmd {
     }};
 }
 
+/// Envrionment settings
+pub struct Env {
+    current_dir: String,
+    variables: HashMap<String,String>,
+}
+
+impl Env {
+    pub fn new() -> Self {
+        Self {
+            current_dir: ".".to_string(),
+            variables: HashMap::new(),
+        }
+    }
+
+    pub fn cd(&mut self, dir: &str) -> &Self {
+        self.current_dir = dir.to_string();
+        self
+    }
+
+    pub fn set(&mut self, key: String, val: String) -> &Self {
+        self.variables.insert(key, val);
+        self
+    }
+
+    pub fn get(&mut self, key: &str) -> Option<&String> {
+        self.variables.get(key)
+    }
+
+    pub fn exec(&self, cmd: &str) -> Process {
+        Process::new_with_env(self, cmd)
+    }
+}
+
 #[doc(hidden)]
 pub trait ProcessResult {
     fn get_result(process: &mut Process) -> Self;
@@ -224,18 +257,26 @@ pub trait ProcessResult {
 ///     .wait::<CmdResult>()?
 /// ```
 ///
-pub struct Process {
+pub struct Process<'a> {
+    env: Option<&'a Env>,
     full_cmd: Vec<Vec<String>>,
 }
 
-impl Process {
+impl<'a> Process<'a> {
     pub fn new<S: Borrow<str>>(pipe_cmd: S) -> Self {
         let args = parse_args(pipe_cmd.borrow());
         let argv = parse_argv(args);
 
         Self {
+            env: None,
             full_cmd: vec![argv],
         }
+    }
+
+    fn new_with_env(env: &'a Env, cmd: &str) -> Self {
+        let mut p = Process::new(cmd);
+        p.env = Some(env);
+        p
     }
 
     pub fn pipe<S: Borrow<str>>(&mut self, pipe_cmd: S) -> &mut Self {
@@ -253,20 +294,7 @@ impl Process {
 
 impl ProcessResult for FunResult {
     fn get_result(process: &mut Process) -> Self {
-	let full_cmd_str = format_full_cmd(&process.full_cmd);
-        info!("Running \"{}\" ...", full_cmd_str);
-	let first_cmd = &process.full_cmd[0];
-	let mut last_proc = Command::new(&first_cmd[0])
-			.args(&first_cmd[1..])
-			.stdout(Stdio::piped())
-			.spawn()?;
-        for cmd in process.full_cmd.iter().skip(1) {
-	    last_proc = Command::new(&cmd[0])
-			    .args(&cmd[1..])
-			    .stdin(last_proc.stdout.take().unwrap())
-			    .stdout(Stdio::piped())
-			    .spawn()?;
-        }
+        let (last_proc, full_cmd_str) = run_full_cmd(process, true)?;
         let output = last_proc.wait_with_output()?;
         if !output.status.success() {
             Err(to_io_error(&full_cmd_str, output.status))
@@ -278,20 +306,7 @@ impl ProcessResult for FunResult {
 
 impl ProcessResult for CmdResult {
     fn get_result(process: &mut Process) -> Self {
-	let full_cmd_str = format_full_cmd(&process.full_cmd);
-        info!("Running \"{}\" ...", full_cmd_str);
-	let first_cmd = &process.full_cmd[0];
-	let mut last_proc = Command::new(&first_cmd[0])
-			.args(&first_cmd[1..])
-			.stdout(Stdio::piped())
-			.spawn()?;
-        for cmd in process.full_cmd.iter().skip(1) {
-	    last_proc = Command::new(&cmd[0])
-			    .args(&cmd[1..])
-			    .stdin(last_proc.stdout.take().unwrap())
-			    .stdout(Stdio::piped())
-			    .spawn()?;
-        }
+        let (mut last_proc, full_cmd_str) = run_full_cmd(process, false)?;
         let status = last_proc.wait()?;
         if !status.success() {
             Err(to_io_error(&full_cmd_str, status))
@@ -310,8 +325,51 @@ fn format_full_cmd(full_cmd: &Vec<Vec<String>>) -> String {
     full_cmd_str
 }
 
+fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String)> {
+    let mut full_cmd_str = format_full_cmd(&process.full_cmd);
+    let first_cmd = &process.full_cmd[0];
+    let cur_dir = if let Some(env) = process.env {
+        full_cmd_str += &format!(" (cd: {})", env.current_dir);
+        &env.current_dir
+    } else {
+        "."
+    };
+    info!("Running \"{}\" ...", full_cmd_str);
+    let mut last_proc = Command::new(&first_cmd[0])
+                        .current_dir(cur_dir)
+                        .args(&first_cmd[1..])
+                        .stdout(if pipe_last || process.full_cmd.len() > 1 {
+                            Stdio::piped()
+                        } else {
+                            Stdio::inherit()
+                        })
+                        .spawn()?;
+    for (i, cmd) in process.full_cmd.iter().skip(1).enumerate() {
+        let new_proc = Command::new(&cmd[0])
+                        .args(&cmd[1..])
+                        .stdin(last_proc.stdout.take().unwrap())
+                        .stdout(if !pipe_last && i == process.full_cmd.len()-2 {
+                            Stdio::inherit()
+                        } else {
+                            Stdio::piped()
+                        })
+                        .spawn()?;
+        last_proc = new_proc;
+    }
+
+    Ok((last_proc, full_cmd_str))
+}
+
 fn run_pipe_cmd(full_command: &str) -> CmdResult {
-    result_fun_to_cmd(run_pipe_fun(full_command))
+    let pipe_args = parse_pipes(full_command.trim());
+    let pipe_argv = parse_argv(pipe_args);
+
+    let mut last_proc = Process::new(pipe_argv[0].clone());
+    for pipe_cmd in pipe_argv.iter().skip(1) {
+	last_proc.pipe(pipe_cmd.clone());
+    }
+
+    last_proc.wait::<CmdResult>()
 }
 
 fn run_pipe_fun(full_command: &str) -> FunResult {
@@ -341,16 +399,6 @@ pub fn run_cmd(cmds: &str) -> CmdResult {
         }
     }
     Ok(())
-}
-
-fn result_fun_to_cmd(res: FunResult) -> CmdResult {
-    match res {
-        Err(e) => Err(e),
-        Ok(s) => {
-            print!("{}", s);
-            Ok(())
-        }
-    }
 }
 
 fn to_io_error(command: &str, status: ExitStatus) -> Error {
