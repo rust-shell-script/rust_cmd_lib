@@ -1,6 +1,7 @@
 use std::io::{Result, Error, ErrorKind};
 use std::process::{Command, Stdio, ExitStatus};
 use std::collections::HashMap;
+use std::borrow::Borrow;
 
 pub type FunResult = Result<String>;
 pub type CmdResult = Result<()>;
@@ -217,7 +218,10 @@ pub trait ProcessResult {
 ///
 /// Pipe command could also lauched in builder style
 /// ```rust
-/// Process::new("du -ah .")?.pipe("sort -hr")?.pipe("head -n 5")?.wait::<CmdResult>()
+/// Process::new("du -ah .")
+///     .pipe("sort -hr")
+///     .pipe("head -n 5")
+///     .wait::<CmdResult>()?
 /// ```
 ///
 pub struct Process {
@@ -226,30 +230,30 @@ pub struct Process {
 }
 
 impl Process {
-    pub fn new(pipe_cmd: &str) -> Result<Process> {
-        let args = parse_args(pipe_cmd);
+    pub fn new<S: Borrow<str>>(pipe_cmd: S) -> Process {
+        let args = parse_args(pipe_cmd.borrow());
         let argv = parse_argv(&args);
         let mut cur_cmd = Command::new(&argv[0]);
         cur_cmd.args(&argv[1..]).stdin(Stdio::inherit());
 
-        Ok(Self {
+        Self {
             cur_cmd: cur_cmd,
-            full_cmd: pipe_cmd.into(),
-        })
+            full_cmd: String::from(pipe_cmd.borrow().trim()),
+        }
     }
 
-    pub fn pipe(&mut self, pipe_cmd: &str) -> Result<Process> {
-        let args = parse_args(pipe_cmd);
+    pub fn pipe<S: Borrow<str>>(&mut self, pipe_cmd: S) -> Process {
+        let args = parse_args(pipe_cmd.borrow());
         let argv = parse_argv(&args);
 
-        let mut last_child = self.cur_cmd.stdout(Stdio::piped()).spawn()?;
+        let mut last_child = self.cur_cmd.stdout(Stdio::piped()).spawn().unwrap();
         let mut cur_cmd = Command::new(&argv[0]);
         cur_cmd.args(&argv[1..]).stdin(last_child.stdout.take().unwrap());
 
-        Ok(Self {
+        Self {
             cur_cmd: cur_cmd,
-            full_cmd: format!("{} | {}", self.full_cmd.trim(), pipe_cmd.trim()),
-        })
+            full_cmd: format!("{} | {}", self.full_cmd, pipe_cmd.borrow().trim()),
+        }
     }
 
     pub fn wait<T:ProcessResult>(&mut self) -> T {
@@ -291,10 +295,10 @@ fn run_pipe_fun(full_command: &str) -> FunResult {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(&pipe_args);
 
-    let mut last_proc = Process::new(pipe_argv[0])?;
+    let mut last_proc = Process::new(pipe_argv[0]);
     for (i, pipe_cmd) in pipe_argv.iter().enumerate() {
         if i != 0 {
-            last_proc = last_proc.pipe(pipe_cmd)?;
+            last_proc = last_proc.pipe(*pipe_cmd);
         }
     }
 

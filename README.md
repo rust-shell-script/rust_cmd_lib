@@ -44,12 +44,12 @@ info!("There are {} words in above sentence", n.trim());
 
 parameters could be passed much clearer in this style
 ```rust
-Process::new("du -ah .")?
-    .pipe("sort -hr")?
-    .pipe("head -n 5")?
-    .wait::<CmdResult>();
+Process::new("du -ah .")
+    .pipe("sort -hr")
+    .pipe("head -n 5")
+    .wait::<CmdResult>()?;
 // the same run_cmd! macro
-run_cmd!("du -ah . | sort -hr | head -n 10");
+run_cmd!("du -ah . | sort -hr | head -n 10")?;
 ```
 
 ## Easy Reporting
