@@ -225,35 +225,25 @@ pub trait ProcessResult {
 /// ```
 ///
 pub struct Process {
-    cur_cmd: Command,
-    full_cmd: String,
+    full_cmd: Vec<Vec<String>>,
 }
 
 impl Process {
-    pub fn new<S: Borrow<str>>(pipe_cmd: S) -> Process {
+    pub fn new<S: Borrow<str>>(pipe_cmd: S) -> Self {
         let args = parse_args(pipe_cmd.borrow());
-        let argv = parse_argv(&args);
-        let mut cur_cmd = Command::new(&argv[0]);
-        cur_cmd.args(&argv[1..]).stdin(Stdio::inherit());
+        let argv = parse_argv(args);
 
         Self {
-            cur_cmd: cur_cmd,
-            full_cmd: String::from(pipe_cmd.borrow().trim()),
+            full_cmd: vec![argv],
         }
     }
 
-    pub fn pipe<S: Borrow<str>>(&mut self, pipe_cmd: S) -> Process {
+    pub fn pipe<S: Borrow<str>>(&mut self, pipe_cmd: S) -> &mut Self {
         let args = parse_args(pipe_cmd.borrow());
-        let argv = parse_argv(&args);
+        let argv = parse_argv(args);
 
-        let mut last_child = self.cur_cmd.stdout(Stdio::piped()).spawn().unwrap();
-        let mut cur_cmd = Command::new(&argv[0]);
-        cur_cmd.args(&argv[1..]).stdin(last_child.stdout.take().unwrap());
-
-        Self {
-            cur_cmd: cur_cmd,
-            full_cmd: format!("{} | {}", self.full_cmd, pipe_cmd.borrow().trim()),
-        }
+        self.full_cmd.push(argv);
+        self
     }
 
     pub fn wait<T:ProcessResult>(&mut self) -> T {
@@ -263,11 +253,23 @@ impl Process {
 
 impl ProcessResult for FunResult {
     fn get_result(process: &mut Process) -> Self {
-        info!("Running \"{}\" ...", process.full_cmd.trim());
-        let last_child = process.cur_cmd.stdout(Stdio::piped()).spawn()?;
-        let output = last_child.wait_with_output()?;
+	let full_cmd_str = format_full_cmd(&process.full_cmd);
+        info!("Running \"{}\" ...", full_cmd_str);
+	let first_cmd = &process.full_cmd[0];
+	let mut last_proc = Command::new(&first_cmd[0])
+			.args(&first_cmd[1..])
+			.stdout(Stdio::piped())
+			.spawn()?;
+        for cmd in process.full_cmd.iter().skip(1) {
+	    last_proc = Command::new(&cmd[0])
+			    .args(&cmd[1..])
+			    .stdin(last_proc.stdout.take().unwrap())
+			    .stdout(Stdio::piped())
+			    .spawn()?;
+        }
+        let output = last_proc.wait_with_output()?;
         if !output.status.success() {
-            Err(to_io_error(&process.full_cmd, output.status))
+            Err(to_io_error(&full_cmd_str, output.status))
         } else {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         }
@@ -276,15 +278,36 @@ impl ProcessResult for FunResult {
 
 impl ProcessResult for CmdResult {
     fn get_result(process: &mut Process) -> Self {
-        info!("Running \"{}\" ...", process.full_cmd.trim());
-        let mut last_child = process.cur_cmd.spawn()?;
-        let status = last_child.wait()?;
+	let full_cmd_str = format_full_cmd(&process.full_cmd);
+        info!("Running \"{}\" ...", full_cmd_str);
+	let first_cmd = &process.full_cmd[0];
+	let mut last_proc = Command::new(&first_cmd[0])
+			.args(&first_cmd[1..])
+			.stdout(Stdio::piped())
+			.spawn()?;
+        for cmd in process.full_cmd.iter().skip(1) {
+	    last_proc = Command::new(&cmd[0])
+			    .args(&cmd[1..])
+			    .stdin(last_proc.stdout.take().unwrap())
+			    .stdout(Stdio::piped())
+			    .spawn()?;
+        }
+        let status = last_proc.wait()?;
         if !status.success() {
-            Err(to_io_error(&process.full_cmd, status))
+            Err(to_io_error(&full_cmd_str, status))
         } else {
             Ok(())
         }
     }
+}
+
+fn format_full_cmd(full_cmd: &Vec<Vec<String>>) -> String {
+    let mut full_cmd_str = String::from(full_cmd[0].join(" "));
+    for cmd in full_cmd.iter().skip(1) {
+        full_cmd_str += " | ";
+        full_cmd_str += &cmd.join(" ");
+    }
+    full_cmd_str
 }
 
 fn run_pipe_cmd(full_command: &str) -> CmdResult {
@@ -293,13 +316,11 @@ fn run_pipe_cmd(full_command: &str) -> CmdResult {
 
 fn run_pipe_fun(full_command: &str) -> FunResult {
     let pipe_args = parse_pipes(full_command.trim());
-    let pipe_argv = parse_argv(&pipe_args);
+    let pipe_argv = parse_argv(pipe_args);
 
-    let mut last_proc = Process::new(pipe_argv[0]);
-    for (i, pipe_cmd) in pipe_argv.iter().enumerate() {
-        if i != 0 {
-            last_proc = last_proc.pipe(*pipe_cmd);
-        }
+    let mut last_proc = Process::new(pipe_argv[0].clone());
+    for pipe_cmd in pipe_argv.iter().skip(1) {
+	last_proc.pipe(pipe_cmd.clone());
     }
 
     last_proc.wait::<FunResult>()
@@ -313,9 +334,9 @@ pub fn run_fun(cmds: &str) -> FunResult {
 #[doc(hidden)]
 pub fn run_cmd(cmds: &str) -> CmdResult {
     let cmd_args = parse_cmds(cmds);
-    let cmd_argv = parse_argv(&cmd_args);
+    let cmd_argv = parse_argv(cmd_args);
     for cmd in cmd_argv {
-        if let Err(e) = run_pipe_cmd(cmd) {
+        if let Err(e) = run_pipe_cmd(&cmd) {
             return Err(e);
         }
     }
@@ -388,10 +409,11 @@ fn parse_seps(s: &str, sep: char) -> String {
         .collect()
 }
 
-fn parse_argv(s: &str) -> Vec<&str> {
+fn parse_argv(s: String) -> Vec<String> {
     s.split("\n")
         .filter(|s| !s.trim().is_empty())
-        .collect::<Vec<&str>>()
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>()
 }
 
 #[doc(hidden)]
