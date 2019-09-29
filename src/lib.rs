@@ -1,5 +1,5 @@
 use std::io::{Result, Error, ErrorKind};
-use std::process::{Command, Stdio, ExitStatus, Child};
+use std::process::{Command, Stdio, ExitStatus};
 use std::collections::HashMap;
 
 pub type FunResult = Result<String>;
@@ -209,7 +209,7 @@ macro_rules! run_cmd {
 
 #[doc(hidden)]
 pub trait ProcessResult {
-    fn get_result(process: Process) -> Self;
+    fn get_result(process: &mut Process) -> Self;
 }
 
 ///
@@ -221,7 +221,7 @@ pub trait ProcessResult {
 /// ```
 ///
 pub struct Process {
-    last_proc: Child,
+    cur_cmd: Command,
     full_cmd: String,
 }
 
@@ -229,12 +229,11 @@ impl Process {
     pub fn new(pipe_cmd: &str) -> Result<Process> {
         let args = parse_args(pipe_cmd);
         let argv = parse_argv(&args);
+        let mut cur_cmd = Command::new(&argv[0]);
+        cur_cmd.args(&argv[1..]).stdin(Stdio::inherit());
 
         Ok(Self {
-            last_proc: Command::new(&argv[0])
-                        .args(&argv[1..])
-                        .stdout(Stdio::piped())
-                        .spawn()?,
+            cur_cmd: cur_cmd,
             full_cmd: pipe_cmd.into(),
         })
     }
@@ -242,27 +241,27 @@ impl Process {
     pub fn pipe(&mut self, pipe_cmd: &str) -> Result<Process> {
         let args = parse_args(pipe_cmd);
         let argv = parse_argv(&args);
-        let new_proc = Command::new(&argv[0])
-                        .args(&argv[1..])
-                        .stdin(self.last_proc.stdout.take().unwrap())
-                        .stdout(Stdio::piped())
-                        .spawn()?;
-        self.last_proc.wait()?;
+
+        let mut last_child = self.cur_cmd.stdout(Stdio::piped()).spawn()?;
+        let mut cur_cmd = Command::new(&argv[0]);
+        cur_cmd.args(&argv[1..]).stdin(last_child.stdout.take().unwrap());
+
         Ok(Self {
-            last_proc: new_proc,
+            cur_cmd: cur_cmd,
             full_cmd: format!("{} | {}", self.full_cmd.trim(), pipe_cmd.trim()),
         })
     }
 
-    pub fn wait<T:ProcessResult>(self) -> T {
+    pub fn wait<T:ProcessResult>(&mut self) -> T {
         T::get_result(self)
     }
 }
 
 impl ProcessResult for FunResult {
-    fn get_result(process: Process) -> Self {
+    fn get_result(process: &mut Process) -> Self {
         info!("Running \"{}\" ...", process.full_cmd.trim());
-        let output = process.last_proc.wait_with_output()?;
+        let last_child = process.cur_cmd.stdout(Stdio::piped()).spawn()?;
+        let output = last_child.wait_with_output()?;
         if !output.status.success() {
             Err(to_io_error(&process.full_cmd, output.status))
         } else {
@@ -272,9 +271,15 @@ impl ProcessResult for FunResult {
 }
 
 impl ProcessResult for CmdResult {
-    // wait() without reading seems not working
-    fn get_result(process: Process) -> Self {
-        result_fun_to_cmd(FunResult::get_result(process))
+    fn get_result(process: &mut Process) -> Self {
+        info!("Running \"{}\" ...", process.full_cmd.trim());
+        let mut last_child = process.cur_cmd.spawn()?;
+        let status = last_child.wait()?;
+        if !status.success() {
+            Err(to_io_error(&process.full_cmd, status))
+        } else {
+            Ok(())
+        }
     }
 }
 
