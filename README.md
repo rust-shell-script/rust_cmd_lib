@@ -50,9 +50,14 @@ Process::new("du -ah .")
     .wait::<CmdResult>()?;
 // the same run_cmd! macro
 run_cmd!("du -ah . | sort -hr | head -n 10")?;
+
+Process::new("ls")
+    .pipe("wc -l")
+    .current_dir("/src/rust-shell-script/")
+    .wait::<CmdResult>()?;
 ```
 
-## Run commands in different environment settings
+## Run commands with different environment settings
 ```rust
 Env::new()
     .cd("/src/rust-shell-script/")

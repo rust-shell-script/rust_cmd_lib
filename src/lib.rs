@@ -223,6 +223,10 @@ impl Env {
         self
     }
 
+    pub fn pwd(&self) -> &str {
+        &self.current_dir
+    }
+
     pub fn set(&mut self, key: String, val: String) -> &Self {
         self.variables.insert(key, val);
         self
@@ -255,6 +259,7 @@ pub trait ProcessResult {
 ///
 pub struct Process<'a> {
     env: Option<&'a Env>,
+    cur_dir: Option<String>,
     full_cmd: Vec<Vec<String>>,
 }
 
@@ -265,6 +270,7 @@ impl<'a> Process<'a> {
 
         Self {
             env: None,
+            cur_dir: None,
             full_cmd: vec![argv],
         }
     }
@@ -273,6 +279,11 @@ impl<'a> Process<'a> {
         let mut p = Process::new(cmd);
         p.env = Some(env);
         p
+    }
+
+    pub fn current_dir<S: Borrow<str>>(&mut self, dir: S) -> &mut Self {
+        self.cur_dir = Some(dir.borrow().to_string());
+        self
     }
 
     pub fn pipe<S: Borrow<str>>(&mut self, pipe_cmd: S) -> &mut Self {
@@ -324,7 +335,10 @@ fn format_full_cmd(full_cmd: &Vec<Vec<String>>) -> String {
 fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String)> {
     let mut full_cmd_str = format_full_cmd(&process.full_cmd);
     let first_cmd = &process.full_cmd[0];
-    let cur_dir = if let Some(env) = process.env {
+    let cur_dir = if let Some(dir) = &process.cur_dir {
+        full_cmd_str += &format!(" (cd: {})", dir);
+        dir
+    } else if let Some(env) = process.env {
         full_cmd_str += &format!(" (cd: {})", env.current_dir);
         &env.current_dir
     } else {
