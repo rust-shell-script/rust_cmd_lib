@@ -33,11 +33,11 @@ if run_cmd! {
 ## run_fun! --> FunResult
 ```rust
 let version = run_fun!("rustc --version")?;
-info!("Your rust version is {}", version.trim());
+info!("Your rust version is {}", version);
 
 // with pipes
 let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w")?;
-info!("There are {} words in above sentence", n.trim());
+info!("There are {} words in above sentence", n);
 ```
 
 ## Run pipe commands in the builder style
@@ -105,7 +105,7 @@ FATAL: Command exit unexpectedly: disk is full
 ## Complete Example
 
 ```rust
-use cmd_lib::{info, warn, output, run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{info, warn, run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     let dir = "/var/tmp";
@@ -120,16 +120,18 @@ fn foo() -> CmdResult {
 }
 
 fn get_year() -> FunResult {
-    let year = run_fun!("date +%Y")?;
-    output!("{}", year.trim())
+    run_fun!("date +%Y")
 }
 
 fn main() -> CmdResult {
+    run_cmd!(lcd /tmp; ls | wc -l;)?;
+    run_cmd!("pwd")?;
+
     let name = "rust";
     run_cmd!("echo hello, {}", name)?;
 
     let result = run_fun!("du -ah . | sort -hr | head -n 5")?;
-    info!("Top 5 directories:\n{}", result.trim());
+    info!("Top 5 directories:\n{}", result);
 
     if foo().is_err() {
         warn!("Failed to run foo()");
@@ -147,14 +149,21 @@ fn main() -> CmdResult {
 
 output:
 ```bash
+INFO: Set local current_dir: "/tmp"
+INFO: Running "ls | wc -l (cd: /tmp)" ...
+42
+INFO: Running "pwd" ...
+/home/tao/src/rust-shell-script/rust_cmd_lib
 INFO: Running "echo hello, rust" ...
 hello, rust
 INFO: Running "du -ah . | sort -hr | head -n 5" ...
 INFO: Top 5 directories:
-24K .
-16K ./lib.rs
-4.0K    ./main.rs
-INFO: Set process current_dir: "/var/tmp"
+488M	.
+485M	./target
+286M	./target/debug
+170M	./target/debug/incremental
+163M	./target/package
+INFO: Set env current_dir: "/var/tmp"
 INFO: Running "sleep 3" ...
 INFO: Running "ls nofile" ...
 ls: cannot access 'nofile': No such file or directory

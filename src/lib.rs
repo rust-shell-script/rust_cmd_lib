@@ -261,7 +261,11 @@ impl ProcessResult for FunResult {
         if !output.status.success() {
             Err(to_io_error(&full_cmd_str, output.status))
         } else {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            let mut ans = String::from_utf8_lossy(&output.stdout).to_string();
+            if ans.ends_with('\n') {
+                ans.pop();
+            }
+            Ok(ans)
         }
     }
 }
