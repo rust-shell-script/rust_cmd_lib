@@ -57,17 +57,35 @@ Process::new("ls")
     .wait::<CmdResult>()?;
 ```
 
-## Run commands with different environment settings
-```rust
-Env::new()
-    .cd("/src/rust-shell-script/")
-    .exec("du -ah")
-    .pipe("sort -hr")
-    .pipe("head -n 5")
-    .wait::<CmdResult>()?;
+## Builtin commands
+### pwd
+pwd: print current working directory
 
-let res = Env::new().cd("/home").exec("ls").wait::<FunResult>()?;
+### cd
+cd: set procecess current directory
+
+```rust
+run_cmd! {
+    cd /tmp
+    ls | wc -l
+};
+run_cmd!("pwd");
 ```
+
+output will be "/tmp"
+
+### lcd
+lcd: set group commands current directory
+
+```rust
+run_cmd! {
+    lcd /tmp
+    ls | wc -l
+};
+run_cmd!("pwd");
+```
+
+output will be the old current directory
 
 ## Easy Reporting
 ```rust
@@ -90,9 +108,12 @@ FATAL: Command exit unexpectedly: disk is full
 use cmd_lib::{info, warn, output, run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
-    let f = "/var/tmp/nofile";
-    run_cmd!{
-        use f;
+    let dir = "/var/tmp";
+    let f = "nofile";
+
+    run_cmd! {
+        use dir, f;
+        cd ${dir};
         sleep 3;
         ls ${f};
     }
@@ -130,14 +151,13 @@ INFO: Running "echo hello, rust" ...
 hello, rust
 INFO: Running "du -ah . | sort -hr | head -n 5" ...
 INFO: Top 5 directories:
-362M    .
-360M    ./target
-216M    ./target/debug
-131M    ./target/debug/incremental
-117M    ./target/package
+24K .
+16K ./lib.rs
+4.0K    ./main.rs
+INFO: Set process current_dir: "/var/tmp"
 INFO: Running "sleep 3" ...
-INFO: Running "ls "/var/tmp/nofile"" ...
-ls: cannot access '/var/tmp/nofile': No such file or directory
+INFO: Running "ls nofile" ...
+ls: cannot access 'nofile': No such file or directory
 WARN: Failed to run foo()
 INFO: Running "date +%Y" ...
 INFO: You are in year 2019

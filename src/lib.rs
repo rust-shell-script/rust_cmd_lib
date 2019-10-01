@@ -204,43 +204,6 @@ macro_rules! run_cmd {
     }};
 }
 
-/// Envrionment settings
-pub struct Env {
-    current_dir: String,
-    variables: HashMap<String, String>,
-}
-
-impl Env {
-    pub fn new() -> Self {
-        Self {
-            current_dir: ".".to_string(),
-            variables: HashMap::new(),
-        }
-    }
-
-    pub fn cd(&mut self, dir: &str) -> &Self {
-        self.current_dir = dir.to_string();
-        self
-    }
-
-    pub fn pwd(&self) -> &str {
-        &self.current_dir
-    }
-
-    pub fn set(&mut self, key: String, val: String) -> &Self {
-        self.variables.insert(key, val);
-        self
-    }
-
-    pub fn get(&mut self, key: &str) -> Option<&String> {
-        self.variables.get(key)
-    }
-
-    pub fn exec(&self, cmd: &str) -> Process {
-        Process::new_with_env(self, cmd)
-    }
-}
-
 #[doc(hidden)]
 pub trait ProcessResult {
     fn get_result(process: &mut Process) -> Self;
@@ -257,28 +220,20 @@ pub trait ProcessResult {
 ///     .wait::<CmdResult>()?
 /// ```
 ///
-pub struct Process<'a> {
-    env: Option<&'a Env>,
+pub struct Process {
     cur_dir: Option<String>,
     full_cmd: Vec<Vec<String>>,
 }
 
-impl<'a> Process<'a> {
+impl Process {
     pub fn new<S: Borrow<str>>(pipe_cmd: S) -> Self {
         let args = parse_args(pipe_cmd.borrow());
         let argv = parse_argv(args);
 
         Self {
-            env: None,
             cur_dir: None,
             full_cmd: vec![argv],
         }
-    }
-
-    fn new_with_env(env: &'a Env, cmd: &str) -> Self {
-        let mut p = Process::new(cmd);
-        p.env = Some(env);
-        p
     }
 
     pub fn current_dir<S: Borrow<str>>(&mut self, dir: S) -> &mut Self {
@@ -335,18 +290,14 @@ fn format_full_cmd(full_cmd: &Vec<Vec<String>>) -> String {
 fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String)> {
     let mut full_cmd_str = format_full_cmd(&process.full_cmd);
     let first_cmd = &process.full_cmd[0];
-    let cur_dir = if let Some(dir) = &process.cur_dir {
+    let mut cmd = Command::new(&first_cmd[0]);
+    if let Some(dir) = &process.cur_dir {
         full_cmd_str += &format!(" (cd: {})", dir);
-        dir
-    } else if let Some(env) = process.env {
-        full_cmd_str += &format!(" (cd: {})", env.current_dir);
-        &env.current_dir
-    } else {
-        "."
-    };
+        cmd.current_dir(dir);
+    }
     info!("Running \"{}\" ...", full_cmd_str);
-    let mut last_proc = Command::new(&first_cmd[0])
-        .current_dir(cur_dir)
+
+    let mut last_proc = cmd
         .args(&first_cmd[1..])
         .stdout(if pipe_last || process.full_cmd.len() > 1 {
             Stdio::piped()
@@ -370,11 +321,39 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
     Ok((last_proc, full_cmd_str))
 }
 
-fn run_pipe_cmd(full_command: &str) -> CmdResult {
+fn run_pipe_cmd(full_command: &str, cd_opt: &mut Option<String>) -> CmdResult {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(pipe_args);
 
+    let mut pipe_iter =  pipe_argv[0].split_whitespace();
+    let cmd = pipe_iter.next().unwrap();
+    if cmd == "cd" || cmd == "lcd" {
+        let dir = pipe_iter.next().unwrap().trim_matches('"');
+        if pipe_iter.next() != None {
+            let err = Error::new(ErrorKind::Other,
+            format!("{} format wrong: {}", cmd, full_command));
+            return Err(err);
+        } else {
+            if cmd == "cd" {
+                info!("Set env current_dir: \"{}\"", dir);
+                return std::env::set_current_dir(dir);
+            } else {
+                info!("Set local current_dir: \"{}\"", dir);
+                *cd_opt = Some(dir.into());
+                return Ok(());
+            }
+        }
+    } else if cmd == "pwd" {
+        let pwd = std::env::current_dir()?;
+        info!("Running \"pwd\" ...");
+        println!("{}", pwd.display());
+        return Ok(());
+    }
+
     let mut last_proc = Process::new(pipe_argv[0].clone());
+    if let Some(dir) = cd_opt {
+        last_proc.current_dir(dir.clone());
+    }
     for pipe_cmd in pipe_argv.iter().skip(1) {
         last_proc.pipe(pipe_cmd.clone());
     }
@@ -385,6 +364,13 @@ fn run_pipe_cmd(full_command: &str) -> CmdResult {
 fn run_pipe_fun(full_command: &str) -> FunResult {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(pipe_args);
+
+    let mut pipe_iter =  pipe_argv[0].split_whitespace();
+    let cmd = pipe_iter.next().unwrap();
+    if cmd == "pwd" {
+        let pwd = std::env::current_dir()?;
+        return Ok(format!("{}", pwd.display()));
+    }
 
     let mut last_proc = Process::new(pipe_argv[0].clone());
     for pipe_cmd in pipe_argv.iter().skip(1) {
@@ -403,8 +389,9 @@ pub fn run_fun(cmds: &str) -> FunResult {
 pub fn run_cmd(cmds: &str) -> CmdResult {
     let cmd_args = parse_cmds(cmds);
     let cmd_argv = parse_argv(cmd_args);
+    let mut cd_opt: Option<String> = None;
     for cmd in cmd_argv {
-        if let Err(e) = run_pipe_cmd(&cmd) {
+        if let Err(e) = run_pipe_cmd(&cmd, &mut cd_opt) {
             return Err(e);
         }
     }
