@@ -1,9 +1,8 @@
-# cmd_lib - Rust command line library
+# Command-line library for writing rust style shell scripts
 
-Common rust command line macros and utils, to write shell script like tasks
+Common rust command-line macros and utilities, to write shell-script like tasks
 easily in rust programming language.
-Available at [cargo](https://crates.io/crates/cmd_lib).
-
+Available at [crates.io](https://crates.io/crates/cmd_lib).
 
 ## run_cmd! --> CmdResult
 ```rust
@@ -66,8 +65,8 @@ cd: set procecess current directory
 
 ```rust
 run_cmd! {
-    cd /tmp
-    ls | wc -l
+    cd /tmp;
+    ls | wc -l;
 };
 run_cmd!("pwd");
 ```
@@ -79,8 +78,8 @@ lcd: set group commands current directory
 
 ```rust
 run_cmd! {
-    lcd /tmp
-    ls | wc -l
+    lcd /tmp;
+    ls | wc -l;
 };
 run_cmd!("pwd");
 ```

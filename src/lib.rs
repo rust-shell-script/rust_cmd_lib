@@ -141,11 +141,11 @@ macro_rules! macro_str {
 /// ## run_fun! --> FunResult
 /// ```rust
 /// let version = run_fun!("rustc --version")?;
-/// info!("Your rust version is {}", version.trim());
+/// info!("Your rust version is {}", version);
 ///
 /// // with pipes
 /// let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w")?;
-/// info!("There are {} words in above sentence", n.trim());
+/// info!("There are {} words in above sentence", n);
 ///
 /// // without string quotes
 /// let files = run_fun!(du -ah . | sort -hr | head -n 10)?;
@@ -210,7 +210,7 @@ pub trait ProcessResult {
 }
 
 ///
-/// Low level process API, std::process::Child wrapper
+/// Low level process API, wrapper on std::process module
 ///
 /// Pipe command could also lauched in builder style
 /// ```rust
