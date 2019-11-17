@@ -8,6 +8,9 @@ pub type CmdResult = Result<()>;
 
 /// To print warning information to stderr, no return value
 /// ```rust
+/// #[macro_use]
+/// use cmd_lib::info;
+///
 /// info!("Running command xxx ...");
 /// ```
 #[macro_export]
@@ -19,6 +22,9 @@ macro_rules! info {
 
 /// To print warning information to stderr, no return value
 /// ```rust
+/// #[macro_use]
+/// use cmd_lib::warn;
+///
 /// warn!("Running command failed");
 /// ```
 #[macro_export]
@@ -30,6 +36,9 @@ macro_rules! warn {
 
 /// To print error information to stderr, no return value
 /// ```rust
+/// #[macro_use]
+/// use cmd_lib::err;
+///
 /// err!("Copying file failed");
 /// ```
 #[macro_export]
@@ -40,7 +49,11 @@ macro_rules! err {
 }
 
 /// To print information to stderr, and exit current process with non-zero
-/// ```rust
+/// ```should_panic
+/// #[macro_use]
+/// use cmd_lib::die;
+///
+/// let reason = "system error";
 /// die!("command failed: {}", reason);
 /// ```
 #[macro_export]
@@ -53,7 +66,7 @@ macro_rules! die {
 }
 
 /// To return FunResult
-/// ```rust
+/// ```compile_fail
 /// fn foo() -> FunResult
 /// ...
 /// output!("yes");
@@ -139,16 +152,18 @@ macro_rules! macro_str {
 }
 
 /// ## run_fun! --> FunResult
-/// ```rust
-/// let version = run_fun!("rustc --version")?;
-/// info!("Your rust version is {}", version);
+/// ```no_run
+/// #[macro_use]
+/// use cmd_lib::{info, run_fun};
+/// let version = run_fun!("rustc --version");
+/// info!("Your rust version is {:?}", version);
 ///
 /// // with pipes
-/// let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w")?;
-/// info!("There are {} words in above sentence", n);
+/// let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w");
+/// info!("There are {:?} words in above sentence", n);
 ///
 /// // without string quotes
-/// let files = run_fun!(du -ah . | sort -hr | head -n 10)?;
+/// let files = run_fun!(du -ah . | sort -hr | head -n 10);
 /// ```
 #[macro_export]
 macro_rules! run_fun {
@@ -163,6 +178,9 @@ macro_rules! run_fun {
 ///
 /// ## run_cmd! --> CmdResult
 /// ```rust
+/// #[macro_use]
+/// use cmd_lib::run_cmd;
+///
 /// let name = "rust";
 /// run_cmd!("echo hello, {}", name);
 ///
@@ -175,11 +193,9 @@ macro_rules! run_fun {
 /// // or a group of commands
 /// // if any command fails, just return Err(...)
 /// run_cmd!{
-///     use file;
-///
 ///     date;
 ///     ls -l ${file};
-/// }
+/// };
 /// ```
 #[macro_export]
 macro_rules! run_cmd {
@@ -214,10 +230,12 @@ pub trait ProcessResult {
 ///
 /// Pipe command could also lauched in builder style
 /// ```rust
+/// use cmd_lib::{Process,CmdResult};
+///
 /// Process::new("du -ah .")
 ///     .pipe("sort -hr")
 ///     .pipe("head -n 5")
-///     .wait::<CmdResult>()?
+///     .wait::<CmdResult>();
 /// ```
 ///
 pub struct Process {
