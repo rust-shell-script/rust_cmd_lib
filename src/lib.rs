@@ -317,7 +317,6 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
         full_cmd_str += &format!(" (cd: {})", dir);
         cmd.current_dir(dir);
     }
-    info!("Running \"{}\" ...", full_cmd_str);
 
     let mut last_proc = cmd
         .args(&first_cmd[1..])
