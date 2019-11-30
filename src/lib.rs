@@ -336,6 +336,7 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
                 Stdio::piped()
             })
             .spawn()?;
+        last_proc.wait();
         last_proc = new_proc;
     }
 
