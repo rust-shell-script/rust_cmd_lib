@@ -1,4 +1,4 @@
-use cmd_lib::{sh, run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{run_cmd, run_fun, sh, CmdResult, FunResult};
 
 sh! {
     fn foo() -> CmdResult {

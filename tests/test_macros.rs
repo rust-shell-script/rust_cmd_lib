@@ -1,7 +1,6 @@
-#[macro_use]
 extern crate cmd_lib;
 
-use cmd_lib::{sh, run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{run_cmd, run_fun, sh};
 
 #[test]
 fn test_run_cmd() {
@@ -13,7 +12,8 @@ fn test_run_cmds() {
     let _ = run_cmd! {
         cd /tmp;
         ls;
-    }.unwrap();
+    }
+    .unwrap();
 }
 
 #[test]

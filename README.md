@@ -7,6 +7,7 @@ Available at [crates.io](https://crates.io/crates/cmd_lib).
 ## run_cmd! --> CmdResult
 ```rust
 let name = "rust";
+run_cmd!(echo $name)?;
 run_cmd!(|name| echo "hello, $name")?;
 
 // pipe commands are also supported
@@ -28,12 +29,12 @@ if run_cmd! {
 
 ## run_fun! --> FunResult
 ```rust
-let version = run_fun!(rustc --version)?;
-info!("Your rust version is {}", version);
+let version = run_fun!(rustc --version).unwrap();
+eprintln!("Your rust version is {}", version);
 
 // with pipes
-let n = run_fun!(echo "the quick brown fox jumped over the lazy dog" | wc -w)?;
-info!("There are {} words in above sentence", n);
+let n = run_fun!(echo "the quick brown fox jumped over the lazy dog" | wc -w).unwrap();
+eprintln!("There are {} words in above sentence", n);
 ```
 
 ## sh! to write shell-like code
@@ -151,32 +152,6 @@ fn main() -> CmdResult {
     Ok(())
 }
 ```
-
-output:
-```bash
-INFO: Set local current_dir: "/tmp"
-INFO: Running "ls | wc -l (cd: /tmp)" ...
-42
-INFO: Running "pwd" ...
-/home/tao/src/rust-shell-script/rust_cmd_lib
-INFO: Running "echo hello, rust" ...
-hello, rust
-INFO: Running "du -ah . | sort -hr | head -n 5" ...
-INFO: Top 5 directories:
-488M	.
-485M	./target
-286M	./target/debug
-170M	./target/debug/incremental
-163M	./target/package
-INFO: Set env current_dir: "/var/tmp"
-INFO: Running "sleep 3" ...
-INFO: Running "ls nofile" ...
-ls: cannot access 'nofile': No such file or directory
-WARN: Failed to run foo()
-INFO: Running "date +%Y" ...
-INFO: You are in year 2019
-```
-
 ## Related
 
 See [rust-shell-script](https://github.com/rust-shell-script/rust-shell-script/), which can compile

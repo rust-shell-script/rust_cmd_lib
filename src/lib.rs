@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::collections::{VecDeque, HashMap};
+use std::collections::{HashMap, VecDeque};
 use std::io::{Error, ErrorKind, Result};
 use std::process::{Child, Command, ExitStatus, Stdio};
 
@@ -116,11 +116,11 @@ macro_rules! parse_sym_table {
 /// ```no_run
 /// #[macro_use]
 /// use cmd_lib::run_fun;
-/// let version = run_fun!(rustc --version)?;
+/// let version = run_fun!(rustc --version).unwrap();
 /// println!("Your rust version is {}", version);
 ///
 /// // with pipes
-/// let files = run_fun!(du -ah . | sort -hr | head -n 10)?;
+/// let files = run_fun!(du -ah . | sort -hr | head -n 10).unwrap();
 /// println!("files: {}", files);
 /// ```
 #[macro_export]
@@ -167,18 +167,22 @@ macro_rules! run_cmd {
 }
 
 #[doc(hidden)]
-pub fn run_cmd_with_sym_table(cmd: &str,
-                              sym_table: &HashMap<String, String>,
-                              file: &str,
-                              line: u32) -> CmdResult {
+pub fn run_cmd_with_sym_table(
+    cmd: &str,
+    sym_table: &HashMap<String, String>,
+    file: &str,
+    line: u32,
+) -> CmdResult {
     run_cmd(&resolve_name(&cmd, &sym_table, &file, line))
 }
 
 #[doc(hidden)]
-pub fn run_fun_with_sym_table(fun: &str,
-                              sym_table: &HashMap<String, String>,
-                              file: &str,
-                              line: u32) -> FunResult {
+pub fn run_fun_with_sym_table(
+    fun: &str,
+    sym_table: &HashMap<String, String>,
+    file: &str,
+    line: u32,
+) -> FunResult {
     run_fun(&resolve_name(&fun, &sym_table, &file, line))
 }
 
@@ -189,11 +193,17 @@ pub fn parse_src_cmds(src: String) -> VecDeque<String> {
     let n = s.len();
     let mut i: usize = 0;
     while i < n {
-        while i < n - 1 && ((s[i] != '$' && s[i] != '#') || s[i + 1] != '(') { i += 1; }
-        if i >= n - 1 { break }
+        while i < n - 1 && ((s[i] != '$' && s[i] != '#') || s[i + 1] != '(') {
+            i += 1;
+        }
+        if i >= n - 1 {
+            break;
+        }
         i += 2; // cmd starts
         let mut j = i;
-        while j < n && s[j] != ')' { j += 1; }  // cmd ends
+        while j < n && s[j] != ')' {
+            j += 1;
+        } // cmd ends
         ret.push_back(s[i..j].into_iter().collect());
         i = j;
     }
@@ -393,7 +403,7 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
                 Stdio::piped()
             })
             .spawn()?;
-        last_proc.wait();
+        last_proc.wait().unwrap();
         last_proc = new_proc;
     }
 
@@ -404,13 +414,15 @@ fn run_pipe_cmd(full_command: &str, cd_opt: &mut Option<String>) -> CmdResult {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(pipe_args);
 
-    let mut pipe_iter =  pipe_argv[0].split_whitespace();
+    let mut pipe_iter = pipe_argv[0].split_whitespace();
     let cmd = pipe_iter.next().unwrap();
     if cmd == "cd" || cmd == "lcd" {
         let dir = pipe_iter.next().unwrap().trim_matches('"');
         if pipe_iter.next() != None {
-            let err = Error::new(ErrorKind::Other,
-            format!("{} format wrong: {}", cmd, full_command));
+            let err = Error::new(
+                ErrorKind::Other,
+                format!("{} format wrong: {}", cmd, full_command),
+            );
             return Err(err);
         } else {
             if cmd == "cd" {
@@ -444,7 +456,7 @@ fn run_pipe_fun(full_command: &str) -> FunResult {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(pipe_args);
 
-    let mut pipe_iter =  pipe_argv[0].split_whitespace();
+    let mut pipe_iter = pipe_argv[0].split_whitespace();
     let cmd = pipe_iter.next().unwrap();
     if cmd == "pwd" {
         let pwd = std::env::current_dir()?;
@@ -557,7 +569,9 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
             }
             if input[i] == '|' {
                 i += 1;
-                while i < len && input[i] != '|' { i += 1; }
+                while i < len && input[i] != '|' {
+                    i += 1;
+                }
                 i += 1;
             }
         }
@@ -572,11 +586,15 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
             i += 1;
             let with_bracket = input[i] == '{';
             let mut var = String::new();
-            if with_bracket { i += 1; }
-            while i < len && ((input[i] >= 'a' && input[i] <= 'z') ||
-                  (input[i] >= 'A' && input[i] <= 'Z') ||
-                  (input[i] >= '0' && input[i] <= '9') ||
-                  (input[i] == '_')) {
+            if with_bracket {
+                i += 1;
+            }
+            while i < len
+                && ((input[i] >= 'a' && input[i] <= 'z')
+                    || (input[i] >= 'A' && input[i] <= 'Z')
+                    || (input[i] >= '0' && input[i] <= '9')
+                    || (input[i] == '_'))
+            {
                 var.push(input[i]);
                 i += 1;
             }
@@ -608,4 +626,3 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
 
     output
 }
-
