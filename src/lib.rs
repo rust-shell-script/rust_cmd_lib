@@ -100,6 +100,12 @@ macro_rules! parse_sym_table {
         $crate::parse_sym_table!{&$st; [$cur] $($other)*}
     };
     // start: block tokenstream
+    (|$arg0:ident $(,$arg:ident)*| $cur:tt $($other:tt)*) => {{
+        let mut __sym_table = std::collections::HashMap::new();
+        __sym_table.insert(stringify!($arg0).to_owned(), $arg0.to_owned());
+        $(__sym_table.insert(stringify!($arg).to_owned(), $arg.to_owned());)*
+        $crate::parse_sym_table!{&__sym_table; [$cur] $($other)*}
+    }};
     ($cur:tt $($other:tt)*) => {{
         let mut __sym_table = std::collections::HashMap::new();
         $crate::parse_sym_table!{&__sym_table; [$cur] $($other)*}
@@ -122,7 +128,9 @@ macro_rules! run_fun {
    ($($cur:tt)*) => {
        $crate::run_fun_with_sym_table(
            &$crate::macro_str!(run_fun),
-           &$crate::parse_sym_table!($($cur)*))
+           &$crate::parse_sym_table!($($cur)*),
+           &file!(),
+           line!())
    };
 }
 
@@ -152,20 +160,26 @@ macro_rules! run_cmd {
    ($($cur:tt)*) => {
        $crate::run_cmd_with_sym_table(
            &$crate::macro_str!(run_cmd),
-           &$crate::parse_sym_table!($($cur)*))
+           &$crate::parse_sym_table!($($cur)*),
+           &file!(),
+           line!())
    };
 }
 
 #[doc(hidden)]
-pub fn run_cmd_with_sym_table(cmd: &str, sym_table: &HashMap<String, String>) -> CmdResult {
-    println!("running cmd: {}, sym_table: {:#?}", cmd, sym_table);
-    Ok(())
+pub fn run_cmd_with_sym_table(cmd: &str,
+                              sym_table: &HashMap<String, String>,
+                              file: &str,
+                              line: u32) -> CmdResult {
+    run_cmd(&resolve_name(&cmd, &sym_table, &file, line))
 }
 
 #[doc(hidden)]
-pub fn run_fun_with_sym_table(cmd: &str, sym_table: &HashMap<String, String>) -> FunResult {
-    println!("running fun: {}, sym_table: {:#?}", cmd, sym_table);
-    Ok("ok".to_owned())
+pub fn run_fun_with_sym_table(fun: &str,
+                              sym_table: &HashMap<String, String>,
+                              file: &str,
+                              line: u32) -> FunResult {
+    run_fun(&resolve_name(&fun, &sym_table, &file, line))
 }
 
 #[doc(hidden)]
@@ -199,7 +213,9 @@ macro_rules! sh {
             @[block $($pre)*
                 $crate::run_cmd_with_sym_table(
                     &$cmds.pop_front().unwrap(),
-                    &$crate::parse_sym_table!($($cur)*))]
+                    &$crate::parse_sym_table!($($cur)*),
+                    &file!(),
+                    line!())]
             $($other)*
         }
     };
@@ -213,7 +229,9 @@ macro_rules! sh {
             @[block $($pre)*
                 $crate::run_fun_with_sym_table(
                     &$cmds.pop_front().unwrap(),
-                    &$crate::parse_sym_table!($($cur)*))]
+                    &$crate::parse_sym_table!($($cur)*),
+                    &file!(),
+                    line!())]
             $($other)*
         }
     };
@@ -537,11 +555,10 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
             while input[i] == ' ' || input[i] == '\t' || input[i] == '\n' {
                 i += 1;
             }
-            let first = input[i..i + 4].iter().collect::<String>();
-            if i < len - 4 && first == "use " || first == "use\t" {
-                while input[i] != ';' {
-                    i += 1;
-                }
+            if input[i] == '|' {
+                i += 1;
+                while i < len && input[i] != '|' { i += 1; }
+                i += 1;
             }
         }
 
