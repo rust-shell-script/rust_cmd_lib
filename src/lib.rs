@@ -426,17 +426,14 @@ fn run_pipe_cmd(full_command: &str, cd_opt: &mut Option<String>) -> CmdResult {
             return Err(err);
         } else {
             if cmd == "cd" {
-                eprintln!("Set env current_dir: \"{}\"", dir);
                 return std::env::set_current_dir(dir);
             } else {
-                eprintln!("Set local current_dir: \"{}\"", dir);
                 *cd_opt = Some(dir.into());
                 return Ok(());
             }
         }
     } else if cmd == "pwd" {
         let pwd = std::env::current_dir()?;
-        eprintln!("Running \"pwd\" ...");
         println!("{}", pwd.display());
         return Ok(());
     }
