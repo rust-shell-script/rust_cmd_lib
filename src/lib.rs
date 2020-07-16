@@ -1,82 +1,10 @@
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::collections::{VecDeque, HashMap};
 use std::io::{Error, ErrorKind, Result};
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 pub type FunResult = Result<String>;
 pub type CmdResult = Result<()>;
-
-/// To print warning information to stderr, no return value
-/// ```rust
-/// #[macro_use]
-/// use cmd_lib::info;
-///
-/// info!("Running command xxx ...");
-/// ```
-#[macro_export]
-macro_rules! info {
-    ($($arg:tt)*) => {
-        eprintln!("INFO: {}", format!($($arg)*));
-    }
-}
-
-/// To print warning information to stderr, no return value
-/// ```rust
-/// #[macro_use]
-/// use cmd_lib::warn;
-///
-/// warn!("Running command failed");
-/// ```
-#[macro_export]
-macro_rules! warn {
-    ($($arg:tt)*) => {
-        eprintln!("WARN: {}", format!($($arg)*));
-    }
-}
-
-/// To print error information to stderr, no return value
-/// ```rust
-/// #[macro_use]
-/// use cmd_lib::err;
-///
-/// err!("Copying file failed");
-/// ```
-#[macro_export]
-macro_rules! err {
-    ($($arg:tt)*) => {
-        eprintln!("ERROR: {}", format!($($arg)*));
-    }
-}
-
-/// To print information to stderr, and exit current process with non-zero
-/// ```should_panic
-/// #[macro_use]
-/// use cmd_lib::die;
-///
-/// let reason = "system error";
-/// die!("command failed: {}", reason);
-/// ```
-#[macro_export]
-macro_rules! die {
-    ($($arg:tt)*) => {{
-        use std::process::exit;
-        eprintln!("FATAL: {}", format!($($arg)*));
-        exit(1);
-    }}
-}
-
-/// To return FunResult
-/// ```compile_fail
-/// fn foo() -> FunResult
-/// ...
-/// output!("yes");
-/// ```
-#[macro_export]
-macro_rules! output {
-    ($($arg:tt)*) => {
-        Ok(format!($($arg)*)) as FunResult
-    }
-}
 
 // XX: hack here to return orignal macro string
 // In future, use proc macro or wait for std provide such a macro
@@ -151,27 +79,50 @@ macro_rules! macro_str {
     }};
 }
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! parse_sym_table {
+    (&$st:expr;) => {
+        $st
+    };
+    (&$st:expr; [$] {$cur:ident} $($other:tt)*) => {
+        $st.insert(stringify!($cur).to_owned(), $cur.to_owned());
+        $crate::parse_sym_table!{&$st; $($other)*}
+    };
+    (&$st:expr; [$] $cur:ident $($other:tt)*) => {
+        $st.insert(stringify!($cur).to_owned(), $cur.to_owned());
+        $crate::parse_sym_table!{&$st; $($other)*}
+    };
+    (&$st:expr; [$cur:tt] $($other:tt)*) => {
+        $crate::parse_sym_table!{&$st; $($other)*}
+    };
+    (&$st:expr; $cur:tt $($other:tt)*) => {
+        $crate::parse_sym_table!{&$st; [$cur] $($other)*}
+    };
+    // start: block tokenstream
+    ($cur:tt $($other:tt)*) => {{
+        let mut __sym_table = std::collections::HashMap::new();
+        $crate::parse_sym_table!{&__sym_table; [$cur] $($other)*}
+    }};
+}
+
 /// ## run_fun! --> FunResult
 /// ```no_run
 /// #[macro_use]
-/// use cmd_lib::{info, run_fun};
-/// let version = run_fun!("rustc --version");
-/// info!("Your rust version is {:?}", version);
+/// use cmd_lib::run_fun;
+/// let version = run_fun!(rustc --version)?;
+/// println!("Your rust version is {}", version);
 ///
 /// // with pipes
-/// let n = run_fun!("echo the quick brown fox jumped over the lazy dog | wc -w");
-/// info!("There are {:?} words in above sentence", n);
-///
-/// // without string quotes
-/// let files = run_fun!(du -ah . | sort -hr | head -n 10);
+/// let files = run_fun!(du -ah . | sort -hr | head -n 10)?;
+/// println!("files: {}", files);
 /// ```
 #[macro_export]
 macro_rules! run_fun {
-   ($cmd:ident $($arg:tt)*) => {
-       $crate::run_fun(&$crate::macro_str!(run_fun))
-   };
-   ($($arg:tt)*) => {
-       $crate::run_fun(&format!($($arg)*))
+   ($($cur:tt)*) => {
+       $crate::run_fun_with_sym_table(
+           &$crate::macro_str!(run_fun),
+           &$crate::parse_sym_table!($($cur)*))
    };
 }
 
@@ -182,42 +133,130 @@ macro_rules! run_fun {
 /// use cmd_lib::run_cmd;
 ///
 /// let name = "rust";
-/// run_cmd!("echo hello, {}", name);
+/// run_cmd!(echo $name);
+/// run_cmd!(|name| echo "hello, $name");
 ///
 /// // pipe commands are also supported
-/// run_cmd!("du -ah . | sort -hr | head -n 10");
-///
-/// // work without string quote
 /// run_cmd!(du -ah . | sort -hr | head -n 10);
 ///
 /// // or a group of commands
 /// // if any command fails, just return Err(...)
+/// let file = "/tmp/f";
 /// run_cmd!{
 ///     date;
-///     ls -l ${file};
+///     ls -l $file;
 /// };
 /// ```
 #[macro_export]
 macro_rules! run_cmd {
-    (use $($arg:tt)*) => {{
-        let mut sym_table = ::std::collections::HashMap::new();
-        run_cmd!(&sym_table; $($arg)*)
-    }};
-    (&$st:expr; $var:ident, $($arg:tt)*) => {{
-        $st.insert(stringify!($var).into(), format!("{}", $var));
-        run_cmd!(&$st; $($arg)*)
-    }};
-    (&$st:expr; $var:ident; $($arg:tt)*) => {{
-        $st.insert(stringify!($var).into(), format!("{}", $var));
-        let src = $crate::macro_str!(run_cmd);
-        $crate::run_cmd(&$crate::resolve_name(&src, &$st, &file!(), line!()))
-    }};
-    ($cmd:ident $($arg:tt)*) => {{
-        $crate::run_cmd(&$crate::macro_str!(run_cmd))
-    }};
-    ($($arg:tt)*) => {{
-        $crate::run_cmd(&format!($($arg)*))
-    }};
+   ($($cur:tt)*) => {
+       $crate::run_cmd_with_sym_table(
+           &$crate::macro_str!(run_cmd),
+           &$crate::parse_sym_table!($($cur)*))
+   };
+}
+
+#[doc(hidden)]
+pub fn run_cmd_with_sym_table(cmd: &str, sym_table: &HashMap<String, String>) -> CmdResult {
+    println!("running cmd: {}, sym_table: {:#?}", cmd, sym_table);
+    Ok(())
+}
+
+#[doc(hidden)]
+pub fn run_fun_with_sym_table(cmd: &str, sym_table: &HashMap<String, String>) -> FunResult {
+    println!("running fun: {}, sym_table: {:#?}", cmd, sym_table);
+    Ok("ok".to_owned())
+}
+
+#[doc(hidden)]
+pub fn parse_src_cmds(src: String) -> VecDeque<String> {
+    let mut ret = VecDeque::new();
+    let s: Vec<char> = src.chars().collect();
+    let n = s.len();
+    let mut i: usize = 0;
+    while i < n {
+        while i < n - 1 && ((s[i] != '$' && s[i] != '#') || s[i + 1] != '(') { i += 1; }
+        if i >= n - 1 { break }
+        i += 2; // cmd starts
+        let mut j = i;
+        while j < n && s[j] != ')' { j += 1; }  // cmd ends
+        ret.push_back(s[i..j].into_iter().collect());
+        i = j;
+    }
+    ret
+}
+
+#[macro_export]
+macro_rules! sh {
+    () => {};
+    (&$cmds:expr; @[block $($tts:tt)*]) => {
+        $($tts)*
+    };
+
+    (&$cmds:expr; @[cmd_candidate $($pre:tt)*] ($($cur:tt)*) $($other:tt)*) => {
+        sh!{
+            &$cmds;
+            @[block $($pre)*
+                $crate::run_cmd_with_sym_table(
+                    &$cmds.pop_front().unwrap(),
+                    &$crate::parse_sym_table!($($cur)*))]
+            $($other)*
+        }
+    };
+    (&$cmds:expr; @[cmd_candidate $($pre:tt)*] $cur:tt $($other:tt)*) => {
+        compile_error!("invalid token started with '#'");
+    };
+
+    (&$cmds:expr; @[fun_candidate $($pre:tt)*] ($($cur:tt)*) $($other:tt)*) => {
+        sh!{
+            &$cmds;
+            @[block $($pre)*
+                $crate::run_fun_with_sym_table(
+                    &$cmds.pop_front().unwrap(),
+                    &$crate::parse_sym_table!($($cur)*))]
+            $($other)*
+        }
+    };
+    (&$cmds:expr; @[fun_candidate $($pre:tt)*] $cur:tt $($other:tt)*) => {
+        compile_error!("invalid token started with '$'");
+    };
+
+    // shell fun candidate in block tokenstream
+    (&$cmds:expr; @[block $($pre:tt)*] [$] $($other:tt)*) => {
+        sh!{&$cmds; @[fun_candidate $($pre)*] $($other)*}
+    };
+    // shell cmd candidate in block tokenstream
+    (&$cmds:expr; @[block $($pre:tt)*] [#] $($other:tt)*) => {
+        sh!{&$cmds; @[cmd_candidate $($pre)*] $($other)*}
+    };
+
+    (&$cmds:expr; @[block $($pre:tt)*] [$cur:tt] $($other:tt)*) => {
+        sh!{&$cmds; @[block $($pre)* $cur] $($other)*}
+    };
+    (&$cmds:expr; @[block $($pre:tt)*] $cur:tt $($other:tt)*) => {
+        sh!{&$cmds; @[block $($pre)*] [$cur] $($other)*}
+    };
+
+    // start: block tokenstream
+    (fn $cur:tt $($other:tt)*) => {
+        sh!{ @fun[fn] $cur $($other)* }
+    };
+    (pub fn $cur:tt $($other:tt)*) => {
+        sh!{ @fun[pub fn] $cur $($other)* }
+    };
+    (@fun[$($pre:tt)*] {$($cur:tt)*} $($other:tt)*) => {
+        $($pre)* {
+            sh!{ $($cur)* }
+        }
+        sh!{ $($other)* }
+    };
+    (@fun[$($pre:tt)*] $cur:tt $($other:tt)*) => {
+        sh!{ @fun[$($pre)* $cur] $($other)* }
+    };
+    ($cur:tt $($other:tt)*) => {
+        let mut __sh_cmds = $crate::parse_src_cmds($crate::macro_str!(sh));
+        sh!{&__sh_cmds; @[block] [$cur] $($other)*}
+    };
 }
 
 #[doc(hidden)]
@@ -357,17 +396,17 @@ fn run_pipe_cmd(full_command: &str, cd_opt: &mut Option<String>) -> CmdResult {
             return Err(err);
         } else {
             if cmd == "cd" {
-                info!("Set env current_dir: \"{}\"", dir);
+                eprintln!("Set env current_dir: \"{}\"", dir);
                 return std::env::set_current_dir(dir);
             } else {
-                info!("Set local current_dir: \"{}\"", dir);
+                eprintln!("Set local current_dir: \"{}\"", dir);
                 *cd_opt = Some(dir.into());
                 return Ok(());
             }
         }
     } else if cmd == "pwd" {
         let pwd = std::env::current_dir()?;
-        info!("Running \"pwd\" ...");
+        eprintln!("Running \"pwd\" ...");
         println!("{}", pwd.display());
         return Ok(());
     }
@@ -479,7 +518,7 @@ fn parse_seps(s: &str, sep: char) -> String {
 fn parse_argv(s: String) -> Vec<String> {
     s.split("\n")
         .filter(|s| !s.trim().is_empty())
-        .map(|s| s.to_string())
+        .map(|s| s.to_owned())
         .collect::<Vec<String>>()
 }
 
@@ -518,13 +557,13 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
             while input[i] != '}' {
                 var.push(input[i]);
                 if input[i] == ';' || input[i] == '\n' || i == len - 1 {
-                    die!("invalid name {}, {}:{}\n{}", var, file, line, src);
+                    panic!("invalid name {}, {}:{}\n{}", var, file, line, src);
                 }
                 i += 1;
             }
             match st.get(&var) {
                 None => {
-                    die!("resolve {} failed, {}:{}\n{}", var, file, line, src);
+                    panic!("resolve {} failed, {}:{}\n{}", var, file, line, src);
                 }
                 Some(v) => {
                     if in_double_quote {
@@ -544,3 +583,4 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
 
     output
 }
+
