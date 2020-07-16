@@ -568,12 +568,20 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
             in_single_quote = !in_single_quote;
         }
 
-        if !in_single_quote && i < len - 2 && input[i] == '$' && input[i + 1] == '{' {
-            i += 2;
+        if !in_single_quote && i < len - 2 && input[i] == '$' {
+            i += 1;
+            let with_bracket = input[i] == '{';
             let mut var = String::new();
-            while input[i] != '}' {
+            if with_bracket { i += 1; }
+            while i < len && ((input[i] >= 'a' && input[i] <= 'z') ||
+                  (input[i] >= 'A' && input[i] <= 'Z') ||
+                  (input[i] >= '0' && input[i] <= '9') ||
+                  (input[i] == '_')) {
                 var.push(input[i]);
-                if input[i] == ';' || input[i] == '\n' || i == len - 1 {
+                i += 1;
+            }
+            if with_bracket {
+                if input[i] != '}' {
                     panic!("invalid name {}, {}:{}\n{}", var, file, line, src);
                 }
                 i += 1;
