@@ -582,13 +582,11 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
             in_single_quote = !in_single_quote;
         }
 
-        if !in_single_quote && i < len - 2 && input[i] == '$' {
+        if !in_single_quote && i < len - 1 && input[i] == '$' {
             i += 1;
-            let with_bracket = input[i] == '{';
+            let with_bracket = i < len && input[i] == '{';
             let mut var = String::new();
-            if with_bracket {
-                i += 1;
-            }
+            if with_bracket { i += 1; }
             while i < len
                 && ((input[i] >= 'a' && input[i] <= 'z')
                     || (input[i] >= 'A' && input[i] <= 'Z')
