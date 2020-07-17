@@ -4,9 +4,10 @@ sh! {
     fn foo() -> CmdResult {
         let dir = "/var/tmp";
         let f = "nofile";
+        let gap = 3;
 
         #(cd $dir)?;
-        #(sleep 3)?;
+        #(sleep $gap)?;
         #(ls $f)?;
         Ok(())
     }

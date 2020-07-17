@@ -50,3 +50,9 @@ fn test_args() {
     assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_ok());
     assert!(run_cmd!(|dir| mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_ok());
 }
+
+#[test]
+fn test_non_string_args() {
+    let a = 3;
+    assert!(run_cmd!(sleep $a).is_ok());
+}

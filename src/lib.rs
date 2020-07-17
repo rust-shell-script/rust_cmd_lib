@@ -86,11 +86,11 @@ macro_rules! parse_sym_table {
         $st
     };
     (&$st:expr; [$] {$cur:ident} $($other:tt)*) => {
-        $st.insert(stringify!($cur).to_owned(), $cur.to_owned());
+        $st.insert(stringify!($cur).to_owned(), $cur.to_string());
         $crate::parse_sym_table!{&$st; $($other)*}
     };
     (&$st:expr; [$] $cur:ident $($other:tt)*) => {
-        $st.insert(stringify!($cur).to_owned(), $cur.to_owned());
+        $st.insert(stringify!($cur).to_owned(), $cur.to_string());
         $crate::parse_sym_table!{&$st; $($other)*}
     };
     (&$st:expr; [$cur:tt] $($other:tt)*) => {
@@ -102,8 +102,8 @@ macro_rules! parse_sym_table {
     // start: block tokenstream
     (|$arg0:ident $(,$arg:ident)*| $cur:tt $($other:tt)*) => {{
         let mut __sym_table = std::collections::HashMap::new();
-        __sym_table.insert(stringify!($arg0).to_owned(), $arg0.to_owned());
-        $(__sym_table.insert(stringify!($arg).to_owned(), $arg.to_owned());)*
+        __sym_table.insert(stringify!($arg0).to_owned(), $arg0.to_string());
+        $(__sym_table.insert(stringify!($arg).to_owned(), $arg.to_string());)*
         $crate::parse_sym_table!{&__sym_table; [$cur] $($other)*}
     }};
     ($cur:tt $($other:tt)*) => {{
