@@ -10,7 +10,7 @@ fn test_run_cmd() {
 #[test]
 fn test_run_cmds() {
     let _ = run_cmd! {
-        cd /tmp;
+        lcd /tmp;
         ls;
     }
     .unwrap();
@@ -36,4 +36,17 @@ sh! {
 fn test_run_sh() {
     foo().unwrap();
     let _ = bar().unwrap();
+}
+
+#[test]
+fn test_args() {
+    let dir: &str = "folder";
+    assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir; rmdir /tmp/$dir).is_ok());
+    assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_ok());
+    assert!(run_cmd!(|dir| mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_ok());
+
+    let dir: &str = "folder with spaces";
+    assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir; rmdir /tmp/$dir).is_ok());
+    assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_ok());
+    assert!(run_cmd!(|dir| mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_ok());
 }

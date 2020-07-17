@@ -417,7 +417,7 @@ fn run_pipe_cmd(full_command: &str, cd_opt: &mut Option<String>) -> CmdResult {
     let mut pipe_iter = pipe_argv[0].split_whitespace();
     let cmd = pipe_iter.next().unwrap();
     if cmd == "cd" || cmd == "lcd" {
-        let dir = pipe_iter.next().unwrap().trim_matches('"');
+        let dir = pipe_iter.next().unwrap().trim();
         if pipe_iter.next() != None {
             let err = Error::new(
                 ErrorKind::Other,
@@ -501,10 +501,10 @@ fn parse_args(s: &str) -> String {
         .map(|c| {
             if c == '"' && !in_single_quote {
                 in_double_quote = !in_double_quote;
-                '\n'
+                c
             } else if c == '\'' && !in_double_quote {
                 in_single_quote = !in_single_quote;
-                '\n'
+                c
             } else if !in_single_quote && !in_double_quote && char::is_whitespace(c) {
                 '\n'
             } else {
@@ -544,6 +544,7 @@ fn parse_seps(s: &str, sep: char) -> String {
 
 fn parse_argv(s: String) -> Vec<String> {
     s.split("\n")
+        .map(|s| s.trim_matches(|c| c == ' ' || c == '\"'))
         .filter(|s| !s.trim().is_empty())
         .map(|s| s.to_owned())
         .collect::<Vec<String>>()
@@ -569,6 +570,9 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
                 while i < len && input[i] != '|' {
                     i += 1;
                 }
+                i += 1;
+            }
+            while input[i] == ' ' || input[i] == '\t' || input[i] == '\n' {
                 i += 1;
             }
         }
@@ -597,7 +601,8 @@ pub fn resolve_name(src: &str, st: &HashMap<String, String>, file: &str, line: u
                 if input[i] != '}' {
                     panic!("invalid name {}, {}:{}\n{}", var, file, line, src);
                 }
-                i += 1;
+            } else {
+                i -= 1; // back off 1 char
             }
             match st.get(&var) {
                 None => {
