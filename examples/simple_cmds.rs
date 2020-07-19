@@ -1,20 +1,20 @@
-use cmd_lib::{run_cmd, run_fun, sh, CmdResult, FunResult};
+use cmd_lib::{run_cmd, run_fun, CmdResult, FunResult};
 
-sh! {
-    fn foo() -> CmdResult {
-        let dir = "/var/tmp";
-        let f = "nofile";
-        let gap = 3;
+fn foo() -> CmdResult {
+    let dir = "/var/tmp";
+    let f = "nofile";
+    let gap = 3;
 
-        #(cd $dir)?;
-        #(sleep $gap)?;
-        #(ls $f)?;
-        Ok(())
+    run_cmd!{
+        cd $dir;
+        echo "current dir: $dir";
+        sleep $gap;
+        ls $f;
     }
+}
 
-    fn get_year() -> FunResult {
-        run_fun!(date +%Y)
-    }
+fn get_year() -> FunResult {
+    run_fun!(date +%Y)
 }
 
 fn main() -> CmdResult {

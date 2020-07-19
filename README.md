@@ -37,38 +37,10 @@ let n = run_fun!(echo "the quick brown fox jumped over the lazy dog" | wc -w).un
 eprintln!("There are {} words in above sentence", n);
 ```
 
-## sh! to write shell-like code
-```rust
-sh! {
-    fn foo() -> CmdResult {
-        let file = "/tmp/f";
-        #(ls $file)?;
-        Ok(())
-    }
-
-    fn bar(a: &str) -> FunResult {
-        $(date +%Y)
-    }
-}
-```
-or inside a function:
-```rust
-fn main() -> CmdResult {
-    ...
-    sh! {
-        #(mkfs.ext3 -b 4096 /dev/sda)?;
-        if #(ls /tmp).is_ok() {
-            println!("running cmd success");
-        } else {
-            println!("running cmd failed");
-        }
-    }
-}
-```
-
 ## Run pipe commands in the builder style
 
-parameters could be passed much clearer in this style
+These are low level APIs, without using macros. Parameters could be
+passed much clearer in this style:
 ```rust
 Process::new("du -ah .")
     .pipe("sort -hr")
@@ -116,18 +88,18 @@ output will be the old current directory
 ## Complete Example
 
 ```rust
-use cmd_lib::{sh, run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{run_cmd, run_fun, CmdResult, FunResult};
 
-sh! {
-    fn foo(time: &str) -> CmdResult {
-        let wait = 3;
-        #(sleep $wait)?;
-        #(ls $f)?;
+fn foo(time: &str) -> CmdResult {
+    let wait = 3;
+    run_cmd!{
+        sleep $wait;
+        ls $f;
     }
+}
 
-    fn get_year() -> FunResult {
-        $(date +%Y)
-    }
+fn get_year() -> FunResult {
+    run_fun!(date +%Y)
 }
 
 fn main() -> CmdResult {
