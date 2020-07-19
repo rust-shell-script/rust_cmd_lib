@@ -34,7 +34,7 @@ macro_rules! parse_sym_table {
 }
 
 #[doc(hidden)]
-pub fn resolve_name(src: &str, sym_table: &HashMap<String, String>, file: &str, line: u32) -> String {
+pub(crate) fn resolve_name(src: &str, sym_table: &HashMap<String, String>, file: &str, line: u32) -> String {
     let mut output = String::new();
     let input: Vec<char> = src.chars().collect();
     let len = input.len();

@@ -1,7 +1,7 @@
-pub mod source_text;
-pub mod sym_table;
-pub mod process;
-pub mod parser;
+pub(crate) mod source_text;
+pub(crate) mod sym_table;
+pub(crate) mod process;
+pub(crate) mod parser;
 pub mod cmd_fun;
 
 pub type FunResult = std::io::Result<String>;

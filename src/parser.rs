@@ -1,4 +1,4 @@
-pub fn parse_args(s: &str) -> String {
+pub(crate) fn parse_args(s: &str) -> String {
     let mut in_single_quote = false;
     let mut in_double_quote = false;
     s.chars()
@@ -18,11 +18,11 @@ pub fn parse_args(s: &str) -> String {
         .collect()
 }
 
-pub fn parse_cmds(s: &str) -> String {
+pub(crate) fn parse_cmds(s: &str) -> String {
     parse_seps(s, ';')
 }
 
-pub fn parse_pipes(s: &str) -> String {
+pub(crate) fn parse_pipes(s: &str) -> String {
     parse_seps(s, '|')
 }
 
@@ -46,7 +46,7 @@ fn parse_seps(s: &str, sep: char) -> String {
         .collect()
 }
 
-pub fn parse_argv(s: String) -> Vec<String> {
+pub(crate) fn parse_argv(s: String) -> Vec<String> {
     s.split("\n")
         .map(|s| s.trim_matches(|c| c == ' ' || c == '\"'))
         .filter(|s| !s.trim().is_empty())
