@@ -22,16 +22,27 @@ fn test_run_fun() {
 }
 
 #[test]
-fn test_args() {
+fn test_args_passing() {
     let dir: &str = "folder";
     assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir; rmdir /tmp/$dir).is_ok());
     assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_ok());
     assert!(run_cmd!(|dir| mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_ok());
+}
 
+#[test]
+fn test_args_with_spaces() {
     let dir: &str = "folder with spaces";
     assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir; rmdir /tmp/$dir).is_ok());
     assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_ok());
     assert!(run_cmd!(|dir| mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_ok());
+}
+
+#[test]
+fn test_args_with_spaces_check_result() {
+    let dir: &str = "folder with spaces2";
+    assert!(run_cmd!(mkdir /tmp/$dir).is_ok());
+    assert!(run_cmd!(ls "/tmp/folder with spaces2").is_ok());
+    assert!(run_cmd!(rmdir /tmp/$dir).is_ok());
 }
 
 #[test]

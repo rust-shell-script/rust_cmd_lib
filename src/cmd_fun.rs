@@ -79,13 +79,11 @@ pub fn run_cmd_with_sym_table(
     run_cmd(&resolve_name(&cmd, &sym_table, &file, line))
 }
 
-#[doc(hidden)]
-pub fn run_fun(cmds: &str) -> FunResult {
+fn run_fun(cmds: &str) -> FunResult {
     run_pipe_fun(cmds)
 }
 
-#[doc(hidden)]
-pub fn run_cmd(cmds: &str) -> CmdResult {
+fn run_cmd(cmds: &str) -> CmdResult {
     let cmd_args = parse_cmds(cmds);
     let cmd_argv = parse_argv(cmd_args);
     let mut cd_opt: Option<String> = None;

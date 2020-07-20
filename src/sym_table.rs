@@ -139,9 +139,9 @@ mod tests {
         assert!(cmd1 == "touch \"/tmp/resolve\"");
 
         let folder1 = "my folder";
-        let cmd2 = get_cmd_for_sym_table!(mkdir $folder1);
+        let cmd2 = get_cmd_for_sym_table!(mkdir /tmp/$folder1);
         eprintln!("{}", cmd2);
-        assert!(cmd2 == "mkdir \"my folder\"");
+        assert!(cmd2 == "mkdir /tmp/\"my folder\"");
 
         let name = "rust";
         let project = "rust-shell-script";

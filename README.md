@@ -47,7 +47,7 @@ Process::new("du -ah .")
     .pipe("head -n 5")
     .wait::<CmdResult>()?;
 // the same run_cmd! macro
-run_cmd!("du -ah . | sort -hr | head -n 10")?;
+run_cmd!(du -ah . | sort -hr | head -n 10)?;
 
 Process::new("ls")
     .pipe("wc -l")
