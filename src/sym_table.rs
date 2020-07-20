@@ -118,9 +118,9 @@ mod tests {
         let sym_table1 = parse_sym_table!(ls $file);
         let sym_table2 = parse_sym_table!(ls ${file});
         let sym_table3 = parse_sym_table!(|file| echo "opening ${file}");
-        assert!(sym_table1["file"] == file);
-        assert!(sym_table2["file"] == file);
-        assert!(sym_table3["file"] == file);
+        assert_eq!(sym_table1["file"], file);
+        assert_eq!(sym_table2["file"], file);
+        assert_eq!(sym_table3["file"], file);
     }
 
     #[test]
@@ -135,18 +135,15 @@ mod tests {
         }
         let file1 = "/tmp/resolve";
         let cmd1 = get_cmd_for_sym_table!(touch $file1);
-        eprintln!("{}", cmd1);
-        assert!(cmd1 == "touch \"/tmp/resolve\"");
+        assert_eq!(cmd1, "touch \"/tmp/resolve\"");
 
         let folder1 = "my folder";
         let cmd2 = get_cmd_for_sym_table!(mkdir /tmp/$folder1);
-        eprintln!("{}", cmd2);
-        assert!(cmd2 == "mkdir /tmp/\"my folder\"");
+        assert_eq!(cmd2, "mkdir /tmp/\"my folder\"");
 
         let name = "rust";
         let project = "rust-shell-script";
         let cmd3 = get_cmd_for_sym_table!(|name, project| echo "hello, $name from $project");
-        eprintln!("{}", cmd3);
-        assert!(cmd3 == "echo \"hello, rust from rust-shell-script\"");
+        assert_eq!(cmd3, "echo \"hello, rust from rust-shell-script\"");
     }
 }

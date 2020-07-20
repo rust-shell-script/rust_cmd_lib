@@ -79,22 +79,14 @@ mod tests {
     fn test_parse_cmds() {
         let cmds_str = "ls -a; echo \"hello\";";
         let cmds_with_lines = parse_cmds(cmds_str);
-        let expected = "ls -a\n echo \"hello\"\n";
-        eprintln!("cmds parsed:\n#{}#", cmds_with_lines);
-        eprintln!("expected:\n#{}#", expected);
-        assert!(cmds_with_lines == expected);
+        assert_eq!(cmds_with_lines, "ls -a\n echo \"hello\"\n");
     }
 
     #[test]
     fn test_parse_cmd_args() {
         let cmd_str = "mkdir   /tmp/\"my folder\"";
         let cmd_args = parse_cmd_args(cmd_str);
-        eprintln!("cmd_args: {:#?}", cmd_args);
-
         let cmd_argv = parse_cmd_argv(cmd_args);
-        eprintln!("cmd_argv: {:#?}", cmd_argv);
-
-        assert!(cmd_argv[0] == "mkdir");
-        assert!(cmd_argv[1] == "/tmp/my folder");
+        assert_eq!(cmd_argv, &["mkdir", "/tmp/my folder"]);
     }
 }

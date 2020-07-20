@@ -82,7 +82,7 @@ mod tests {
         macro_rules! run_cmd {
             ($($tts:tt)*) => {
                 let src = source_text!(run_cmd);
-                assert!(src == "cd /tmp; ls /f;");
+                assert_eq!(src, "cd /tmp; ls /f;");
             };
         }
         run_cmd!(cd /tmp; ls /f;);
@@ -95,12 +95,7 @@ mod tests {
                 let src = source_text!(run_cmd);
                 let indent1 = " ".repeat(12);
                 let indent2 = " ".repeat(8);
-                let expected = format!("\n{}cd /tmp;\n{}ls ${{f}};\n{}", indent1, indent1, indent2);
-                if (src != expected) {
-                    eprintln!("src:\n#{}#", src);
-                    eprintln!("expected:\n#{}#", expected);
-                    panic!("source text mismatch");
-                }
+                assert_eq!(src, format!("\n{}cd /tmp;\n{}ls ${{f}};\n{}", indent1, indent1, indent2))
             };
         }
         run_cmd_for_source_text!{
