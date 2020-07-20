@@ -1,5 +1,5 @@
 extern crate cmd_lib;
-use cmd_lib::{run_cmd, run_fun};
+use cmd_lib::{run_cmd, run_fun, env_set, Env};
 
 #[test]
 fn test_run_cmd() {
@@ -51,4 +51,10 @@ fn test_args_with_spaces_check_result() {
 fn test_non_string_args() {
     let a = 1;
     assert!(run_cmd!(sleep $a).is_ok());
+}
+
+#[test]
+fn test_env_set() {
+    env_set!(PWD = "/var/tmp");
+    assert_eq!(std::env::var("RUST_CMD_LIB_PWD".to_owned()), Ok("/var/tmp".to_owned()));
 }

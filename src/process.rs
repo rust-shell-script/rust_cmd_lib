@@ -1,6 +1,8 @@
 use std::borrow::Borrow;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::io::{Error, ErrorKind, Result};
+use std::collections::HashMap;
+use std::env;
 use crate::{CmdResult, FunResult, parser};
 
 ///
@@ -132,4 +134,69 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
     }
 
     Ok((last_proc, full_cmd_str))
+}
+
+// PWD
+// DEBUG
+pub struct Env {
+    vars_saved: HashMap<String, String>,
+}
+
+impl Env {
+    pub fn new() -> Self {
+        Self {
+            vars_saved: HashMap::new(),
+        }
+    }
+
+    pub fn set(&mut self, key: String, value: String) {
+        let key = format!("RUST_CMD_LIB_{}", key);
+        if let Ok(old_value) = env::var(&key) {
+            self.vars_saved.insert(key.clone(), old_value);
+        } else {
+            self.vars_saved.insert(key.clone(), "".to_owned());
+        }
+        env::set_var(key, value);
+    }
+}
+
+impl Drop for Env {
+    fn drop(&mut self) {
+        for (key, value) in &self.vars_saved {
+            if value != "" {
+                env::set_var(key, value);
+            } else {
+                env::remove_var(key);
+            }
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! env_set {
+    () => {};
+    (&$env: expr) => {};
+    (&$env: expr, $key:ident = $v:tt $($other:tt)*) => {
+        $env.set(stringify!($key).to_string(), $v.to_string());
+        env_set!(&$env $($other)*);
+    };
+    ($key:ident = $v:tt $($other:tt)*) => {
+        let mut _cmdlib_env = Env::new();
+        _cmdlib_env.set(stringify!($key).to_string(), $v.to_string());
+        env_set!(&_cmdlib_env $($other)*);
+    };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_pwd_set() {
+        {
+            env_set!(PWD = "/tmp", DEBUG = 1);
+            assert_eq!(env::var("RUST_CMD_LIB_PWD".to_owned()), Ok("/tmp".to_owned()));
+            assert_eq!(env::var("RUST_CMD_LIB_DEBUG".to_owned()), Ok("1".to_owned()));
+        }
+        assert!(env::var("RUST_CMD_LIB_PWD".to_owned()).is_err());
+    }
 }

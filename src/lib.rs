@@ -7,3 +7,4 @@ pub mod cmd_fun;
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use process::Process;
+pub use process::Env;
