@@ -19,7 +19,7 @@ use crate::process::Process;
 #[macro_export]
 macro_rules! run_fun {
    ($($cur:tt)*) => {
-       $crate::cmd_fun::run_fun_with_sym_table(
+       $crate::run_fun(
            &$crate::source_text!(run_fun),
            &$crate::parse_sym_table!($($cur)*),
            &file!(),
@@ -51,7 +51,7 @@ macro_rules! run_fun {
 #[macro_export]
 macro_rules! run_cmd {
    ($($cur:tt)*) => {
-       $crate::cmd_fun::run_cmd_with_sym_table(
+       $crate::run_cmd(
            &$crate::source_text!(run_cmd),
            &$crate::parse_sym_table!($($cur)*),
            &file!(),
@@ -60,31 +60,24 @@ macro_rules! run_cmd {
 }
 
 #[doc(hidden)]
-pub fn run_fun_with_sym_table(
+pub fn run_fun(
     fun: &str,
     sym_table: &HashMap<String, String>,
     file: &str,
     line: u32,
 ) -> FunResult {
-    run_fun(&resolve_name(&fun, &sym_table, &file, line))
+    run_pipe_fun(&resolve_name(&fun, &sym_table, &file, line))
 }
 
 #[doc(hidden)]
-pub fn run_cmd_with_sym_table(
+pub fn run_cmd(
     cmd: &str,
     sym_table: &HashMap<String, String>,
     file: &str,
     line: u32,
 ) -> CmdResult {
-    run_cmd(&resolve_name(&cmd, &sym_table, &file, line))
-}
-
-fn run_fun(cmds: &str) -> FunResult {
-    run_pipe_fun(cmds)
-}
-
-fn run_cmd(cmds: &str) -> CmdResult {
-    let cmd_args = parse_cmds(cmds);
+    let cmds = resolve_name(&cmd, &sym_table, &file, line);
+    let cmd_args = parse_cmds(&cmds);
     let cmd_argv = parse_argv(cmd_args);
     let mut cd_opt: Option<String> = None;
     for cmd in cmd_argv {
