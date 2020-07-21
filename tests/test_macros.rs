@@ -1,7 +1,8 @@
 extern crate cmd_lib;
-use cmd_lib::{run_cmd, run_fun, proc_env_set, Env};
+use cmd_lib::{proc_env_set, run_cmd, run_fun};
 
 #[test]
+#[rustfmt::skip]
 fn test_run_single_cmd() {
     assert!(run_cmd!(touch /tmp/xxf).is_ok());
     assert!(run_cmd!(rm /tmp/xxf).is_ok());
@@ -12,7 +13,8 @@ fn test_run_builtin_cmds() {
     assert!(run_cmd! {
         cd /tmp;
         ls | wc -l;
-    }.is_ok());
+    }
+    .is_ok());
 }
 
 #[test]
@@ -20,7 +22,8 @@ fn test_cd_fails() {
     assert!(run_cmd! {
         cd /bad_dir;
         ls | wc -l;
-    }.is_err());
+    }
+    .is_err());
 }
 
 #[test]
@@ -30,7 +33,8 @@ fn test_run_cmds() {
         touch xxff;
         ls | wc -l;
         rm xxff;
-    }.is_ok());
+    }
+    .is_ok());
 }
 
 #[test]
@@ -75,5 +79,9 @@ fn test_non_string_args() {
 #[test]
 fn test_proc_env_set() {
     proc_env_set!(PWD = "/var/tmp");
-    assert_eq!(std::env::var("CMD_LIB_PWD".to_owned()), Ok("/var/tmp".to_owned()));
+    let pwd = run_fun!(pwd).unwrap();
+    assert_eq!(
+        pwd,
+        std::fs::canonicalize("/var/tmp").unwrap().to_str().unwrap()
+    );
 }

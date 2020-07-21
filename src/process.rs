@@ -2,9 +2,12 @@ use std::borrow::Borrow;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::io::{Error, ErrorKind, Result};
 use std::collections::HashMap;
-use std::env;
+use std::cell::RefCell;
 use crate::{CmdResult, FunResult, parser};
 
+thread_local!{
+    pub static ENV_VARS: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+}
 ///
 /// Low level process API, wrapper on std::process module
 ///
@@ -105,15 +108,17 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
     let first_cmd = &process.full_cmd[0];
     let mut cmd = Command::new(&first_cmd[0]);
 
-    if let Ok(dir) = env::var("CMD_LIB_PWD".to_owned()) {
-        full_cmd_str += &format!(" (cd: {})", dir);
-        cmd.current_dir(dir);
-    }
-    if let Ok(debug) = env::var("CMD_LIB_DEBUG".to_owned()) {
-        if debug == "1" {
-            eprintln!("Running \"{}\" ...", full_cmd_str);
+    ENV_VARS.with(|vars| {
+        if let Some(dir) = vars.borrow().get("PWD") {
+            full_cmd_str += &format!(" (cd: {})", dir);
+            cmd.current_dir(dir);
         }
-    }
+        if let Some(debug) = vars.borrow().get("DEBUG") {
+            if debug == "1" {
+                eprintln!("Running \"{}\" ...", full_cmd_str);
+            }
+        }
+    });
 
     let mut last_proc = cmd
         .args(&first_cmd[1..])
@@ -140,8 +145,7 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
     Ok((last_proc, full_cmd_str))
 }
 
-// PWD
-// DEBUG
+#[doc(hidden)]
 pub struct Env {
     vars_saved: HashMap<String, String>,
 }
@@ -154,13 +158,14 @@ impl Env {
     }
 
     pub fn set(&mut self, key: String, value: String) {
-        let key = format!("CMD_LIB_{}", key);
-        if let Ok(old_value) = env::var(&key) {
-            self.vars_saved.insert(key.clone(), old_value);
-        } else {
-            self.vars_saved.insert(key.clone(), "".to_owned());
-        }
-        env::set_var(key, value);
+        ENV_VARS.with(|vars| {
+            if let Some(old_value) = vars.borrow().get(&key) {
+                self.vars_saved.insert(key.clone(), old_value.to_owned());
+            } else {
+                self.vars_saved.insert(key.clone(), "".to_owned());
+            }
+            vars.borrow_mut().insert(key, value);
+        });
     }
 }
 
@@ -168,9 +173,13 @@ impl Drop for Env {
     fn drop(&mut self) {
         for (key, value) in &self.vars_saved {
             if value != "" {
-                env::set_var(key, value);
+                ENV_VARS.with(|vars| {
+                    vars.borrow_mut().insert(key.to_owned(), value.to_owned());
+                });
             } else {
-                env::remove_var(key);
+                ENV_VARS.with(|vars| {
+                    vars.borrow_mut().remove(key);
+                });
             }
         }
     }
@@ -185,7 +194,7 @@ macro_rules! proc_env_set {
         proc_env_set!(&$env $($other)*);
     };
     ($key:ident = $v:tt $($other:tt)*) => {
-        let mut _cmdlib_env = Env::new();
+        let mut _cmdlib_env = $crate::Env::new();
         _cmdlib_env.set(stringify!($key).to_string(), $v.to_string());
         proc_env_set!(&_cmdlib_env $($other)*);
     };
@@ -198,9 +207,13 @@ mod tests {
     fn test_pwd_set() {
         {
             proc_env_set!(PWD = "/tmp", DEBUG = 1);
-            assert_eq!(env::var("CMD_LIB_PWD".to_owned()), Ok("/tmp".to_owned()));
-            assert_eq!(env::var("CMD_LIB_DEBUG".to_owned()), Ok("1".to_owned()));
+            ENV_VARS.with(|vars| {
+                assert!(vars.borrow().get("PWD") == Some(&"/tmp".to_string()));
+                assert!(vars.borrow().get("DEBUG") == Some(&"1".to_string()));
+            });
         }
-        assert!(env::var("CMD_LIB_PWD".to_owned()).is_err());
+        ENV_VARS.with(|vars| {
+            assert!(vars.borrow().get("PWD").is_none());
+        });
     }
 }

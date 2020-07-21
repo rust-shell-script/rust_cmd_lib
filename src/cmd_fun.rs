@@ -118,11 +118,13 @@ fn run_builtin_cmds(cmd_iter: &mut Peekable<Iter<String>>, cmd_env: &mut process
             }
             // if it is relative path, always convert it to absolute one
             if !dir.starts_with("/") {
-                if let Ok(cmd_lib_pwd) = std::env::var("CMD_LIB_PWD".to_owned()) {
-                    dir = format!("{}/{}", cmd_lib_pwd, dir);
-                } else {
-                    dir = format!("{}/{}", std::env::current_dir()?.to_str().unwrap(), dir);
-                }
+                process::ENV_VARS.with(|vars| {
+                    if let Some(cmd_lib_pwd) = vars.borrow().get("PWD") {
+                        dir = format!("{}/{}", cmd_lib_pwd, dir);
+                    } else {
+                        dir = format!("{}/{}", std::env::current_dir().unwrap().to_str().unwrap(), dir);
+                    }
+                });
             }
             dir = parser::trim_quotes(&dir);
             if !std::path::Path::new(&dir).exists() {

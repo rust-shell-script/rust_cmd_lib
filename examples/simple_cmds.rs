@@ -1,4 +1,4 @@
-use cmd_lib::{run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{proc_env_set, run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     let dir = "src";
@@ -18,6 +18,7 @@ fn get_year() -> FunResult {
 }
 
 fn main() -> CmdResult {
+    proc_env_set!(DEBUG = 1);
     run_cmd!(cd /tmp; ls | wc -l;)?;
     run_cmd!(pwd)?;
 
