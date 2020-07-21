@@ -12,18 +12,22 @@ pub fn parse_cmd_args(s: &str) -> Vec<String> {
     let cmd_argv = parse_argv(parse_seps(s, char::is_whitespace));
     let mut ret = Vec::new();
     for arg in cmd_argv {
-        let mut iter = arg.chars().peekable();
-        let mut s = String::new();
-        while let Some(c) = iter.next() {
-            if c == '\\' && iter.peek() == Some(&'"') {
-                s.push('\\'); s.push('"');
-                iter.next();
-                continue;
-            }
-            if c == '"' { continue; }
-            s.push(c);
+        ret.push(trim_quotes(&arg));
+    }
+    ret
+}
+
+pub fn trim_quotes(s: &str) -> String {
+    let mut iter = s.chars().peekable();
+    let mut ret = String::new();
+    while let Some(c) = iter.next() {
+        if c == '\\' && iter.peek() == Some(&'"') {
+            ret.push('\\'); ret.push('"');
+            iter.next();
+            continue;
         }
-        ret.push(s);
+        if c == '"' { continue; }
+        ret.push(c);
     }
     ret
 }

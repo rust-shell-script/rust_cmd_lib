@@ -2,15 +2,34 @@ extern crate cmd_lib;
 use cmd_lib::{run_cmd, run_fun, proc_env_set, Env};
 
 #[test]
-fn test_run_cmd() {
-    assert!(run_cmd!(touch /tmp/xxf; rm /tmp/xxf).is_ok());
+fn test_run_single_cmd() {
+    assert!(run_cmd!(touch /tmp/xxf).is_ok());
+    assert!(run_cmd!(rm /tmp/xxf).is_ok());
+}
+
+#[test]
+fn test_run_builtin_cmds() {
+    assert!(run_cmd! {
+        cd /tmp;
+        ls | wc -l;
+    }.is_ok());
+}
+
+#[test]
+fn test_cd_fails() {
+    assert!(run_cmd! {
+        cd /bad_dir;
+        ls | wc -l;
+    }.is_err());
 }
 
 #[test]
 fn test_run_cmds() {
     assert!(run_cmd! {
         cd /tmp;
+        touch xxff;
         ls | wc -l;
+        rm xxff;
     }.is_ok());
 }
 

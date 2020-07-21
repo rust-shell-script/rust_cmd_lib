@@ -1,15 +1,15 @@
 use cmd_lib::{run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
-    let dir = "/var/tmp";
+    let dir = "src";
     let f = "nofile";
     let gap = 3;
 
     run_cmd!{
         cd $dir;
-        echo "current dir: $dir";
+        pwd;
         sleep $gap;
-        ls $f;
+        cd $f;
     }
 }
 
