@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
 use crate::{CmdResult, FunResult};
 use crate::sym_table::resolve_name;
-use crate::parser::{parse_cmds, parse_argv, parse_pipes};
+use crate::parser::{parse_cmds, parse_pipes};
 use crate::process;
 
 /// ## run_fun! --> FunResult
@@ -60,6 +60,7 @@ macro_rules! run_cmd {
 }
 
 #[doc(hidden)]
+// TODO: clean up with run_cmd
 pub fn run_fun(
     cmd: &str,
     sym_table: &HashMap<String, String>,
@@ -67,8 +68,7 @@ pub fn run_fun(
     line: u32,
 ) -> FunResult {
     let cmds = resolve_name(&cmd, &sym_table, &file, line);
-    let cmd_args = parse_cmds(&cmds);
-    let cmd_argv = parse_argv(cmd_args);
+    let cmd_argv = parse_cmds(&cmds);
     let mut ret = String::new();
     let mut cmd_env = process::Env::new();
     for cmd in cmd_argv {
@@ -99,8 +99,7 @@ pub fn run_cmd(
     line: u32,
 ) -> CmdResult {
     let cmds = resolve_name(&cmd, &sym_table, &file, line);
-    let cmd_args = parse_cmds(&cmds);
-    let cmd_argv = parse_argv(cmd_args);
+    let cmd_argv = parse_cmds(&cmds);
     let mut cmd_env = process::Env::new();
     for cmd in cmd_argv {
         let mut cmd_iter = cmd.split_whitespace();
@@ -123,8 +122,7 @@ pub fn run_cmd(
 }
 
 fn run_pipe<T: process::ProcessResult>(full_command: &str) -> T {
-    let pipe_args = parse_pipes(full_command.trim());
-    let pipe_argv = parse_argv(pipe_args);
+    let pipe_argv = parse_pipes(full_command.trim());
 
     let mut last_proc = process::Process::new(pipe_argv[0].clone());
     for pipe_cmd in pipe_argv.iter().skip(1) {

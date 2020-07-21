@@ -25,8 +25,7 @@ pub struct Process {
 
 impl Process {
     pub fn new<S: Borrow<str>>(pipe_cmd: S) -> Self {
-        let args = parser::parse_cmd_args(pipe_cmd.borrow());
-        let argv = parser::parse_cmd_argv(args);
+        let argv = parser::parse_cmd_args(pipe_cmd.borrow());
 
         Self {
             full_cmd: vec![argv],
@@ -40,8 +39,7 @@ impl Process {
     }
 
     pub fn pipe<S: Borrow<str>>(&mut self, pipe_cmd: S) -> &mut Self {
-        let args = parser::parse_cmd_args(pipe_cmd.borrow());
-        let argv = parser::parse_cmd_argv(args);
+        let argv = parser::parse_cmd_args(pipe_cmd.borrow());
 
         self.full_cmd.push(argv);
         self
