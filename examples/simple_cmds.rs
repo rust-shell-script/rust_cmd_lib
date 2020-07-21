@@ -18,7 +18,7 @@ fn get_year() -> FunResult {
 }
 
 fn main() -> CmdResult {
-    run_cmd!(lcd /tmp; ls | wc -l;)?;
+    run_cmd!(cd /tmp; ls | wc -l;)?;
     run_cmd!(pwd)?;
 
     let name = "rust";

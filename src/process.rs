@@ -173,17 +173,17 @@ impl Drop for Env {
 }
 
 #[macro_export]
-macro_rules! env_set {
+macro_rules! proc_env_set {
     () => {};
     (&$env: expr) => {};
     (&$env: expr, $key:ident = $v:tt $($other:tt)*) => {
         $env.set(stringify!($key).to_string(), $v.to_string());
-        env_set!(&$env $($other)*);
+        proc_env_set!(&$env $($other)*);
     };
     ($key:ident = $v:tt $($other:tt)*) => {
         let mut _cmdlib_env = Env::new();
         _cmdlib_env.set(stringify!($key).to_string(), $v.to_string());
-        env_set!(&_cmdlib_env $($other)*);
+        proc_env_set!(&_cmdlib_env $($other)*);
     };
 }
 
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn test_pwd_set() {
         {
-            env_set!(PWD = "/tmp", DEBUG = 1);
+            proc_env_set!(PWD = "/tmp", DEBUG = 1);
             assert_eq!(env::var("RUST_CMD_LIB_PWD".to_owned()), Ok("/tmp".to_owned()));
             assert_eq!(env::var("RUST_CMD_LIB_DEBUG".to_owned()), Ok("1".to_owned()));
         }

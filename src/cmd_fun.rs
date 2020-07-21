@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use crate::{CmdResult, FunResult};
 use std::io::{Error, ErrorKind};
+use crate::{CmdResult, FunResult};
 use crate::sym_table::resolve_name;
 use crate::parser::{parse_cmds, parse_argv, parse_pipes};
-use crate::process::Process;
+use crate::process;
 
 /// ## run_fun! --> FunResult
 /// ```no_run
@@ -61,12 +61,34 @@ macro_rules! run_cmd {
 
 #[doc(hidden)]
 pub fn run_fun(
-    fun: &str,
+    cmd: &str,
     sym_table: &HashMap<String, String>,
     file: &str,
     line: u32,
 ) -> FunResult {
-    run_pipe_fun(&resolve_name(&fun, &sym_table, &file, line))
+    let cmds = resolve_name(&cmd, &sym_table, &file, line);
+    let cmd_args = parse_cmds(&cmds);
+    let cmd_argv = parse_argv(cmd_args);
+    let mut ret = String::new();
+    let mut cmd_env = process::Env::new();
+    for cmd in cmd_argv {
+        let mut cmd_iter = cmd.split_whitespace();
+        let cmd0 = cmd_iter.next().unwrap();
+        if cmd0 == "cd" {
+            let dir = cmd_iter.next().unwrap().trim();
+            if cmd_iter.next() != None {
+                let err = Error::new(
+                    ErrorKind::Other,
+                    format!("{} format wrong: {}", cmd0, cmd),
+                );
+                return Err(err);
+            }
+            cmd_env.set("PWD".to_string(), dir.to_string());
+        } else {
+            ret = run_pipe::<FunResult>(&cmd)?;
+        }
+    }
+    Ok(ret)
 }
 
 #[doc(hidden)]
@@ -79,69 +101,35 @@ pub fn run_cmd(
     let cmds = resolve_name(&cmd, &sym_table, &file, line);
     let cmd_args = parse_cmds(&cmds);
     let cmd_argv = parse_argv(cmd_args);
-    let mut cd_opt: Option<String> = None;
+    let mut cmd_env = process::Env::new();
     for cmd in cmd_argv {
-        if let Err(e) = run_pipe_cmd(&cmd, &mut cd_opt) {
-            return Err(e);
+        let mut cmd_iter = cmd.split_whitespace();
+        let cmd0 = cmd_iter.next().unwrap();
+        if cmd0 == "cd" {
+            let dir = cmd_iter.next().unwrap().trim();
+            if cmd_iter.next() != None {
+                let err = Error::new(
+                    ErrorKind::Other,
+                    format!("{} format wrong: {}", cmd0, cmd),
+                );
+                return Err(err);
+            }
+            cmd_env.set("PWD".to_string(), dir.to_string());
+        } else {
+            run_pipe::<CmdResult>(&cmd)?;
         }
     }
     Ok(())
 }
 
-fn run_pipe_cmd(full_command: &str, cd_opt: &mut Option<String>) -> CmdResult {
+fn run_pipe<T: process::ProcessResult>(full_command: &str) -> T {
     let pipe_args = parse_pipes(full_command.trim());
     let pipe_argv = parse_argv(pipe_args);
 
-    let mut pipe_iter = pipe_argv[0].split_whitespace();
-    let cmd = pipe_iter.next().unwrap();
-    if cmd == "cd" || cmd == "lcd" {
-        let dir = pipe_iter.next().unwrap().trim();
-        if pipe_iter.next() != None {
-            let err = Error::new(
-                ErrorKind::Other,
-                format!("{} format wrong: {}", cmd, full_command),
-            );
-            return Err(err);
-        } else {
-            if cmd == "cd" {
-                return std::env::set_current_dir(dir);
-            } else {
-                *cd_opt = Some(dir.into());
-                return Ok(());
-            }
-        }
-    } else if cmd == "pwd" {
-        let pwd = std::env::current_dir()?;
-        println!("{}", pwd.display());
-        return Ok(());
-    }
-
-    let mut last_proc = Process::new(pipe_argv[0].clone());
-    if let Some(dir) = cd_opt {
-        last_proc.current_dir(dir.clone());
-    }
+    let mut last_proc = process::Process::new(pipe_argv[0].clone());
     for pipe_cmd in pipe_argv.iter().skip(1) {
         last_proc.pipe(pipe_cmd.clone());
     }
 
-    last_proc.wait::<CmdResult>()
-}
-
-fn run_pipe_fun(full_command: &str) -> FunResult {
-    let pipe_args = parse_pipes(full_command.trim());
-    let pipe_argv = parse_argv(pipe_args);
-
-    let mut pipe_iter = pipe_argv[0].split_whitespace();
-    let cmd = pipe_iter.next().unwrap();
-    if cmd == "pwd" {
-        let pwd = std::env::current_dir()?;
-        return Ok(format!("{}", pwd.display()));
-    }
-
-    let mut last_proc = Process::new(pipe_argv[0].clone());
-    for pipe_cmd in pipe_argv.iter().skip(1) {
-        last_proc.pipe(pipe_cmd.clone());
-    }
-
-    last_proc.wait::<FunResult>()
+    last_proc.wait::<T>()
 }

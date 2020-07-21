@@ -56,34 +56,20 @@ Process::new("ls")
 ```
 
 ## Builtin commands
-### pwd
-pwd: print current working directory
-
 ### cd
 cd: set procecess current directory
-
 ```rust
 run_cmd! {
     cd /tmp;
     ls | wc -l;
 };
-run_cmd!(pwd);
 ```
+Notice that builtin `cd` will only change with current scope
+and it will restore the previous current directory when it
+exits the scope.
 
-output will be "/tmp"
-
-### lcd
-lcd: set group commands current directory
-
-```rust
-run_cmd! {
-    lcd /tmp;
-    ls | wc -l;
-};
-run_cmd!(pwd);
-```
-
-output will be the old current directory
+Use `std::env::set_current_dir` if you want to change the current
+working directory for the whole program.
 
 ## Complete Example
 
@@ -103,7 +89,7 @@ fn get_year() -> FunResult {
 }
 
 fn main() -> CmdResult {
-    run_cmd!(lcd /tmp; ls | wc -l;)?;
+    run_cmd!(cd /tmp; ls | wc -l;)?;
 
     let name = "rust";
     run_cmd!(echo "hello, $name")?;
