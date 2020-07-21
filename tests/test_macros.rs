@@ -56,5 +56,5 @@ fn test_non_string_args() {
 #[test]
 fn test_proc_env_set() {
     proc_env_set!(PWD = "/var/tmp");
-    assert_eq!(std::env::var("RUST_CMD_LIB_PWD".to_owned()), Ok("/var/tmp".to_owned()));
+    assert_eq!(std::env::var("CMD_LIB_PWD".to_owned()), Ok("/var/tmp".to_owned()));
 }

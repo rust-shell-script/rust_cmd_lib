@@ -19,8 +19,8 @@ use crate::{CmdResult, FunResult, parser};
 /// ```
 ///
 pub struct Process {
-    cur_dir: Option<String>,
     full_cmd: Vec<Vec<String>>,
+    env: Env,
 }
 
 impl Process {
@@ -29,13 +29,13 @@ impl Process {
         let argv = parser::parse_cmd_argv(args);
 
         Self {
-            cur_dir: None,
             full_cmd: vec![argv],
+            env: Env::new(),
         }
     }
 
     pub fn current_dir<S: Borrow<str>>(&mut self, dir: S) -> &mut Self {
-        self.cur_dir = Some(dir.borrow().to_string());
+        self.env.set("PWD".to_string(), dir.borrow().to_string());
         self
     }
 
@@ -106,9 +106,15 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
     let mut full_cmd_str = format_full_cmd(&process.full_cmd);
     let first_cmd = &process.full_cmd[0];
     let mut cmd = Command::new(&first_cmd[0]);
-    if let Some(dir) = &process.cur_dir {
+
+    if let Ok(dir) = env::var("CMD_LIB_PWD".to_owned()) {
         full_cmd_str += &format!(" (cd: {})", dir);
         cmd.current_dir(dir);
+    }
+    if let Ok(debug) = env::var("CMD_LIB_DEBUG".to_owned()) {
+        if debug == "1" {
+            eprintln!("Running \"{}\" ...", full_cmd_str);
+        }
     }
 
     let mut last_proc = cmd
@@ -150,7 +156,7 @@ impl Env {
     }
 
     pub fn set(&mut self, key: String, value: String) {
-        let key = format!("RUST_CMD_LIB_{}", key);
+        let key = format!("CMD_LIB_{}", key);
         if let Ok(old_value) = env::var(&key) {
             self.vars_saved.insert(key.clone(), old_value);
         } else {
@@ -194,9 +200,9 @@ mod tests {
     fn test_pwd_set() {
         {
             proc_env_set!(PWD = "/tmp", DEBUG = 1);
-            assert_eq!(env::var("RUST_CMD_LIB_PWD".to_owned()), Ok("/tmp".to_owned()));
-            assert_eq!(env::var("RUST_CMD_LIB_DEBUG".to_owned()), Ok("1".to_owned()));
+            assert_eq!(env::var("CMD_LIB_PWD".to_owned()), Ok("/tmp".to_owned()));
+            assert_eq!(env::var("CMD_LIB_DEBUG".to_owned()), Ok("1".to_owned()));
         }
-        assert!(env::var("RUST_CMD_LIB_PWD".to_owned()).is_err());
+        assert!(env::var("CMD_LIB_PWD".to_owned()).is_err());
     }
 }
