@@ -136,7 +136,7 @@ fn run_builtin_cmds(cmd_iter: &mut Peekable<Iter<String>>, cmd_env: &mut process
                 );
                 return Err(err);
             }
-            cmd_env.set("PWD".to_string(), dir);
+            cmd_env.set_var("PWD".to_string(), dir);
             cmd_iter.next();
         }
     }

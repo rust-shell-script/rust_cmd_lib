@@ -37,7 +37,7 @@ impl Process {
     }
 
     pub fn current_dir<S: Borrow<str>>(&mut self, dir: S) -> &mut Self {
-        self.env.set("PWD".to_string(), dir.borrow().to_string());
+        self.env.set_var("PWD".to_string(), dir.borrow().to_string());
         self
     }
 
@@ -157,7 +157,7 @@ impl Env {
         }
     }
 
-    pub fn set(&mut self, key: String, value: String) {
+    pub fn set_var(&mut self, key: String, value: String) {
         ENV_VARS.with(|vars| {
             if let Some(old_value) = vars.borrow().get(&key) {
                 self.vars_saved.insert(key.clone(), old_value.to_owned());
@@ -190,12 +190,12 @@ macro_rules! proc_env_set {
     () => {};
     (&$env: expr) => {};
     (&$env: expr, $key:ident = $v:tt $($other:tt)*) => {
-        $env.set(stringify!($key).to_string(), $v.to_string());
+        $env.set_var(stringify!($key).to_string(), $v.to_string());
         proc_env_set!(&$env $($other)*);
     };
     ($key:ident = $v:tt $($other:tt)*) => {
         let mut _cmdlib_env = $crate::Env::new();
-        _cmdlib_env.set(stringify!($key).to_string(), $v.to_string());
+        _cmdlib_env.set_var(stringify!($key).to_string(), $v.to_string());
         proc_env_set!(&_cmdlib_env $($other)*);
     };
 }
