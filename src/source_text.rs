@@ -8,70 +8,73 @@
 #[macro_export]
 macro_rules! source_text {
     ($macro:ident) => {{
-        let macro_name = stringify!($macro);
-        let mut macro_str = String::new();
-        let src = String::from(format!("{}/{}", env!("CARGO_MANIFEST_DIR"), file!()));
-        let target_line = line!() as usize;
-        let file: Vec<char> = std::fs::read_to_string(src)
+        let __st_macro_name = stringify!($macro);
+        let mut __st_macro_str = String::new();
+        let __st_src = String::from(format!("{}/{}", env!("CARGO_MANIFEST_DIR"), file!()));
+        let __st_target_line = line!() as usize;
+        let __st_file: Vec<char> = std::fs::read_to_string(__st_src)
             .expect("error reading file")
             .chars()
             .collect();
-        let len = file.len();
-        let mut i: usize = 0;
-        let mut line = 1;
-        let mut level = 0;
-        while i < len {
-            if file[i] == '\n' {
-                line += 1;
+        let __st_len = __st_file.len();
+        let mut __st_i: usize = 0;
+        let mut __st_line = 1;
+        let mut __st_level = 0;
+        while __st_i < __st_len {
+            if __st_file[__st_i] == '\n' {
+                __st_line += 1;
             }
-            if line == target_line {
-                let cmp_str: String = file[i..i + macro_name.len()].iter().collect();
-                if cmp_str == macro_name {
-                    i += macro_name.len() + 1;
-                    while file[i] != '{' && file[i] != '(' {
-                        i += 1;
+            if __st_line == __st_target_line {
+                let __st_cmp_str: String =
+                    __st_file[__st_i..__st_i + __st_macro_name.len()]
+                    .iter()
+                    .collect();
+                if __st_cmp_str == __st_macro_name {
+                    __st_i += __st_macro_name.len() + 1;
+                    while __st_file[__st_i] != '{' && __st_file[__st_i] != '(' {
+                        __st_i += 1;
                     }
-                    i += 1;
-                    level += 1;
+                    __st_i += 1;
+                    __st_level += 1;
 
-                    let with_quote = file[i] == '"';
-                    let mut in_single_quote = false;
-                    let mut in_double_quote = false;
-                    if with_quote {
-                        in_double_quote = true;
-                        i += 1;
+                    let __st_with_quote = __st_file[__st_i] == '"';
+                    let mut __st_in_single_quote = false;
+                    let mut __st_in_double_quote = false;
+                    if __st_with_quote {
+                        __st_in_double_quote = true;
+                        __st_i += 1;
                     }
                     loop {
-                        if !in_single_quote && !in_double_quote {
-                            if file[i] == '}' || file[i] == ')' {
-                                level -= 1;
-                            } else if file[i] == '{' || file[i] == '(' {
-                                level += 1;
+                        if !__st_in_single_quote && !__st_in_double_quote {
+                            if __st_file[__st_i] == '}' || __st_file[__st_i] == ')' {
+                                __st_level -= 1;
+                            } else if __st_file[__st_i] == '{' || __st_file[__st_i] == '(' {
+                                __st_level += 1;
                             }
 
-                            if level == 0 {
+                            if __st_level == 0 {
                                 break;
                             }
                         }
 
-                        if file[i] == '"' && !in_single_quote {
-                            in_double_quote = !in_double_quote;
-                        } else if file[i] == '\'' && !in_double_quote {
-                            in_single_quote = !in_single_quote;
+                        if __st_file[__st_i] == '"' && !__st_in_single_quote {
+                            __st_in_double_quote = !__st_in_double_quote;
+                        } else if __st_file[__st_i] == '\'' && !__st_in_double_quote {
+                            __st_in_single_quote = !__st_in_single_quote;
                         }
 
-                        macro_str.push(file[i]);
-                        i += 1;
+                        __st_macro_str.push(__st_file[__st_i]);
+                        __st_i += 1;
                     }
-                    if with_quote {
-                        macro_str.pop();
+                    if __st_with_quote {
+                        __st_macro_str.pop();
                     }
                     break;
                 }
             }
-            i += 1;
+            __st_i += 1;
         }
-        macro_str
+        __st_macro_str
     }};
 }
 

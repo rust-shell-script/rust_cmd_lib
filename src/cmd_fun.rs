@@ -62,7 +62,6 @@ macro_rules! run_cmd {
 }
 
 #[doc(hidden)]
-// TODO: clean up with run_cmd
 pub fn run_fun(
     cmd: &str,
     sym_table: &HashMap<String, String>,
