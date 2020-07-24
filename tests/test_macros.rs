@@ -9,6 +9,19 @@ fn test_run_single_cmd() {
 }
 
 #[test]
+#[rustfmt::skip]
+fn test_run_single_cmd_with_quote() {
+    // not valid rust tokenstream:
+    // assert!(run_cmd!(echo "hello, rust" | sed 's/rust/cmd_lib/g').is_ok());
+    // use https://doc.rust-lang.org/reference/tokens.html#raw-string-literals:
+    // we only support r"xxx" format for now
+    assert_eq!(
+        run_fun!(echo "hello, rust" | sed r"s/rust/cmd_lib1/g").unwrap(),
+        "hello, cmd_lib1".to_string()
+    );
+}
+
+#[test]
 fn test_run_builtin_cmds() {
     assert!(run_cmd! {
         cd /tmp;

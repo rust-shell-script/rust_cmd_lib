@@ -113,10 +113,14 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
             full_cmd_str += &format!(" (cd: {})", dir);
             cmd.current_dir(dir);
         }
-        if let Some(debug) = vars.borrow().get("DEBUG") {
-            if debug == "1" {
-                eprintln!("Running \"{}\" ...", full_cmd_str);
-            }
+        let mut debug = String::from("0");
+        if let Some(proc_debug) = vars.borrow().get("CMD_LIB_DEBUG") {
+            debug = proc_debug.clone();
+        } else if let Ok(global_debug) = std::env::var("CMD_LIB_DEBUG") {
+            debug = global_debug.clone();
+        }
+        if debug == "1" {
+            eprintln!("Running \"{}\" ...", full_cmd_str);
         }
     });
 

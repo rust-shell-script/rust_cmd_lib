@@ -20,13 +20,22 @@ pub fn parse_cmd_args(s: &str) -> Vec<String> {
 pub fn trim_quotes(s: &str) -> String {
     let mut iter = s.chars().peekable();
     let mut ret = String::new();
+    let mut in_double_quote = false;
     while let Some(c) = iter.next() {
         if c == '\\' && iter.peek() == Some(&'"') {
             ret.push('\\'); ret.push('"');
             iter.next();
             continue;
         }
-        if c == '"' { continue; }
+        if c == '"' {
+            if !in_double_quote &&
+               !ret.is_empty() &&
+               ret.chars().last().unwrap() == 'r' {
+                ret.pop();
+            }
+            in_double_quote = !in_double_quote;
+            continue;
+        }
         ret.push(c);
     }
     ret
