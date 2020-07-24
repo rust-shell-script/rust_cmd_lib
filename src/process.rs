@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::io::{Error, ErrorKind, Result};
 use std::collections::HashMap;
@@ -27,8 +26,8 @@ pub struct Process {
 }
 
 impl Process {
-    pub fn new<S: Borrow<str>>(pipe_cmd: S) -> Self {
-        let argv = parser::parse_cmd_args(pipe_cmd.borrow());
+    pub fn new<S: AsRef<str>>(pipe_cmd: S) -> Self {
+        let argv = parser::parse_cmd_args(&pipe_cmd.as_ref());
 
         Self {
             full_cmd: vec![argv],
@@ -36,13 +35,13 @@ impl Process {
         }
     }
 
-    pub fn current_dir<S: Borrow<str>>(&mut self, dir: S) -> &mut Self {
-        self.env.set_var("PWD".to_string(), dir.borrow().to_string());
+    pub fn current_dir<S: AsRef<str>>(&mut self, dir: S) -> &mut Self {
+        self.env.set_var("PWD".to_string(), dir.as_ref().to_string());
         self
     }
 
-    pub fn pipe<S: Borrow<str>>(&mut self, pipe_cmd: S) -> &mut Self {
-        let argv = parser::parse_cmd_args(pipe_cmd.borrow());
+    pub fn pipe<S: AsRef<str>>(&mut self, pipe_cmd: S) -> &mut Self {
+        let argv = parser::parse_cmd_args(pipe_cmd.as_ref());
 
         self.full_cmd.push(argv);
         self
