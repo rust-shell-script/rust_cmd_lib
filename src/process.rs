@@ -2,48 +2,24 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::io::{Error, ErrorKind, Result};
 use std::collections::HashMap;
 use std::cell::RefCell;
-use crate::{CmdResult, FunResult, parser};
+use crate::{CmdResult, FunResult};
 
-thread_local!{
-    pub static ENV_VARS: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
-}
-///
-/// Low level process API, wrapper on std::process module
-///
-/// Pipe command could also lauched in builder style
-/// ```rust
-/// use cmd_lib::{Process,CmdResult};
-///
-/// Process::new("du -ah .")
-///     .pipe("sort -hr")
-///     .pipe("head -n 5")
-///     .wait::<CmdResult>();
-/// ```
-///
+//
+// Low level process API, wrapper on std::process module
+//
 pub struct Process {
     full_cmd: Vec<Vec<String>>,
-    env: Env,
 }
 
 impl Process {
-    pub fn new<S: AsRef<str>>(pipe_cmd: S) -> Self {
-        let argv = parser::parse_cmd_args(&pipe_cmd.as_ref());
-
+    pub fn new(start_cmd: Vec<String>) -> Self {
         Self {
-            full_cmd: vec![argv],
-            env: Env::new(),
+            full_cmd: vec![start_cmd],
         }
     }
 
-    pub fn current_dir<S: AsRef<str>>(&mut self, dir: S) -> &mut Self {
-        self.env.set_var("PWD".to_string(), dir.as_ref().to_string());
-        self
-    }
-
-    pub fn pipe<S: AsRef<str>>(&mut self, pipe_cmd: S) -> &mut Self {
-        let argv = parser::parse_cmd_args(pipe_cmd.as_ref());
-
-        self.full_cmd.push(argv);
+    pub fn pipe(&mut self, pipe_cmd: Vec<String>) -> &mut Self {
+        self.full_cmd.push(pipe_cmd);
         self
     }
 
@@ -148,6 +124,9 @@ fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String
     Ok((last_proc, full_cmd_str))
 }
 
+thread_local!{
+    pub static ENV_VARS: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+}
 #[doc(hidden)]
 pub struct Env {
     vars_saved: HashMap<String, String>,

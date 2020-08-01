@@ -144,9 +144,11 @@ fn run_builtin_cmds(cmd_iter: &mut Peekable<Iter<String>>, cmd_env: &mut process
 
 fn run_pipe<T: process::ProcessResult>(full_command: &str) -> T {
     let pipe_argv = parser::parse_pipes(full_command.trim());
-    let mut last_proc = process::Process::new(pipe_argv[0].clone());
-    for pipe_cmd in pipe_argv.iter().skip(1) {
-        last_proc.pipe(pipe_cmd.clone());
+    let start_cmd_argv = parser::parse_cmd_args(&pipe_argv[0]);
+    let mut last_proc = process::Process::new(start_cmd_argv);
+    for pipe_cmd in pipe_argv.into_iter().skip(1) {
+        let pipe_cmd_argv = parser::parse_cmd_args(&pipe_cmd);
+        last_proc.pipe(pipe_cmd_argv);
     }
 
     last_proc.wait::<T>()

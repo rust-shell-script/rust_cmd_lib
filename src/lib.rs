@@ -9,5 +9,4 @@ pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use cmd_fun::run_cmd;
 pub use cmd_fun::run_fun;
-pub use process::Process;
 pub use process::Env;
