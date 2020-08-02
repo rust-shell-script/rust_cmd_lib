@@ -3,7 +3,7 @@ use cmd_lib::{proc_env_set, proc_var, proc_var_set, proc_var_get, run_cmd, run_f
 
 #[test]
 #[rustfmt::skip]
-fn test_run_single_cmd() {
+fn test_run_single_cmds() {
     assert!(run_cmd!(touch /tmp/xxf).is_ok());
     assert!(run_cmd!(rm /tmp/xxf).is_ok());
 }
@@ -11,10 +11,6 @@ fn test_run_single_cmd() {
 #[test]
 #[rustfmt::skip]
 fn test_run_single_cmd_with_quote() {
-    // not valid rust tokenstream:
-    // assert!(run_cmd!(echo "hello, rust" | sed 's/rust/cmd_lib/g').is_ok());
-    // use https://doc.rust-lang.org/reference/tokens.html#raw-string-literals:
-    // we only support r"xxx" format for now
     assert_eq!(
         run_fun!(echo "hello, rust" | sed r"s/rust/cmd_lib1/g").unwrap(),
         "hello, cmd_lib1".to_string()
@@ -69,6 +65,7 @@ fn test_args_passing() {
 fn test_args_with_spaces() {
     let dir: &str = "folder with spaces";
     assert!(run_cmd!(rm -rf /tmp/$dir).is_ok());
+    assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_ok());
     assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir).is_ok());
     assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
     assert!(run_cmd!(|dir| mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_err());

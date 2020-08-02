@@ -1,100 +1,164 @@
-pub fn parse_cmds(s: &str) -> Vec<String> {
-    let is_cmd_ended = |c| c == ';';
-    parse_argv(parse_seps(s, is_cmd_ended))
+use std::collections::{VecDeque, HashMap};
+use crate::sym_table;
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! parse_string_literal {
+    (&$sl:expr;) => {
+        $sl
+    };
+    (&$sl:expr; - $($other:tt)*) => {
+        $crate::parse_string_literal!{&$sl; $($other)*}
+    };
+    (&$sl:expr; $cur:literal $($other:tt)*) => {
+        let s = stringify!($cur);
+        // only save string literals
+        if s.starts_with("\"") || s.starts_with("r") || s.starts_with("b") {
+            $sl.push_back($cur.to_string());
+        }
+        $crate::parse_string_literal!{&$sl; $($other)*}
+    };
+    (&$sl:expr; $cur:tt $($other:tt)*) => {
+        $crate::parse_string_literal!{&$sl; $($other)*}
+    };
+    ($cur:tt $($other:tt)*) => {{
+        let mut __str_lits = std::collections::VecDeque::<String>::new();
+        $crate::parse_string_literal!{&__str_lits; $cur $($other)*}
+    }};
 }
 
-pub fn parse_pipes(s: &str) -> Vec<String> {
-    let is_pipe_ended = |c| c == '|';
-    parse_argv(parse_seps(s, is_pipe_ended))
-}
-
-pub fn parse_cmd_args(s: &str) -> Vec<String> {
-    let cmd_argv = parse_argv(parse_seps(s, char::is_whitespace));
+pub fn parse(s: &str,
+             lits: &mut VecDeque<String>,
+             sym_table: &HashMap<String, String>,
+             file: &str,
+             line: u32) -> Vec<Vec<Vec<String>>> {
     let mut ret = Vec::new();
-    for arg in cmd_argv {
-        ret.push(trim_quotes(&arg));
+    let s: Vec<char> = s.chars().collect();
+    let len = s.len();
+    let mut i = 0;
+
+    // skip leading spaces
+    while i < len  && char::is_whitespace(s[i]) { i += 1; }
+    if i == len { return ret; }
+
+    // skip variables declaration part
+    if i < len && s[i] == '|' {
+        i += 1;
+        while i < len && s[i] != '|' { i += 1; }
+        i += 1;
+    }
+
+    // real commands parsing starts
+    while i < len {
+        while i < len && char::is_whitespace(s[i]) { i += 1; }
+        if i == len { break; }
+
+        let cmd = parse_cmd(&s, &mut i, lits, sym_table, file, line);
+        if !cmd.is_empty() {
+            ret.push(cmd);
+        }
     }
     ret
 }
 
-pub fn trim_quotes(s: &str) -> String {
-    let mut iter = s.chars().peekable();
-    let mut ret = String::new();
-    let mut in_double_quote = false;
-    while let Some(c) = iter.next() {
-        if c == '\\' && iter.peek() == Some(&'"') {
-            ret.push('\\'); ret.push('"');
-            iter.next();
-            continue;
+fn parse_cmd(s: &Vec<char>,
+             i: &mut usize,
+             lits: &mut VecDeque<String>,
+             sym_table: &HashMap<String, String>,
+             file: &str,
+             line: u32) -> Vec<Vec<String>> {
+    let mut ret = Vec::new();
+    let len = s.len();
+    while *i < len && s[*i] != ';' {
+        while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
+        if *i == len { break; }
+
+        let pipe = parse_pipe(s, i, lits, sym_table, file, line);
+        if !pipe.is_empty() {
+            ret.push(pipe);
         }
-        if c == '"' {
-            if !in_double_quote &&
-               !ret.is_empty() &&
-               ret.chars().last().unwrap() == 'r' {
-                ret.pop();
+    }
+    if *i < len && s[*i] == ';' { *i += 1; }
+    ret
+}
+
+fn parse_pipe(s: &Vec<char>,
+              i: &mut usize,
+              lits: &mut VecDeque<String>,
+              sym_table: &HashMap<String, String>,
+              file: &str,
+              line: u32) -> Vec<String> {
+    let mut ret = Vec::new();
+    let len = s.len();
+    while *i < len && s[*i] != '|' && s[*i] != ';' {
+        while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
+        if *i == len { break; }
+        let mut arg = String::new();
+        let mut is_ended = false;
+
+        while *i < len && !is_ended {
+            let mut cnt = 0;    // '#' counts for raw string literal
+            if s[*i] == 'r' || s[*i] == 'b' {
+                let mut j = *i + 1;
+                while j < len && s[j] == '#' { j += 1; }
+                if j < len && s[j] == '\"' {
+                    cnt = j - *i - 1;
+                    *i = j;
+                }
             }
-            in_double_quote = !in_double_quote;
-            continue;
+
+            let mut cnt2 = cnt;
+            if s[*i] == '\"' {
+                *i += 1;
+                while *i < len && (s[*i] != '\"' || s[*i - 1] == '\\' || cnt2 > 0) {
+                    if s[*i] == '\"' && s[*i - 1] != '\\' { cnt2 -= 1; }
+                    *i += 1;
+                }
+                *i += 1;
+                while *i < len && cnt > 0 {
+                    eprintln!("s[{}]: {}", *i, s[*i]);
+                    if s[*i] != '#' {
+                        eprintln!("cnt: {}", cnt);
+                        panic!("invalid raw string literal {}:{}", file, line);
+                    }
+                    *i += 1;
+                    cnt -= 1;
+                }
+                arg.push_str(&lits.pop_front().unwrap());
+            }
+
+            while *i < len {
+                if s[*i] == '|' || s[*i] == ';' || char::is_whitespace(s[*i]) {
+                    is_ended = true;
+                    break;
+                }
+                if s[*i] == '\"' && s[*i - 1] != '\\' {
+                    break;
+                }
+                arg.push(s[*i]);
+                *i += 1;
+            }
         }
-        ret.push(c);
+        if !arg.is_empty() {
+            ret.push(sym_table::resolve_name(&arg, sym_table, file, line));
+        }
     }
+    if *i < len && s[*i] == '|' { *i += 1; }
     ret
-}
-
-fn parse_seps<F>(s: &str, func: F) -> String
-    where F: Fn(char) -> bool {
-    let mut in_single_quote = false;
-    let mut in_double_quote = false;
-    let mut ret = String::new();
-    let mut iter = s.chars().peekable();
-    while let Some(c) = iter.next() {
-        if c == '\\' && iter.peek() == Some(&'"') {
-            ret.push('\\'); ret.push('"');
-            iter.next();
-            continue;
-        }
-        if c == '\\' && iter.peek() == Some(&'\'') {
-            ret.push('\\'); ret.push('\'');
-            iter.next();
-            continue;
-        }
-
-        if c == '"' && !in_single_quote {
-            in_double_quote = !in_double_quote;
-        } else if c == '\'' && !in_double_quote {
-            in_single_quote = !in_single_quote;
-        }
-
-        if (func(c)) && !in_single_quote && !in_double_quote {
-            ret.push('\n');
-        } else {
-            ret.push(c);
-        }
-    }
-    ret
-}
-
-fn parse_argv(s: String) -> Vec<String> {
-    s.split("\n")
-        .filter(|s| !s.trim().is_empty())
-        .map(|s| s.to_owned())
-        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     #[test]
-    fn test_parse_cmds() {
-        let cmds_str = "ls -a; echo \"hello\";";
-        let cmds_with_lines = parse_cmds(cmds_str);
-        assert_eq!(cmds_with_lines, &["ls -a",  " echo \"hello\""]);
-    }
+    fn test_parse_string_literal() {
+        let str_lits1 = parse_string_literal!(ls "/tmp" "/");
+        assert_eq!(str_lits1, ["/tmp", "/"]);
 
-    #[test]
-    fn test_parse_cmd_args() {
-        let cmd_str = "mkdir   /tmp/\"my folder\"";
-        let cmd_args = parse_cmd_args(cmd_str);
-        assert_eq!(cmd_args, &["mkdir", "/tmp/my folder"]);
+        let str_lits2 = parse_string_literal!(ping -c 3 r"127.0.0.1");
+        assert_eq!(str_lits2, ["127.0.0.1"]);
+
+        let str_lits3 = parse_string_literal!(echo r#"rust"cmd_lib"#);
+        assert_eq!(str_lits3, ["rust\"cmd_lib"]);
     }
 }
+

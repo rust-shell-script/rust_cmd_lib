@@ -38,35 +38,10 @@ pub(crate) fn resolve_name(src: &str, sym_table: &HashMap<String, String>, file:
     let mut output = String::new();
     let input: Vec<char> = src.chars().collect();
     let len = input.len();
-    let mut in_single_quote = false;
-    let mut in_double_quote = false;
 
     let mut i = 0;
     while i < len {
-        if i == 0 {
-            // skip variable declaration part
-            while input[i] == ' ' || input[i] == '\t' || input[i] == '\n' {
-                i += 1;
-            }
-            if input[i] == '|' {
-                i += 1;
-                while i < len && input[i] != '|' {
-                    i += 1;
-                }
-                i += 1;
-            }
-            while input[i] == ' ' || input[i] == '\t' || input[i] == '\n' {
-                i += 1;
-            }
-        }
-
-        if input[i] == '"' && !in_single_quote {
-            in_double_quote = !in_double_quote;
-        } else if input[i] == '\'' && !in_double_quote {
-            in_single_quote = !in_single_quote;
-        }
-
-        if !in_single_quote && i < len - 1 && input[i] == '$' {
+        if input[i] == '$' && (i == 0 || input[i - 1] != '\\') {
             i += 1;
             let with_bracket = i < len && input[i] == '{';
             let mut var = String::new();
@@ -88,19 +63,9 @@ pub(crate) fn resolve_name(src: &str, sym_table: &HashMap<String, String>, file:
                 i -= 1; // back off 1 char
             }
             match sym_table.get(&var) {
-                None => {
-                    panic!("resolve {} failed, {}:{}\n{}", var, file, line, src);
-                }
-                Some(v) => {
-                    if in_double_quote {
-                        output += v;
-                    } else {
-                        output += "\"";
-                        output += v;
-                        output += "\"";
-                    }
-                }
-            }
+                None => panic!("resolve {} failed, {}:{}\n{}", var, file, line, src),
+                Some(v) => output += v,
+            };
         } else {
             output.push(input[i]);
         }
@@ -118,9 +83,11 @@ mod tests {
         let sym_table1 = parse_sym_table!(ls $file);
         let sym_table2 = parse_sym_table!(ls ${file});
         let sym_table3 = parse_sym_table!(|file| echo "opening ${file}");
+        let sym_table4 = parse_sym_table!(|file| echo r"opening ${file}");
         assert_eq!(sym_table1["file"], file);
         assert_eq!(sym_table2["file"], file);
         assert_eq!(sym_table3["file"], file);
+        assert_eq!(sym_table4["file"], file);
     }
 
     #[test]
@@ -135,15 +102,15 @@ mod tests {
         }
         let file1 = "/tmp/resolve";
         let cmd1 = get_cmd_for_sym_table!(touch $file1);
-        assert_eq!(cmd1, "touch \"/tmp/resolve\"");
+        assert_eq!(cmd1, "touch /tmp/resolve");
 
         let folder1 = "my folder";
         let cmd2 = get_cmd_for_sym_table!(mkdir /tmp/$folder1);
-        assert_eq!(cmd2, "mkdir /tmp/\"my folder\"");
+        assert_eq!(cmd2, "mkdir /tmp/my folder");
 
         let name = "rust";
         let project = "rust-shell-script";
         let cmd3 = get_cmd_for_sym_table!(|name, project| echo "hello, $name from $project");
-        assert_eq!(cmd3, "echo \"hello, rust from rust-shell-script\"");
+        assert_eq!(cmd3, "|name, project| echo \"hello, rust from rust-shell-script\"");
     }
 }

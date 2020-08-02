@@ -1,11 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{VecDeque, HashMap};
 use std::io::{Error, ErrorKind};
 use std::slice::Iter;
 use std::iter::Peekable;
-use crate::{CmdResult, FunResult};
-use crate::sym_table::resolve_name;
-use crate::parser;
-use crate::process;
+use crate::{
+    CmdResult,
+    FunResult,
+    parser,
+    process,
+};
 
 /// ## run_fun! --> FunResult
 /// ```no_run
@@ -23,6 +25,7 @@ macro_rules! run_fun {
    ($($cur:tt)*) => {
        $crate::run_fun(
            &$crate::source_text!(run_fun),
+           &mut $crate::parse_string_literal!($($cur)*),
            &$crate::parse_sym_table!($($cur)*),
            &file!(),
            line!())
@@ -55,6 +58,7 @@ macro_rules! run_cmd {
    ($($cur:tt)*) => {
        $crate::run_cmd(
            &$crate::source_text!(run_cmd),
+           &mut $crate::parse_string_literal!($($cur)*),
            &$crate::parse_sym_table!($($cur)*),
            &file!(),
            line!())
@@ -64,13 +68,13 @@ macro_rules! run_cmd {
 #[doc(hidden)]
 pub fn run_fun(
     cmd: &str,
+    str_lits: &mut VecDeque<String>,
     sym_table: &HashMap<String, String>,
     file: &str,
     line: u32,
 ) -> FunResult {
-    let cmds = resolve_name(&cmd, &sym_table, &file, line);
-    let cmd_argv = parser::parse_cmds(&cmds);
-    let mut cmd_iter = cmd_argv.iter().peekable();
+    let cmds = parser::parse(cmd, str_lits, sym_table, &file, line);
+    let mut cmd_iter = cmds.iter().peekable();
     let mut cmd_env = process::Env::new();
     let mut ret = String::new();
     while let Some(_) = cmd_iter.peek() {
@@ -85,13 +89,13 @@ pub fn run_fun(
 #[doc(hidden)]
 pub fn run_cmd(
     cmd: &str,
+    str_lits: &mut VecDeque<String>,
     sym_table: &HashMap<String, String>,
     file: &str,
     line: u32,
 ) -> CmdResult {
-    let cmds = resolve_name(&cmd, &sym_table, &file, line);
-    let cmd_argv = parser::parse_cmds(&cmds);
-    let mut cmd_iter = cmd_argv.iter().peekable();
+    let cmds = parser::parse(cmd, str_lits, sym_table, file, line);
+    let mut cmd_iter = cmds.iter().peekable();
     let mut cmd_env = process::Env::new();
     while let Some(_) = cmd_iter.peek() {
         run_builtin_cmds(&mut cmd_iter, &mut cmd_env)?;
@@ -102,16 +106,15 @@ pub fn run_cmd(
     Ok(())
 }
 
-fn run_builtin_cmds(cmd_iter: &mut Peekable<Iter<String>>, cmd_env: &mut process::Env) -> CmdResult {
+fn run_builtin_cmds(cmd_iter: &mut Peekable<Iter<Vec<Vec<String>>>>, cmd_env: &mut process::Env) -> CmdResult {
     if let Some(cmd) = cmd_iter.peek() {
-        let mut arg_iter = cmd.split_whitespace();
-        let arg0 = arg_iter.next().unwrap();
+        let arg0 = cmd[0][0].clone();
         if arg0 == "cd" {
-            let mut dir = arg_iter.next().unwrap().trim().to_owned();
-            if arg_iter.next() != None {
+            let mut dir = cmd[0][1].clone();
+            if cmd[0].len() != 2 {
                 let err = Error::new(
                     ErrorKind::Other,
-                    format!("{} format wrong: {}", arg0, cmd),
+                    format!("cd format wrong: {}", cmd[0].join(" ")),
                 );
                 return Err(err);
             }
@@ -125,7 +128,6 @@ fn run_builtin_cmds(cmd_iter: &mut Peekable<Iter<String>>, cmd_env: &mut process
                     }
                 });
             }
-            dir = parser::trim_quotes(&dir);
             if !std::path::Path::new(&dir).exists() {
                 let err_msg = format!("cd: {}: No such file or directory", dir);
                 eprintln!("{}", err_msg);
@@ -142,14 +144,11 @@ fn run_builtin_cmds(cmd_iter: &mut Peekable<Iter<String>>, cmd_env: &mut process
     Ok(())
 }
 
-fn run_pipe<T: process::ProcessResult>(full_command: &str) -> T {
-    let pipe_argv = parser::parse_pipes(full_command.trim());
-    let start_cmd_argv = parser::parse_cmd_args(&pipe_argv[0]);
-    let mut last_proc = process::Process::new(start_cmd_argv);
-    for pipe_cmd in pipe_argv.into_iter().skip(1) {
-        let pipe_cmd_argv = parser::parse_cmd_args(&pipe_cmd);
-        last_proc.pipe(pipe_cmd_argv);
+fn run_pipe<T: process::ProcessResult>(pipes: &Vec<Vec<String>>) -> T {
+    let mut proc = process::Process::new(&pipes[0]);
+    for p in pipes.into_iter().skip(1) {
+        proc.pipe(p);
     }
 
-    last_proc.wait::<T>()
+    proc.wait::<T>()
 }

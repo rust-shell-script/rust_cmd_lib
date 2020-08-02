@@ -12,14 +12,14 @@ pub struct Process {
 }
 
 impl Process {
-    pub fn new(start_cmd: Vec<String>) -> Self {
+    pub fn new(start_cmd: &Vec<String>) -> Self {
         Self {
-            full_cmd: vec![start_cmd],
+            full_cmd: vec![start_cmd.clone()],
         }
     }
 
-    pub fn pipe(&mut self, pipe_cmd: Vec<String>) -> &mut Self {
-        self.full_cmd.push(pipe_cmd);
+    pub fn pipe(&mut self, pipe_cmd: &Vec<String>) -> &mut Self {
+        self.full_cmd.push(pipe_cmd.clone());
         self
     }
 
