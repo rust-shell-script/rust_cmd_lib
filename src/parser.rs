@@ -1,5 +1,4 @@
 use std::collections::{VecDeque, HashMap};
-use crate::sym_table;
 
 #[doc(hidden)]
 #[macro_export]
@@ -27,124 +26,146 @@ macro_rules! parse_string_literal {
     }};
 }
 
-pub fn parse(s: &str,
-             lits: &mut VecDeque<String>,
-             sym_table: &HashMap<String, String>,
-             file: &str,
-             line: u32) -> Vec<Vec<Vec<String>>> {
-    let mut ret = Vec::new();
-    let s: Vec<char> = s.chars().collect();
-    let len = s.len();
-    let mut i = 0;
+pub struct Parser {
+    str_lits: VecDeque<String>,
+    sym_table: HashMap<String, String>,
 
-    // skip leading spaces
-    while i < len  && char::is_whitespace(s[i]) { i += 1; }
-    if i == len { return ret; }
+    file: &'static str,
+    line: u32,
 
-    // skip variables declaration part
-    if i < len && s[i] == '|' {
-        i += 1;
-        while i < len && s[i] != '|' { i += 1; }
-        i += 1;
-    }
-
-    // real commands parsing starts
-    while i < len {
-        while i < len && char::is_whitespace(s[i]) { i += 1; }
-        if i == len { break; }
-
-        let cmd = parse_cmd(&s, &mut i, lits, sym_table, file, line);
-        if !cmd.is_empty() {
-            ret.push(cmd);
-        }
-    }
-    ret
+    src: String,
 }
 
-fn parse_cmd(s: &Vec<char>,
-             i: &mut usize,
-             lits: &mut VecDeque<String>,
-             sym_table: &HashMap<String, String>,
-             file: &str,
-             line: u32) -> Vec<Vec<String>> {
-    let mut ret = Vec::new();
-    let len = s.len();
-    while *i < len && s[*i] != ';' {
-        while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
-        if *i == len { break; }
-
-        let pipe = parse_pipe(s, i, lits, sym_table, file, line);
-        if !pipe.is_empty() {
-            ret.push(pipe);
+impl Parser {
+    pub fn new(src: String) -> Self {
+        Self {
+            str_lits: VecDeque::new(),
+            sym_table: HashMap::new(),
+            file: "",
+            line: 0,
+            src,
         }
     }
-    if *i < len && s[*i] == ';' { *i += 1; }
-    ret
-}
 
-fn parse_pipe(s: &Vec<char>,
-              i: &mut usize,
-              lits: &mut VecDeque<String>,
-              sym_table: &HashMap<String, String>,
-              file: &str,
-              line: u32) -> Vec<String> {
-    let mut ret = Vec::new();
-    let len = s.len();
-    while *i < len && s[*i] != '|' && s[*i] != ';' {
-        while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
-        if *i == len { break; }
-        let mut arg = String::new();
-        let mut is_ended = false;
+    pub fn with_lits(&mut self, str_lits: VecDeque<String>) -> &mut Self {
+        self.str_lits = str_lits;
+        self
+    }
 
-        while *i < len && !is_ended {
-            let mut cnt = 0;    // '#' counts for raw string literal
-            if s[*i] == 'r' || s[*i] == 'b' {
-                let mut j = *i + 1;
-                while j < len && s[j] == '#' { j += 1; }
-                if j < len && s[j] == '\"' {
-                    cnt = j - *i - 1;
-                    *i = j;
-                }
+    pub fn with_sym_table(&mut self, sym_table: HashMap<String, String>) -> &mut Self {
+        self.sym_table = sym_table;
+        self
+    }
+
+    pub fn with_location(&mut self, file: &'static str, line: u32) -> &mut Self {
+        self.file = file;
+        self.line = line;
+        self
+    }
+
+    pub fn parse(&mut self) -> Vec<Vec<Vec<String>>> {
+        let mut ret = Vec::new();
+        let s: Vec<char> = self.src.chars().collect();
+        let len = s.len();
+        let mut i = 0;
+
+        // skip leading spaces
+        while i < len  && char::is_whitespace(s[i]) { i += 1; }
+        if i == len { return ret; }
+
+        // skip variables declaration part
+        if i < len && s[i] == '|' {
+            i += 1;
+            while i < len && s[i] != '|' { i += 1; }
+            i += 1;
+        }
+
+        // real commands parsing starts
+        while i < len {
+            while i < len && char::is_whitespace(s[i]) { i += 1; }
+            if i == len { break; }
+
+            let cmd = self.parse_cmd(&s, &mut i);
+            if !cmd.is_empty() {
+                ret.push(cmd);
             }
+        }
+        ret
+    }
 
-            let mut cnt2 = cnt;
-            if s[*i] == '\"' {
-                *i += 1;
-                while *i < len && (s[*i] != '\"' || s[*i - 1] == '\\' || cnt2 > 0) {
-                    if s[*i] == '\"' && s[*i - 1] != '\\' { cnt2 -= 1; }
-                    *i += 1;
+    fn parse_cmd(&mut self, s: &Vec<char>, i: &mut usize) -> Vec<Vec<String>> {
+        let mut ret = Vec::new();
+        let len = s.len();
+        while *i < len && s[*i] != ';' {
+            while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
+            if *i == len { break; }
+
+            let pipe = self.parse_pipe(s, i);
+            if !pipe.is_empty() {
+                ret.push(pipe);
+            }
+        }
+        if *i < len && s[*i] == ';' { *i += 1; }
+        ret
+    }
+
+    fn parse_pipe(&mut self, s: &Vec<char>, i: &mut usize) -> Vec<String> {
+        let mut ret = Vec::new();
+        let len = s.len();
+        while *i < len && s[*i] != '|' && s[*i] != ';' {
+            while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
+            if *i == len { break; }
+            let mut arg = String::new();
+            let mut is_ended = false;
+
+            while *i < len && !is_ended {
+                let mut cnt = 0;    // '#' counts for raw string literal
+                if s[*i] == 'r' || s[*i] == 'b' {
+                    let mut j = *i + 1;
+                    while j < len && s[j] == '#' { j += 1; }
+                    if j < len && s[j] == '\"' {
+                        cnt = j - *i - 1;
+                        *i = j;
+                    }
                 }
-                *i += 1;
-                while *i < len && cnt > 0 {
-                    eprintln!("s[{}]: {}", *i, s[*i]);
-                    if s[*i] != '#' {
-                        eprintln!("cnt: {}", cnt);
-                        panic!("invalid raw string literal {}:{}", file, line);
+
+                let mut cnt2 = cnt;
+                if s[*i] == '\"' {
+                    *i += 1;
+                    while *i < len && (s[*i] != '\"' || s[*i - 1] == '\\' || cnt2 > 0) {
+                        if s[*i] == '\"' && s[*i - 1] != '\\' { cnt2 -= 1; }
+                        *i += 1;
                     }
                     *i += 1;
-                    cnt -= 1;
+                    while *i < len && cnt > 0 {
+                        if s[*i] != '#' {
+                            panic!("invalid raw string literal {}:{}", self.file, self.line);
+                        }
+                        *i += 1;
+                        cnt -= 1;
+                    }
+                    arg.push_str(&self.str_lits.pop_front().unwrap());
                 }
-                arg.push_str(&lits.pop_front().unwrap());
-            }
 
-            while *i < len {
-                if s[*i] == '|' || s[*i] == ';' || char::is_whitespace(s[*i]) {
-                    is_ended = true;
-                    break;
+                while *i < len {
+                    if s[*i] == '|' || s[*i] == ';' || char::is_whitespace(s[*i]) {
+                        is_ended = true;
+                        break;
+                    }
+                    if s[*i] == '\"' && s[*i - 1] != '\\' {
+                        break;
+                    }
+                    arg.push(s[*i]);
+                    *i += 1;
                 }
-                if s[*i] == '\"' && s[*i - 1] != '\\' {
-                    break;
-                }
-                arg.push(s[*i]);
-                *i += 1;
+            }
+            if !arg.is_empty() {
+                ret.push(crate::sym_table::resolve_name(&arg, &self.sym_table, &self.file, self.line));
             }
         }
-        if !arg.is_empty() {
-            ret.push(sym_table::resolve_name(&arg, sym_table, file, line));
-        }
+        if *i < len && s[*i] == '|' { *i += 1; }
+        ret
     }
-    if *i < len && s[*i] == '|' { *i += 1; }
-    ret
 }
 
 #[cfg(test)]

@@ -1,11 +1,9 @@
-use std::collections::{VecDeque, HashMap};
 use std::io::{Error, ErrorKind};
 use std::slice::Iter;
 use std::iter::Peekable;
 use crate::{
     CmdResult,
     FunResult,
-    parser,
     process,
 };
 
@@ -24,11 +22,11 @@ use crate::{
 macro_rules! run_fun {
    ($($cur:tt)*) => {
        $crate::run_fun(
-           &$crate::source_text!(run_fun),
-           &mut $crate::parse_string_literal!($($cur)*),
-           &$crate::parse_sym_table!($($cur)*),
-           &file!(),
-           line!())
+           $crate::Parser::new($crate::source_text!(run_fun).clone())
+           .with_lits($crate::parse_string_literal!($($cur)*))
+           .with_sym_table($crate::parse_sym_table!($($cur)*))
+           .with_location(file!(), line!())
+           .parse())
    };
 }
 
@@ -57,23 +55,16 @@ macro_rules! run_fun {
 macro_rules! run_cmd {
    ($($cur:tt)*) => {
        $crate::run_cmd(
-           &$crate::source_text!(run_cmd),
-           &mut $crate::parse_string_literal!($($cur)*),
-           &$crate::parse_sym_table!($($cur)*),
-           &file!(),
-           line!())
+           $crate::Parser::new($crate::source_text!(run_cmd).clone())
+           .with_lits($crate::parse_string_literal!($($cur)*))
+           .with_sym_table($crate::parse_sym_table!($($cur)*))
+           .with_location(file!(), line!())
+           .parse())
    };
 }
 
 #[doc(hidden)]
-pub fn run_fun(
-    cmd: &str,
-    str_lits: &mut VecDeque<String>,
-    sym_table: &HashMap<String, String>,
-    file: &str,
-    line: u32,
-) -> FunResult {
-    let cmds = parser::parse(cmd, str_lits, sym_table, &file, line);
+pub fn run_fun(cmds: Vec<Vec<Vec<String>>>) -> FunResult {
     let mut cmd_iter = cmds.iter().peekable();
     let mut cmd_env = process::Env::new();
     let mut ret = String::new();
@@ -87,14 +78,7 @@ pub fn run_fun(
 }
 
 #[doc(hidden)]
-pub fn run_cmd(
-    cmd: &str,
-    str_lits: &mut VecDeque<String>,
-    sym_table: &HashMap<String, String>,
-    file: &str,
-    line: u32,
-) -> CmdResult {
-    let cmds = parser::parse(cmd, str_lits, sym_table, file, line);
+pub fn run_cmd(cmds: Vec<Vec<Vec<String>>>) -> CmdResult {
     let mut cmd_iter = cmds.iter().peekable();
     let mut cmd_env = process::Env::new();
     while let Some(_) = cmd_iter.peek() {
