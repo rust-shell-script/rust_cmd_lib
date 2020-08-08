@@ -1,4 +1,5 @@
 use std::collections::{VecDeque, HashMap};
+use crate::process::{GroupCmds, PipedCmds};
 
 #[doc(hidden)]
 #[macro_export]
@@ -26,6 +27,7 @@ macro_rules! parse_string_literal {
     }};
 }
 
+#[doc(hidden)]
 pub struct Parser {
     str_lits: VecDeque<String>,
     sym_table: HashMap<String, String>,
@@ -63,8 +65,8 @@ impl Parser {
         self
     }
 
-    pub fn parse(&mut self) -> Vec<Vec<Vec<String>>> {
-        let mut ret = Vec::new();
+    pub fn parse(&mut self) -> GroupCmds {
+        let mut ret = GroupCmds::new();
         let s: Vec<char> = self.src.chars().collect();
         let len = s.len();
         let mut i = 0;
@@ -87,22 +89,22 @@ impl Parser {
 
             let cmd = self.parse_cmd(&s, &mut i);
             if !cmd.is_empty() {
-                ret.push(cmd);
+                ret.add(cmd, None);
             }
         }
         ret
     }
 
-    fn parse_cmd(&mut self, s: &Vec<char>, i: &mut usize) -> Vec<Vec<String>> {
-        let mut ret = Vec::new();
+    fn parse_cmd(&mut self, s: &Vec<char>, i: &mut usize) -> PipedCmds {
+        let mut ret = PipedCmds::new();
         let len = s.len();
         while *i < len && s[*i] != ';' {
             while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
             if *i == len { break; }
 
-            let pipe = self.parse_pipe(s, i);
-            if !pipe.is_empty() {
-                ret.push(pipe);
+            let pipe_argv = self.parse_pipe(s, i);
+            if !pipe_argv.is_empty() {
+                ret.pipe(pipe_argv);
             }
         }
         if *i < len && s[*i] == ';' { *i += 1; }

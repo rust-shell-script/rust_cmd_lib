@@ -4,16 +4,16 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use crate::{CmdResult, FunResult};
 
-#[allow(dead_code)]
 pub struct GroupCmds {
      cmds: Vec<(PipedCmds, Option<PipedCmds>)>,  // (cmd, orCmd) pairs
+     cmds_env: Env,
 }
 
-#[allow(dead_code)]
 impl GroupCmds {
     pub fn new() -> Self {
         Self {
             cmds: vec![],
+            cmds_env: Env::new(),
         }
     }
 
@@ -23,41 +23,131 @@ impl GroupCmds {
     }
 
     pub fn run_cmd(&mut self) -> CmdResult {
+        for cmd in self.cmds.iter_mut() {
+            if let Err(err) = cmd.0.run_cmd(&mut self.cmds_env) {
+                if let Some(or_cmds) = &mut cmd.1 {
+                    or_cmds.run_cmd(&mut self.cmds_env)?;
+                } else {
+                    return Err(err);
+                }
+            }
+        }
         Ok(())
     }
 
-    pub fn run_fun(self) -> FunResult {
-        Ok("ok".to_string())
+    pub fn run_fun(&mut self) -> FunResult {
+        let mut ret = String::new();
+        for cmd in self.cmds.iter_mut() {
+            let ret0 = cmd.0.run_fun(&mut self.cmds_env);
+            match ret0 {
+                Err(e) => {
+                    if let Some(or_cmds) = &mut cmd.1 {
+                        ret = or_cmds.run_fun(&mut self.cmds_env)?;
+                    } else {
+                        return Err(e);
+                    }
+                },
+                Ok(r) => ret = r,
+            };
+        }
+        Ok(ret)
     }
 }
+
+pub struct BuiltinCmds {
+    cmds: Vec<String>,
+}
+
+impl BuiltinCmds {
+    pub fn from(cmds: &Vec<String>) -> Self {
+        Self {
+            cmds: cmds.to_vec(),
+        }
+    }
+
+    pub fn run_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
+        assert_eq!(self.cmds[0], "cd"); // only support "cd" for now
+        let mut dir = self.cmds[1].clone();
+        if self.cmds.len() != 2 {
+            let err = Error::new(
+                ErrorKind::Other,
+                format!("cd format wrong: {}", self.cmds.join(" ")),
+            );
+            return Err(err);
+        }
+        // if it is relative path, always convert it to absolute one
+        if !dir.starts_with("/") {
+            ENV_VARS.with(|vars| {
+                if let Some(cmd_lib_pwd) = vars.borrow().get("PWD") {
+                    dir = format!("{}/{}", cmd_lib_pwd, dir);
+                } else {
+                    dir = format!("{}/{}", std::env::current_dir().unwrap().to_str().unwrap(), dir);
+                }
+            });
+        }
+        if !std::path::Path::new(&dir).exists() {
+            let err_msg = format!("cd: {}: No such file or directory", dir);
+            eprintln!("{}", err_msg);
+            let err = Error::new(
+                ErrorKind::Other,
+                err_msg,
+            );
+            return Err(err);
+        }
+        cmds_env.set_var("PWD".to_string(), dir);
+        Ok(())
+    }
+}
+
 
 pub struct PipedCmds {
     pipes: Vec<Command>,
     children: Vec<Child>,
+
+    cmd_args: Vec<Vec<String>>,
     full_cmd: String,
 }
 
 impl PipedCmds {
-    pub fn new(start_cmd_argv: &Vec<String>) -> Self {
+    pub fn new() -> Self {
+        Self {
+            pipes: vec![],
+            children: vec![],
+            cmd_args: vec![],
+            full_cmd: String::new(),
+        }
+    }
+
+    pub fn from(start_cmd_argv: Vec<String>) -> Self {
         let mut start_cmd = Command::new(&start_cmd_argv[0]);
         start_cmd.args(&start_cmd_argv[1..]);
         Self {
             pipes: vec![start_cmd],
             children: vec![],
             full_cmd: start_cmd_argv.join(" ").to_string(),
+            cmd_args: vec![start_cmd_argv],
         }
     }
 
-    pub fn pipe(&mut self, pipe_cmd_argv: &Vec<String>) -> &mut Self {
-        let last_i = self.pipes.len() - 1;
-        self.pipes[last_i].stdout(Stdio::piped());
+    pub fn is_empty(&self) -> bool {
+        self.pipes.is_empty()
+    }
+
+    pub fn pipe(&mut self, pipe_cmd_argv: Vec<String>) -> &mut Self {
+        if !self.pipes.is_empty() {
+            let last_i = self.pipes.len() - 1;
+            self.pipes[last_i].stdout(Stdio::piped());
+        }
 
         let mut pipe_cmd = Command::new(&pipe_cmd_argv[0]);
         pipe_cmd.args(&pipe_cmd_argv[1..]);
         self.pipes.push(pipe_cmd);
 
-        self.full_cmd += " | ";
+        if !self.full_cmd.is_empty() {
+            self.full_cmd += " | ";
+        }
         self.full_cmd += &pipe_cmd_argv.join(" ");
+        self.cmd_args.push(pipe_cmd_argv);
         self
     }
 
@@ -91,7 +181,12 @@ impl PipedCmds {
         Ok(())
     }
 
-    pub fn run_cmd(&mut self) -> CmdResult {
+    pub fn run_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
+        // check builtin commands
+        if self.cmd_args[0][0] == "cd" {
+            return BuiltinCmds::from(&self.cmd_args[0]).run_cmd(cmds_env);
+        }
+
         let last_i = self.pipes.len() - 1;
         self.pipes[last_i].stdout(Stdio::inherit());
 
@@ -104,7 +199,7 @@ impl PipedCmds {
         }
     }
 
-    pub fn run_fun(&mut self) -> FunResult {
+    pub fn run_fun(&mut self, _cmds_env: &mut Env) -> FunResult {
         let last_i = self.pipes.len() - 1;
         self.pipes[last_i].stdout(Stdio::piped());
 
@@ -207,22 +302,24 @@ mod tests {
 
     #[test]
     fn test_run_piped_cmds() {
-        assert!(PipedCmds::new(&vec!["echo".to_string(), "rust".to_string()])
-                .pipe(&vec!["wc".to_string()])
-                .run_cmd()
+        let mut cmds_env = Env::new();
+        assert!(PipedCmds::from(vec!["echo".to_string(), "rust".to_string()])
+                .pipe(vec!["wc".to_string()])
+                .run_cmd(&mut cmds_env)
                 .is_ok());
     }
 
     #[test]
     fn test_run_piped_funs() {
-        assert_eq!(PipedCmds::new(&vec!["echo".to_string(), "rust".to_string()])
-                   .run_fun()
+        let mut cmds_env = Env::new();
+        assert_eq!(PipedCmds::from(vec!["echo".to_string(), "rust".to_string()])
+                   .run_fun(&mut cmds_env)
                    .unwrap(),
                    "rust");
 
-        assert_eq!(PipedCmds::new(&vec!["echo".to_string(), "rust".to_string()])
-                   .pipe(&vec!["wc".to_string(), "-c".to_string()])
-                   .run_fun()
+        assert_eq!(PipedCmds::from(vec!["echo".to_string(), "rust".to_string()])
+                   .pipe(vec!["wc".to_string(), "-c".to_string()])
+                   .run_fun(&mut cmds_env)
                    .unwrap()
                    .trim(), "5");
     }
