@@ -71,7 +71,7 @@ pub fn run_fun(cmds: Vec<Vec<Vec<String>>>) -> FunResult {
     while let Some(_) = cmd_iter.peek() {
         run_builtin_cmds(&mut cmd_iter, &mut cmd_env)?;
         if let Some(cmd) = cmd_iter.next() {
-            ret = run_pipe::<FunResult>(&cmd)?;
+            ret = run_pipe_fun(&cmd)?;
         }
     }
     Ok(ret)
@@ -84,7 +84,7 @@ pub fn run_cmd(cmds: Vec<Vec<Vec<String>>>) -> CmdResult {
     while let Some(_) = cmd_iter.peek() {
         run_builtin_cmds(&mut cmd_iter, &mut cmd_env)?;
         if let Some(cmd) = cmd_iter.next() {
-            run_pipe::<CmdResult>(&cmd)?;
+            run_pipe_cmd(&cmd)?;
         }
     }
     Ok(())
@@ -128,11 +128,20 @@ fn run_builtin_cmds(cmd_iter: &mut Peekable<Iter<Vec<Vec<String>>>>, cmd_env: &m
     Ok(())
 }
 
-fn run_pipe<T: process::ProcessResult>(pipes: &Vec<Vec<String>>) -> T {
-    let mut proc = process::Process::new(&pipes[0]);
+fn run_pipe_fun(pipes: &Vec<Vec<String>>) -> FunResult {
+    let mut proc = process::PipedCmds::new(&pipes[0]);
     for p in pipes.into_iter().skip(1) {
         proc.pipe(p);
     }
 
-    proc.wait::<T>()
+    proc.run_fun()
+}
+
+fn run_pipe_cmd(pipes: &Vec<Vec<String>>) -> CmdResult {
+    let mut proc = process::PipedCmds::new(&pipes[0]);
+    for p in pipes.into_iter().skip(1) {
+        proc.pipe(p);
+    }
+
+    proc.run_cmd()
 }

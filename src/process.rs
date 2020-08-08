@@ -1,127 +1,133 @@
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::io::{Error, ErrorKind, Result};
+use std::io::{Error, ErrorKind};
 use std::collections::HashMap;
 use std::cell::RefCell;
 use crate::{CmdResult, FunResult};
 
-//
-// Low level process API, wrapper on std::process module
-//
-pub struct Process {
-    full_cmd: Vec<Vec<String>>,
+#[allow(dead_code)]
+pub struct GroupCmds {
+     cmds: Vec<(PipedCmds, Option<PipedCmds>)>,  // (cmd, orCmd) pairs
 }
 
-impl Process {
-    pub fn new(start_cmd: &Vec<String>) -> Self {
+#[allow(dead_code)]
+impl GroupCmds {
+    pub fn new() -> Self {
         Self {
-            full_cmd: vec![start_cmd.clone()],
+            cmds: vec![],
         }
     }
 
-    pub fn pipe(&mut self, pipe_cmd: &Vec<String>) -> &mut Self {
-        self.full_cmd.push(pipe_cmd.clone());
+    pub fn add(&mut self, cmds: PipedCmds, or_cmds: Option<PipedCmds>) -> &mut Self {
+        self.cmds.push((cmds, or_cmds));
         self
     }
 
-    pub fn wait<T: ProcessResult>(&mut self) -> T {
-        T::get_result(self)
+    pub fn run_cmd(&mut self) -> CmdResult {
+        Ok(())
+    }
+
+    pub fn run_fun(self) -> FunResult {
+        Ok("ok".to_string())
     }
 }
 
-#[doc(hidden)]
-pub trait ProcessResult {
-    fn get_result(process: &mut Process) -> Self;
+pub struct PipedCmds {
+    pipes: Vec<Command>,
+    children: Vec<Child>,
+    full_cmd: String,
 }
 
-impl ProcessResult for FunResult {
-    fn get_result(process: &mut Process) -> Self {
-        let (last_proc, full_cmd_str) = run_full_cmd(process, true)?;
-        let output = last_proc.wait_with_output()?;
-        if !output.status.success() {
-            Err(to_io_error(&full_cmd_str, output.status))
-        } else {
-            let mut ans = String::from_utf8_lossy(&output.stdout).to_string();
-            if ans.ends_with('\n') {
-                ans.pop();
-            }
-            Ok(ans)
+impl PipedCmds {
+    pub fn new(start_cmd_argv: &Vec<String>) -> Self {
+        let mut start_cmd = Command::new(&start_cmd_argv[0]);
+        start_cmd.args(&start_cmd_argv[1..]);
+        Self {
+            pipes: vec![start_cmd],
+            children: vec![],
+            full_cmd: start_cmd_argv.join(" ").to_string(),
         }
     }
-}
 
-impl ProcessResult for CmdResult {
-    fn get_result(process: &mut Process) -> Self {
-        let (mut last_proc, full_cmd_str) = run_full_cmd(process, false)?;
-        let status = last_proc.wait()?;
+    pub fn pipe(&mut self, pipe_cmd_argv: &Vec<String>) -> &mut Self {
+        let last_i = self.pipes.len() - 1;
+        self.pipes[last_i].stdout(Stdio::piped());
+
+        let mut pipe_cmd = Command::new(&pipe_cmd_argv[0]);
+        pipe_cmd.args(&pipe_cmd_argv[1..]);
+        self.pipes.push(pipe_cmd);
+
+        self.full_cmd += " | ";
+        self.full_cmd += &pipe_cmd_argv.join(" ");
+        self
+    }
+
+    fn spawn(&mut self) -> CmdResult {
+        ENV_VARS.with(|vars| {
+            if let Some(dir) = vars.borrow().get("PWD") {
+                self.full_cmd += &format!(" (cd: {})", dir);
+                self.pipes[0].current_dir(dir);
+            }
+            let mut debug = String::from("0");
+            if let Some(proc_debug) = vars.borrow().get("CMD_LIB_DEBUG") {
+                debug = proc_debug.clone();
+            } else if let Ok(global_debug) = std::env::var("CMD_LIB_DEBUG") {
+                debug = global_debug.clone();
+            }
+            if debug == "1" {
+                eprintln!("Running \"{}\" ...", self.full_cmd);
+            }
+        });
+
+        for (i, cmd) in self.pipes.iter_mut().enumerate() {
+            if i != 0 {
+                cmd.stdin(self.children[i - 1].stdout.take().unwrap());
+            }
+            self.children.push(cmd.spawn()?);
+            if i % 2 != 0 {
+                self.children[i - 1].wait()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn run_cmd(&mut self) -> CmdResult {
+        let last_i = self.pipes.len() - 1;
+        self.pipes[last_i].stdout(Stdio::inherit());
+
+        self.spawn()?;
+        let status = self.children.pop().unwrap().wait()?;
         if !status.success() {
-            Err(to_io_error(&full_cmd_str, status))
+            Err(Self::to_io_error(&self.full_cmd, status))
         } else {
             Ok(())
         }
     }
-}
 
-fn to_io_error(command: &str, status: ExitStatus) -> Error {
-    if let Some(code) = status.code() {
-        Error::new(ErrorKind::Other, format!("{} exit with {}", command, code))
-    } else {
-        Error::new(ErrorKind::Other, "Unknown error")
-    }
-}
+    pub fn run_fun(&mut self) -> FunResult {
+        let last_i = self.pipes.len() - 1;
+        self.pipes[last_i].stdout(Stdio::piped());
 
-fn format_full_cmd(full_cmd: &Vec<Vec<String>>) -> String {
-    let mut full_cmd_str = String::from(full_cmd[0].join(" "));
-    for cmd in full_cmd.iter().skip(1) {
-        full_cmd_str += " | ";
-        full_cmd_str += &cmd.join(" ");
-    }
-    full_cmd_str
-}
-
-fn run_full_cmd(process: &mut Process, pipe_last: bool) -> Result<(Child, String)> {
-    let mut full_cmd_str = format_full_cmd(&process.full_cmd);
-    let first_cmd = &process.full_cmd[0];
-    let mut cmd = Command::new(&first_cmd[0]);
-
-    ENV_VARS.with(|vars| {
-        if let Some(dir) = vars.borrow().get("PWD") {
-            full_cmd_str += &format!(" (cd: {})", dir);
-            cmd.current_dir(dir);
-        }
-        let mut debug = String::from("0");
-        if let Some(proc_debug) = vars.borrow().get("CMD_LIB_DEBUG") {
-            debug = proc_debug.clone();
-        } else if let Ok(global_debug) = std::env::var("CMD_LIB_DEBUG") {
-            debug = global_debug.clone();
-        }
-        if debug == "1" {
-            eprintln!("Running \"{}\" ...", full_cmd_str);
-        }
-    });
-
-    let mut last_proc = cmd
-        .args(&first_cmd[1..])
-        .stdout(if pipe_last || process.full_cmd.len() > 1 {
-            Stdio::piped()
+        self.spawn()?;
+        let output = self.children.pop().unwrap().wait_with_output()?;
+        if !output.status.success() {
+            Err(Self::to_io_error(&self.full_cmd, output.status))
         } else {
-            Stdio::inherit()
-        })
-        .spawn()?;
-    for (i, cmd) in process.full_cmd.iter().skip(1).enumerate() {
-        let new_proc = Command::new(&cmd[0])
-            .args(&cmd[1..])
-            .stdin(last_proc.stdout.take().unwrap())
-            .stdout(if !pipe_last && i == process.full_cmd.len() - 2 {
-                Stdio::inherit()
-            } else {
-                Stdio::piped()
-            })
-            .spawn()?;
-        last_proc.wait().unwrap();
-        last_proc = new_proc;
+            let mut ret = String::from_utf8_lossy(&output.stdout).to_string();
+            if ret.ends_with('\n') {
+                ret.pop();
+            }
+            Ok(ret)
+        }
     }
 
-    Ok((last_proc, full_cmd_str))
+    fn to_io_error(command: &str, status: ExitStatus) -> Error {
+        if let Some(code) = status.code() {
+            Error::new(ErrorKind::Other, format!("{} exit with {}", command, code))
+        } else {
+            Error::new(ErrorKind::Other, "Unknown error")
+        }
+   }
 }
 
 thread_local!{
@@ -197,5 +203,27 @@ mod tests {
         ENV_VARS.with(|vars| {
             assert!(vars.borrow().get("PWD").is_none());
         });
+    }
+
+    #[test]
+    fn test_run_piped_cmds() {
+        assert!(PipedCmds::new(&vec!["echo".to_string(), "rust".to_string()])
+                .pipe(&vec!["wc".to_string()])
+                .run_cmd()
+                .is_ok());
+    }
+
+    #[test]
+    fn test_run_piped_funs() {
+        assert_eq!(PipedCmds::new(&vec!["echo".to_string(), "rust".to_string()])
+                   .run_fun()
+                   .unwrap(),
+                   "rust");
+
+        assert_eq!(PipedCmds::new(&vec!["echo".to_string(), "rust".to_string()])
+                   .pipe(&vec!["wc".to_string(), "-c".to_string()])
+                   .run_fun()
+                   .unwrap()
+                   .trim(), "5");
     }
 }
