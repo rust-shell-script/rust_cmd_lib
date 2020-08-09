@@ -1,6 +1,6 @@
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::io::{Error, ErrorKind};
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 use std::cell::RefCell;
 use crate::{CmdResult, FunResult};
 
@@ -65,13 +65,38 @@ impl BuiltinCmds {
         }
     }
 
+    pub fn is_builtin(cmd: &str) -> bool {
+        let mut builtins = HashSet::new();
+        builtins.insert("cd");
+        builtins.insert("true");
+        builtins.contains(cmd)
+    }
+
     pub fn run_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
-        assert_eq!(self.cmds[0], "cd"); // only support "cd" for now
+        match self.cmds[0].as_str() {
+            "true" => self.run_true_cmd(cmds_env),
+            "cd" => self.run_cd_cmd(cmds_env),
+            _ => panic!("invalid builtin cmd: {}", self.cmds[0]),
+        }
+    }
+
+    fn run_true_cmd(&mut self, _cmds_env: &mut Env) -> CmdResult {
+        if self.cmds.len() != 1 {
+            let err = Error::new(
+                ErrorKind::Other,
+                format!("true: too many arguments: {}", self.cmds.join(" ")),
+            );
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    fn run_cd_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
         let mut dir = self.cmds[1].clone();
         if self.cmds.len() != 2 {
             let err = Error::new(
                 ErrorKind::Other,
-                format!("cd format wrong: {}", self.cmds.join(" ")),
+                format!("cd: too many arguments: {}", self.cmds.join(" ")),
             );
             return Err(err);
         }
@@ -183,7 +208,7 @@ impl PipedCmds {
 
     pub fn run_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
         // check builtin commands
-        if self.cmd_args[0][0] == "cd" {
+        if BuiltinCmds::is_builtin(&self.cmd_args[0][0]) {
             return BuiltinCmds::from(&self.cmd_args[0]).run_cmd(cmds_env);
         }
 

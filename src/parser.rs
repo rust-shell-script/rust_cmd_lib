@@ -88,27 +88,39 @@ impl Parser {
             if i == len { break; }
 
             let cmd = self.parse_cmd(&s, &mut i);
-            if !cmd.is_empty() {
-                ret.add(cmd, None);
+            if !cmd.0.is_empty() {
+                ret.add(cmd.0, cmd.1);
             }
         }
         ret
     }
 
-    fn parse_cmd(&mut self, s: &Vec<char>, i: &mut usize) -> PipedCmds {
-        let mut ret = PipedCmds::new();
+    fn parse_cmd(&mut self, s: &Vec<char>, i: &mut usize) -> (PipedCmds, Option<PipedCmds>) {
+        let mut ret = vec![PipedCmds::new(), PipedCmds::new()];
         let len = s.len();
-        while *i < len && s[*i] != ';' {
-            while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
-            if *i == len { break; }
+        for j in 0..2 {
+            while *i < len && s[*i] != ';' {
+                while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
+                if *i == len { break; }
 
-            let pipe_argv = self.parse_pipe(s, i);
-            if !pipe_argv.is_empty() {
-                ret.pipe(pipe_argv);
+                let pipe_argv = self.parse_pipe(s, i);
+                if !pipe_argv.is_empty() {
+                    ret[j].pipe(pipe_argv);
+                }
+                if *i < len && s[*i] == '|' {
+                    break;
+                }
+            }
+            if *i < len && s[*i] == '|' {
+                assert_eq!(s[*i + 1], '|');
+                *i += 2;    // skip "||" operator
+            } else {
+                break;
             }
         }
         if *i < len && s[*i] == ';' { *i += 1; }
-        ret
+        let (ret1, ret0) = (ret.pop().unwrap(), ret.pop().unwrap());
+        (ret0, if ret1.is_empty() { None } else { Some(ret1) })
     }
 
     fn parse_pipe(&mut self, s: &Vec<char>, i: &mut usize) -> Vec<String> {
@@ -165,13 +177,19 @@ impl Parser {
                 ret.push(crate::sym_table::resolve_name(&arg, &self.sym_table, &self.file, self.line));
             }
         }
-        if *i < len && s[*i] == '|' { *i += 1; }
+        if *i < len && s[*i] == '|' {
+            if *i + 1 < len && s[*i + 1] != '|' {
+                *i += 1;
+            }
+        }
         ret
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_parse_string_literal() {
         let str_lits1 = parse_string_literal!(ls "/tmp" "/");
@@ -182,6 +200,14 @@ mod tests {
 
         let str_lits3 = parse_string_literal!(echo r#"rust"cmd_lib"#);
         assert_eq!(str_lits3, ["rust\"cmd_lib"]);
+    }
+
+    #[test]
+    fn test_parser_or_cmd() {
+        assert!(Parser::new("ls /xxx || true; echo continue".to_string())
+                .parse()
+                .run_cmd()
+                .is_ok());
     }
 }
 

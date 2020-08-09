@@ -36,6 +36,15 @@ fn test_cd_fails() {
 }
 
 #[test]
+fn test_or_cmd() {
+    assert!(run_cmd! {
+        ls /nofile || true;
+        echo "continue";
+    }
+    .is_ok());
+}
+
+#[test]
 fn test_run_cmds() {
     assert!(run_cmd! {
         cd /tmp;
