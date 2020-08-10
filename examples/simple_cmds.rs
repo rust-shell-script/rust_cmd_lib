@@ -19,7 +19,7 @@ fn get_year() -> FunResult {
 
 fn main() -> CmdResult {
     proc_env_set!(CMD_LIB_DEBUG = 1);
-    run_cmd!(ls xxxx || true; echo "continue")?;
+    run_cmd!(ls /tmp/nofile || true; echo "continue")?;
     run_cmd!(cd /tmp; ls | wc -l;)?;
     run_cmd!(pwd)?;
 

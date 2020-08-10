@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_parser_or_cmd() {
-        assert!(Parser::new("ls /xxx || true; echo continue".to_string())
+        assert!(Parser::new("ls /nofile || true; echo continue".to_string())
                 .parse()
                 .run_cmd()
                 .is_ok());

@@ -13,7 +13,7 @@ fn test_run_single_cmds() {
 fn test_run_single_cmd_with_quote() {
     assert_eq!(
         run_fun!(echo "hello, rust" | sed r"s/rust/cmd_lib1/g").unwrap(),
-        "hello, cmd_lib1".to_string()
+        "hello, cmd_lib1"
     );
 }
 
