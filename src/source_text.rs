@@ -10,10 +10,8 @@ macro_rules! source_text {
     ($macro:ident) => {{
         let __st_macro_name = stringify!($macro);
         let mut __st_macro_str = String::new();
-        let __st_src = String::from(format!("{}/{}", env!("CARGO_MANIFEST_DIR"), file!()));
         let __st_target_line = line!() as usize;
-        let __st_file: Vec<char> = std::fs::read_to_string(__st_src)
-            .expect("error reading file")
+        let __st_file: Vec<char> = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", file!()))
             .chars()
             .collect();
         let __st_len = __st_file.len();
