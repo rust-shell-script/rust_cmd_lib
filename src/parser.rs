@@ -131,6 +131,8 @@ impl Parser {
             if *i == len { break; }
             let mut arg = String::new();
             let mut is_ended = false;
+            let mut is_str_lit = false;
+            let mut is_raw = false;
 
             while *i < len && !is_ended {
                 let mut cnt = 0;    // '#' counts for raw string literal
@@ -138,29 +140,52 @@ impl Parser {
                     let mut j = *i + 1;
                     while j < len && s[j] == '#' { j += 1; }
                     if j < len && s[j] == '\"' {
+                        is_str_lit = true;
+                        is_raw = true;
                         cnt = j - *i - 1;
-                        *i = j;
+                        *i = j + 1;
                     }
+                } else if s[*i] == '\"' && (*i == 0 || s[*i - 1] != '\\') {
+                    is_str_lit = true;
+                    *i += 1;
                 }
 
-                let mut cnt2 = cnt;
-                if s[*i] == '\"' {
+                if is_str_lit {
+                    let mut found_end = false;
                     *i += 1;
-                    while *i < len && (s[*i] != '\"' || s[*i - 1] == '\\' || cnt2 > 0) {
-                        if s[*i] == '\"' && s[*i - 1] != '\\' { cnt2 -= 1; }
-                        *i += 1;
-                    }
-                    *i += 1;
-                    while *i < len && cnt > 0 {
-                        if s[*i] != '#' {
-                            panic!("invalid raw string literal {}:{}", self.file, self.line);
+                    while *i < len && !found_end {
+                        if s[*i] == '\"' {
+                            let mut cnt2 = cnt;
+                            let mut j = *i + 1;
+                            while j < len && cnt2 > 0 && s[j] == '#' {
+                                cnt2 -= 1;
+                                j += 1;
+                            }
+                            if cnt2 == 0 {
+                                found_end = true;
+                                *i = j;
+                                break;
+                            }
                         }
                         *i += 1;
-                        cnt -= 1;
                     }
-                    arg.push_str(&self.str_lits.pop_front().unwrap());
+                    if !found_end {
+                        panic!("invalid raw string literal at {}:{}", self.file, self.line);
+                    }
+
+                    let str_lit = self.str_lits.pop_front().unwrap();
+                    if is_raw {
+                        arg += &str_lit; // don't resolve names for raw string literals
+                    } else {
+                        arg += &crate::sym_table::resolve_name(&str_lit,
+                                                               &self.sym_table,
+                                                               &self.file,
+                                                               self.line);
+
+                    }
                 }
 
+                let mut arg1 = String::new();
                 while *i < len {
                     if s[*i] == '|' || s[*i] == ';' || char::is_whitespace(s[*i]) {
                         is_ended = true;
@@ -169,12 +194,18 @@ impl Parser {
                     if s[*i] == '\"' && s[*i - 1] != '\\' {
                         break;
                     }
-                    arg.push(s[*i]);
+                    arg1.push(s[*i]);
                     *i += 1;
+                }
+                if !arg1.is_empty() {
+                    arg += &crate::sym_table::resolve_name(&arg1,
+                                                           &self.sym_table,
+                                                           &self.file,
+                                                           self.line);
                 }
             }
             if !arg.is_empty() {
-                ret.push(crate::sym_table::resolve_name(&arg, &self.sym_table, &self.file, self.line));
+                ret.push(arg);
             }
         }
         if *i < len && s[*i] == '|' {
