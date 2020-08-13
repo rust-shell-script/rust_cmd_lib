@@ -1,5 +1,5 @@
 use std::collections::{VecDeque, HashMap};
-use crate::process::{GroupCmds, PipedCmds};
+use crate::process::{GroupCmds, PipedCmds, Cmd};
 
 #[doc(hidden)]
 #[macro_export]
@@ -103,7 +103,8 @@ impl Parser {
                 while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
                 if *i == len { break; }
 
-                let pipe_argv = self.parse_pipe(s, i);
+                let cmd = self.parse_pipe(s, i);
+                let pipe_argv = cmd.get_args();
                 if !pipe_argv.is_empty() {
                     ret[j].pipe(pipe_argv);
                 }
@@ -123,8 +124,8 @@ impl Parser {
         (ret0, if ret1.is_empty() { None } else { Some(ret1) })
     }
 
-    fn parse_pipe(&mut self, s: &Vec<char>, i: &mut usize) -> Vec<String> {
-        let mut ret = Vec::new();
+    fn parse_pipe(&mut self, s: &Vec<char>, i: &mut usize) -> Cmd {
+        let mut ret = Cmd::new();
         let len = s.len();
         while *i < len && s[*i] != '|' && s[*i] != ';' {
             while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
@@ -186,6 +187,7 @@ impl Parser {
                 }
 
                 let mut arg1 = String::new();
+                //let mut stdout_redirect = String::new();
                 while *i < len {
                     if s[*i] == '|' || s[*i] == ';' || char::is_whitespace(s[*i]) {
                         is_ended = true;
@@ -205,7 +207,7 @@ impl Parser {
                 }
             }
             if !arg.is_empty() {
-                ret.push(arg);
+                ret.add_arg(arg);
             }
         }
         if *i < len && s[*i] == '|' {

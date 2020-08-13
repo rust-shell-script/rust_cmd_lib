@@ -226,9 +226,6 @@ impl PipedCmds {
             return BuiltinCmds::from(&self.cmd_args[0]).run_cmd(cmds_env);
         }
 
-        let last_i = self.pipes.len() - 1;
-        self.pipes[last_i].stdout(Stdio::inherit());
-
         self.spawn()?;
         let status = self.children.pop().unwrap().wait()?;
         if !status.success() {
@@ -262,6 +259,43 @@ impl PipedCmds {
             Error::new(ErrorKind::Other, "Unknown error")
         }
    }
+}
+
+#[allow(dead_code)]
+pub struct Cmd {
+    stdout: String,
+    append: bool,
+    args: Vec<String>,
+}
+
+#[allow(dead_code)]
+impl Cmd {
+    pub fn new() -> Self {
+        Self {
+            stdout: String::new(),
+            append: false,
+            args: vec![],
+        }
+    }
+
+    pub fn add_arg(&mut self, arg: String) -> &mut Self {
+        self.args.push(arg);
+        self
+    }
+
+    pub fn set_append(&mut self) -> &mut Self {
+        self.append = true;
+        self
+    }
+
+    pub fn set_stdout(&mut self, stdout: String) -> &mut Self {
+        self.stdout = stdout;
+        self
+    }
+
+    pub fn get_args(&self) -> &Vec<String> {
+        &self.args
+    }
 }
 
 thread_local!{
