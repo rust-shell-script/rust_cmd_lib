@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use crate::{CmdResult, FunResult};
 
 pub struct GroupCmds {
-     cmds: Vec<(PipedCmds, Option<PipedCmds>)>,  // (cmd, orCmd) pairs
+     cmds: Vec<(Cmds, Option<Cmds>)>,  // (cmd, orCmd) pairs
      cmds_env: Env,
 }
 
@@ -17,7 +17,7 @@ impl GroupCmds {
         }
     }
 
-    pub fn add(&mut self, cmds: PipedCmds, or_cmds: Option<PipedCmds>) -> &mut Self {
+    pub fn add(&mut self, cmds: Cmds, or_cmds: Option<Cmds>) -> &mut Self {
         self.cmds.push((cmds, or_cmds));
         self
     }
@@ -125,7 +125,7 @@ impl BuiltinCmds {
 }
 
 
-pub struct PipedCmds {
+pub struct Cmds {
     pipes: Vec<Command>,
     children: Vec<Child>,
 
@@ -133,7 +133,7 @@ pub struct PipedCmds {
     full_cmd: String,
 }
 
-impl PipedCmds {
+impl Cmds {
     pub fn new() -> Self {
         Self {
             pipes: vec![],
@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_run_piped_cmds() {
-        assert!(PipedCmds::from(Cmd::from(vec!["echo", "rust"]))
+        assert!(Cmds::from(Cmd::from(vec!["echo", "rust"]))
                 .pipe(Cmd::from(vec!["wc"]))
                 .run_cmd(&mut Env::new())
                 .is_ok());
@@ -388,12 +388,12 @@ mod tests {
 
     #[test]
     fn test_run_piped_funs() {
-        assert_eq!(PipedCmds::from(Cmd::from(vec!["echo", "rust"]))
+        assert_eq!(Cmds::from(Cmd::from(vec!["echo", "rust"]))
                    .run_fun(&mut Env::new())
                    .unwrap(),
                    "rust");
 
-        assert_eq!(PipedCmds::from(Cmd::from(vec!["echo", "rust"]))
+        assert_eq!(Cmds::from(Cmd::from(vec!["echo", "rust"]))
                    .pipe(Cmd::from(vec!["wc", "-c"]))
                    .run_fun(&mut Env::new())
                    .unwrap()

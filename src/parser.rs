@@ -1,5 +1,5 @@
 use std::collections::{VecDeque, HashMap};
-use crate::process::{GroupCmds, PipedCmds, Cmd, FdOrFile};
+use crate::process::{GroupCmds, Cmds, Cmd, FdOrFile};
 
 #[doc(hidden)]
 #[macro_export]
@@ -95,8 +95,8 @@ impl Parser {
         ret
     }
 
-    fn parse_cmd(&mut self, s: &Vec<char>, i: &mut usize) -> (PipedCmds, Option<PipedCmds>) {
-        let mut ret = vec![PipedCmds::new(), PipedCmds::new()];
+    fn parse_cmd(&mut self, s: &Vec<char>, i: &mut usize) -> (Cmds, Option<Cmds>) {
+        let mut ret = vec![Cmds::new(), Cmds::new()];
         let len = s.len();
         for j in 0..2 {
             while *i < len && s[*i] != ';' {
