@@ -129,7 +129,7 @@ pub struct PipedCmds {
     pipes: Vec<Command>,
     children: Vec<Child>,
 
-    cmd_args: Vec<Vec<String>>,
+    cmd_args: Vec<Cmd>,
     full_cmd: String,
 }
 
@@ -143,21 +143,15 @@ impl PipedCmds {
         }
     }
 
-    pub fn from<I, S>(start_cmd_argv: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
-        let cmd_args: Vec<String> = start_cmd_argv.into_iter()
-            .map(|s| s.as_ref().to_owned())
-            .collect();
+    pub fn from(cmd: Cmd) -> Self {
+        let cmd_args: Vec<String> = cmd.get_args().to_vec();
         let mut start_cmd = Command::new(&cmd_args[0]);
         start_cmd.args(&cmd_args[1..]);
         Self {
             pipes: vec![start_cmd],
             children: vec![],
             full_cmd: cmd_args.join(" ").to_string(),
-            cmd_args: vec![cmd_args],
+            cmd_args: vec![cmd],
         }
     }
 
@@ -165,19 +159,13 @@ impl PipedCmds {
         self.pipes.is_empty()
     }
 
-    pub fn pipe<I, S>(&mut self, pipe_cmd_argv: I) -> &mut Self
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
+    pub fn pipe(&mut self, cmd: Cmd) -> &mut Self {
         if !self.pipes.is_empty() {
             let last_i = self.pipes.len() - 1;
             self.pipes[last_i].stdout(Stdio::piped());
         }
 
-        let cmd_args: Vec<String> = pipe_cmd_argv.into_iter()
-            .map(|s| s.as_ref().to_owned())
-            .collect();
+        let cmd_args: Vec<String> = cmd.get_args().to_vec();
         let mut pipe_cmd = Command::new(&cmd_args[0]);
         pipe_cmd.args(&cmd_args[1..]);
         self.pipes.push(pipe_cmd);
@@ -186,7 +174,7 @@ impl PipedCmds {
             self.full_cmd += " | ";
         }
         self.full_cmd += &cmd_args.join(" ");
-        self.cmd_args.push(cmd_args);
+        self.cmd_args.push(cmd);
         self
     }
 
@@ -222,8 +210,8 @@ impl PipedCmds {
 
     pub fn run_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
         // check builtin commands
-        if BuiltinCmds::is_builtin(&self.cmd_args[0][0]) {
-            return BuiltinCmds::from(&self.cmd_args[0]).run_cmd(cmds_env);
+        if BuiltinCmds::is_builtin(&self.cmd_args[0].get_args()[0]) {
+            return BuiltinCmds::from(&self.cmd_args[0].get_args()).run_cmd(cmds_env);
         }
 
         self.spawn()?;
@@ -261,25 +249,37 @@ impl PipedCmds {
    }
 }
 
-#[allow(dead_code)]
+pub enum FdOrFile {
+    Fd(u32),
+    File(String),
+}
+
 pub struct Cmd {
     stdout: FdOrFile,
     append: bool,
     args: Vec<String>,
 }
 
-pub enum FdOrFile {
-    Fd(u32),
-    File(String),
-}
-
-#[allow(dead_code)]
 impl Cmd {
     pub fn new() -> Self {
         Self {
             stdout: FdOrFile::Fd(1),
             append: false,
             args: vec![],
+        }
+    }
+
+    pub fn from<I, S>(args: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        Self {
+            stdout: FdOrFile::Fd(1),
+            append: false,
+            args: args.into_iter()
+                .map(|s| s.as_ref().to_owned())
+                .collect(),
         }
     }
 
@@ -296,6 +296,10 @@ impl Cmd {
 
     pub fn get_args(&self) -> &Vec<String> {
         &self.args
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.args.is_empty()
     }
 }
 
@@ -376,21 +380,21 @@ mod tests {
 
     #[test]
     fn test_run_piped_cmds() {
-        assert!(PipedCmds::from(&vec!["echo", "rust"])
-                .pipe(&vec!["wc"])
+        assert!(PipedCmds::from(Cmd::from(vec!["echo", "rust"]))
+                .pipe(Cmd::from(vec!["wc"]))
                 .run_cmd(&mut Env::new())
                 .is_ok());
     }
 
     #[test]
     fn test_run_piped_funs() {
-        assert_eq!(PipedCmds::from(&vec!["echo", "rust"])
+        assert_eq!(PipedCmds::from(Cmd::from(vec!["echo", "rust"]))
                    .run_fun(&mut Env::new())
                    .unwrap(),
                    "rust");
 
-        assert_eq!(PipedCmds::from(&vec!["echo", "rust"])
-                   .pipe(&vec!["wc", "-c"])
+        assert_eq!(PipedCmds::from(Cmd::from(vec!["echo", "rust"]))
+                   .pipe(Cmd::from(vec!["wc", "-c"]))
                    .run_fun(&mut Env::new())
                    .unwrap()
                    .trim(), "5");

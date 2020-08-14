@@ -104,9 +104,8 @@ impl Parser {
                 if *i == len { break; }
 
                 let cmd = self.parse_pipe(s, i);
-                let pipe_argv = cmd.get_args();
-                if !pipe_argv.is_empty() {
-                    ret[j].pipe(pipe_argv);
+                if !cmd.is_empty() {
+                    ret[j].pipe(cmd);
                 }
                 if *i < len && s[*i] == '|' {
                     break;
