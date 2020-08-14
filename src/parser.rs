@@ -139,7 +139,23 @@ impl Parser {
 
                 if *i < len && s[*i] == '>' {
                     *i += 1;
-                    ret.set_stdout(self.parse_stdout(s, i));
+                    if !arg.is_empty() {
+                        if arg == "&" {     // "&> f" equals to ">&2 2>f"
+                            ret.set_redirect(2, self.parse_redirect(s, i));
+                            ret.set_redirect(1, FdOrFile::Fd(2, false));
+                        } else if let Ok(fd) = arg.parse::<i32>() {
+                            if fd != 1 && fd != 2 {
+                                panic!("fd redirect only support stdout(1) and stderr(2) {}:{}", self.file, self.line);
+                            }
+                            ret.set_redirect(fd, self.parse_redirect(s, i));
+                        } else {
+                            ret.add_arg(arg.clone());
+                            ret.set_redirect(1, self.parse_redirect(s, i));
+                        }
+                    } else {
+                        ret.set_redirect(1, self.parse_redirect(s, i));
+                    }
+                    arg.clear();
                 }
 
                 let arg1 = self.parse_normal_arg(s, i);
@@ -189,7 +205,7 @@ impl Parser {
         arg
     }
 
-    fn parse_stdout(&mut self, s: &Vec<char>, i: &mut usize) -> FdOrFile {
+    fn parse_redirect(&mut self, s: &Vec<char>, i: &mut usize) -> FdOrFile {
         let mut append = false;
         let len = s.len();
 

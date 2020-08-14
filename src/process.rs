@@ -264,15 +264,15 @@ impl FdOrFile {
 }
 
 pub struct Cmd {
-    stdout: FdOrFile,
     args: Vec<String>,
+    redirects: Vec<(i32, FdOrFile)>,
 }
 
 impl Cmd {
     pub fn new() -> Self {
         Self {
-            stdout: FdOrFile::Fd(1, false),
             args: vec![],
+            redirects: vec![],
         }
     }
 
@@ -282,10 +282,10 @@ impl Cmd {
         S: AsRef<str>,
     {
         Self {
-            stdout: FdOrFile::Fd(1, false),
             args: args.into_iter()
                 .map(|s| s.as_ref().to_owned())
                 .collect(),
+            redirects: vec![],
         }
     }
 
@@ -294,17 +294,13 @@ impl Cmd {
         self
     }
 
-    pub fn get_args(&self) -> &Vec<String> {
-        &self.args
+    pub fn get_args(&mut self) -> &mut Vec<String> {
+        &mut self.args
     }
 
-    pub fn set_stdout(&mut self, stdout: FdOrFile) -> &mut Self {
-        self.stdout = stdout;
+    pub fn set_redirect(&mut self, fd: i32, target: FdOrFile) -> &mut Self {
+        self.redirects.push((fd, target));
         self
-    }
-
-    pub fn get_stdout(&self) -> &FdOrFile {
-        &self.stdout
     }
 
     pub fn is_empty(&self) -> bool {
@@ -315,33 +311,48 @@ impl Cmd {
         let cmd_args: Vec<String> = self.get_args().to_vec();
         let mut cmd = Command::new(&cmd_args[0]);
         cmd.args(&cmd_args[1..]);
-        if self.get_stdout().is_orig_stdout() {
-            return cmd;
+
+        for (fd_src, target) in self.redirects.iter_mut() {
+            match &target {
+                FdOrFile::Fd(fd, _append) => {
+                    let out = unsafe {Stdio::from_raw_fd(*fd)};
+                    if *fd_src == 1 {
+                        cmd.stdout(out);
+                    } else if *fd_src == 2 {
+                        cmd.stderr(out);
+                    }
+                },
+                FdOrFile::File(file, append) => {
+                    if file == "/dev/null" {
+                        if *fd_src == 1 {
+                            cmd.stdout(Stdio::null());
+                        } else if *fd_src == 2 {
+                            cmd.stderr(Stdio::null());
+                        }
+                    } else {
+                        let f = OpenOptions::new()
+                            .create(true)
+                            .truncate(!append)
+                            .write(true)
+                            .append(*append)
+                            .open(file)
+                            .unwrap();
+                        let fd = f.as_raw_fd();
+                        let out = unsafe {Stdio::from_raw_fd(fd)};
+                        if *fd_src == 1 {
+                            cmd.stdout(out);
+                        } else if *fd_src == 2 {
+                            cmd.stderr(out);
+                        }
+                        *target = FdOrFile::OpenedFile(f, *append);
+                    }
+                },
+                _ => {
+                    panic!("file is already opened");
+                }
+            };
         }
 
-        match &self.get_stdout() {
-            FdOrFile::Fd(fd, _append) => {
-                // from_raw_fd is only considered unsafe if the file is used for mmap
-                let out = unsafe {Stdio::from_raw_fd(*fd)};
-                cmd.stdout(out);
-            },
-            FdOrFile::File(file, append) => {
-                let f = OpenOptions::new()
-                    .create(true)
-                    .truncate(!*append)
-                    .write(true)
-                    .append(*append)
-                    .open(file)
-                    .unwrap();
-                let fd = f.as_raw_fd();
-                let out = unsafe {Stdio::from_raw_fd(fd)};
-                cmd.stdout(out);
-                self.stdout = FdOrFile::OpenedFile(f, *append);
-            },
-            _ => {
-                panic!("file is already opened");
-            }
-        };
         cmd
     }
 }
@@ -376,7 +387,7 @@ mod tests {
     fn test_stdout_redirect() {
         let tmp_file = "/tmp/file_echo_rust";
         let mut write_cmd = Cmd::from_args(vec!["echo", "rust"]);
-        write_cmd.set_stdout(FdOrFile::File(tmp_file.to_string(), false));
+        write_cmd.set_redirect(1, FdOrFile::File(tmp_file.to_string(), false));
         assert!(Cmds::from_cmd(write_cmd)
                 .run_cmd(&mut Env::new())
                 .is_ok());
