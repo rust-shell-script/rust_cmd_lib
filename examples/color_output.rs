@@ -7,6 +7,6 @@ fn main() -> CmdResult {
     run_cmd!(|red, green, reset| /bin/echo "1: ${red}red text ${green}green text${reset}")?;
     println!("2: \x1b[0;31mred text \x1b[0;32mgreen text\x1b[0m");
     run_cmd!(bash -c r#"echo -e "3: \x1b[0;31mred text \x1b[0;32mgreen text\x1b[0m""#)?;
-    run_cmd!(bash -c "echo -ne '4: \x1b[0;31mred text \x1b[0;32mgreen text\x1b[0m'")?;
+    run_cmd!(bash -c "echo -e '4: \x1b[0;31mred text \x1b[0;32mgreen text\x1b[0m'")?;
     Ok(())
 }

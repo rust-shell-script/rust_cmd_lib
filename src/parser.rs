@@ -1,5 +1,5 @@
 use std::collections::{VecDeque, HashMap};
-use crate::process::{GroupCmds, PipedCmds, Cmd};
+use crate::process::{GroupCmds, PipedCmds, Cmd, FdOrFile};
 
 #[doc(hidden)]
 #[macro_export]
@@ -131,74 +131,19 @@ impl Parser {
             while *i < len && char::is_whitespace(s[*i]) { *i += 1; }
             if *i == len { break; }
             let mut arg = String::new();
-            let mut is_ended = false;
-            let mut is_str_lit = false;
-            let mut is_raw = false;
-
-            while *i < len && !is_ended {
-                let mut cnt = 0;    // '#' counts for raw string literal
-                if s[*i] == 'r' || s[*i] == 'b' {
-                    let mut j = *i + 1;
-                    while j < len && s[j] == '#' { j += 1; }
-                    if j < len && s[j] == '\"' {
-                        is_str_lit = true;
-                        is_raw = true;
-                        cnt = j - *i - 1;
-                        *i = j + 1;
-                    }
-                } else if s[*i] == '\"' && (*i == 0 || s[*i - 1] != '\\') {
-                    is_str_lit = true;
-                    *i += 1;
+            while *i < len &&
+                  !(s[*i] == '|' || s[*i] == ';' || char::is_whitespace(s[*i])) {
+                if s[*i] == 'r' || s[*i] == 'b' ||
+                   (s[*i] == '\"' && (*i == 0 || s[*i - 1] != '\\')) {
+                    arg += &self.parse_str_lit(s, i);
                 }
 
-                if is_str_lit {
-                    let mut found_end = false;
+                if *i < len && s[*i] == '>' {
                     *i += 1;
-                    while *i < len && !found_end {
-                        if s[*i] == '\"' {
-                            let mut cnt2 = cnt;
-                            let mut j = *i + 1;
-                            while j < len && cnt2 > 0 && s[j] == '#' {
-                                cnt2 -= 1;
-                                j += 1;
-                            }
-                            if cnt2 == 0 {
-                                found_end = true;
-                                *i = j;
-                                break;
-                            }
-                        }
-                        *i += 1;
-                    }
-                    if !found_end {
-                        panic!("invalid raw string literal at {}:{}", self.file, self.line);
-                    }
-
-                    let str_lit = self.str_lits.pop_front().unwrap();
-                    if is_raw {
-                        arg += &str_lit; // don't resolve names for raw string literals
-                    } else {
-                        arg += &crate::sym_table::resolve_name(&str_lit,
-                                                               &self.sym_table,
-                                                               &self.file,
-                                                               self.line);
-
-                    }
+                    ret.set_stdout(self.parse_stdout(s, i));
                 }
 
-                let mut arg1 = String::new();
-                //let mut stdout_redirect = String::new();
-                while *i < len {
-                    if s[*i] == '|' || s[*i] == ';' || char::is_whitespace(s[*i]) {
-                        is_ended = true;
-                        break;
-                    }
-                    if s[*i] == '\"' && s[*i - 1] != '\\' {
-                        break;
-                    }
-                    arg1.push(s[*i]);
-                    *i += 1;
-                }
+                let arg1 = self.parse_normal_arg(s, i);
                 if !arg1.is_empty() {
                     arg += &crate::sym_table::resolve_name(&arg1,
                                                            &self.sym_table,
@@ -216,6 +161,127 @@ impl Parser {
             }
         }
         ret
+    }
+
+    fn parse_normal_arg(&mut self, s: &Vec<char>, i: &mut usize) -> String {
+        let mut arg = String::new();
+        let len = s.len();
+        while *i < len &&
+              !(s[*i] == '|' || s[*i] == ';' || char::is_whitespace(s[*i])) {
+            if s[*i] == '\"' && s[*i - 1] != '\\' { // normal string literal
+                break;
+            }
+
+            if s[*i] == 'r' || s[*i] == 'b' {
+                let mut j = *i + 1;
+                while j < len && s[j] == '#' { j += 1; }
+                if j < len && s[j] == '\"' {        // raw string literal
+                    break;
+                }
+            }
+
+            if s[*i] == '>' {                       // stdout redirect
+                break;
+            }
+
+            arg.push(s[*i]);
+            *i += 1;
+        }
+        arg
+    }
+
+    fn parse_stdout(&mut self, s: &Vec<char>, i: &mut usize) -> (FdOrFile, bool) {
+        let mut append = false;
+        let len = s.len();
+
+        if *i < len && s[*i] == '>' {
+            append = true;
+            *i += 1;
+        }
+        while *i < len && char::is_whitespace(s[*i]) {
+            *i += 1;
+        }
+
+        if *i < len && s[*i] == '&' {
+            let mut fd_str = String::new();
+            *i += 1;
+            while *i < len && s[*i].is_digit(10) {
+                fd_str.push(s[*i]);
+                *i += 1;
+            }
+            return (FdOrFile::Fd(fd_str.parse().unwrap()), append);
+        }
+
+        if s[*i] == 'r' || s[*i] == 'b' ||
+           (s[*i] == '\"' && (*i == 0 || s[*i - 1] != '\\')) {
+            let file = self.parse_str_lit(s, i);
+            if !file.is_empty() {
+                return (FdOrFile::File(file), append);
+            }
+        }
+
+        let file = self.parse_normal_arg(s, i);
+        (FdOrFile::File(crate::sym_table::resolve_name(&file,
+                                                       &self.sym_table,
+                                                       &self.file,
+                                                       self.line)), append)
+    }
+
+    fn parse_str_lit(&mut self, s: &Vec<char>, i: &mut usize) -> String {
+        let len = s.len();
+        let mut is_str_lit = false;
+        let mut is_raw = false;
+        let mut cnt = 0;    // '#' counts for raw string literal
+        if s[*i] == 'r' || s[*i] == 'b' {
+            let mut j = *i + 1;
+            while j < len && s[j] == '#' { j += 1; }
+            if j < len && s[j] == '\"' {
+                is_str_lit = true;
+                is_raw = true;
+                cnt = j - *i - 1;
+                *i = j + 1;
+            }
+        } else if s[*i] == '\"' && (*i == 0 || s[*i - 1] != '\\') {
+            is_str_lit = true;
+            *i += 1;
+        }
+
+        if !is_str_lit {
+            return "".to_string();
+        }
+
+        let mut found_end = false;
+        *i += 1;
+        while *i < len && !found_end {
+            if s[*i] == '\"' {
+                let mut cnt2 = cnt;
+                let mut j = *i + 1;
+                while j < len && cnt2 > 0 && s[j] == '#' {
+                    cnt2 -= 1;
+                    j += 1;
+                }
+                if cnt2 == 0 {
+                    found_end = true;
+                    *i = j;
+                    break;
+                }
+            }
+            *i += 1;
+        }
+        if !found_end {
+            panic!("invalid raw string literal at {}:{}", self.file, self.line);
+        }
+
+        let str_lit = self.str_lits.pop_front().unwrap();
+        if is_raw {
+            return str_lit; // don't resolve names for raw string literals
+        } else {
+            return crate::sym_table::resolve_name(&str_lit,
+                                                   &self.sym_table,
+                                                   &self.file,
+                                                   self.line);
+
+        }
     }
 }
 
@@ -238,6 +304,18 @@ mod tests {
     #[test]
     fn test_parser_or_cmd() {
         assert!(Parser::new("ls /nofile || true; echo continue".to_string())
+                .parse()
+                .run_cmd()
+                .is_ok());
+    }
+
+    #[test]
+    fn test_parser_stdout_redirect() {
+        assert!(Parser::new("echo rust > file".to_string())
+                .parse()
+                .run_cmd()
+                .is_ok());
+        assert!(Parser::new("echo rust > &2".to_string())
                 .parse()
                 .run_cmd()
                 .is_ok());

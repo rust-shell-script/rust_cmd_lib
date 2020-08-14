@@ -263,16 +263,21 @@ impl PipedCmds {
 
 #[allow(dead_code)]
 pub struct Cmd {
-    stdout: String,
+    stdout: FdOrFile,
     append: bool,
     args: Vec<String>,
+}
+
+pub enum FdOrFile {
+    Fd(u32),
+    File(String),
 }
 
 #[allow(dead_code)]
 impl Cmd {
     pub fn new() -> Self {
         Self {
-            stdout: String::new(),
+            stdout: FdOrFile::Fd(1),
             append: false,
             args: vec![],
         }
@@ -283,13 +288,9 @@ impl Cmd {
         self
     }
 
-    pub fn set_append(&mut self) -> &mut Self {
-        self.append = true;
-        self
-    }
-
-    pub fn set_stdout(&mut self, stdout: String) -> &mut Self {
-        self.stdout = stdout;
+    pub fn set_stdout(&mut self, stdout: (FdOrFile, bool)) -> &mut Self {
+        self.stdout = stdout.0;
+        self.append = stdout.1;
         self
     }
 
