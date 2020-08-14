@@ -21,5 +21,9 @@ fn main() -> CmdResult {
 
     eprintln!("redirect stdout and stderr to /tmp/f");
     run_cmd!(ls /x &>/tmp/f || true)?;
+
+    eprintln!("redirect stdin from /tmp/f");
+    run_cmd!(wc -w < /tmp/f)?;
+
     Ok(())
 }

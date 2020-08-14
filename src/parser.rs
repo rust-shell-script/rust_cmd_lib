@@ -143,19 +143,24 @@ impl Parser {
                         if arg == "&" {     // "&> f" equals to ">&2 2>f"
                             ret.set_redirect(2, self.parse_redirect(s, i));
                             ret.set_redirect(1, FdOrFile::Fd(2, false));
+                            arg.clear();
                         } else if let Ok(fd) = arg.parse::<i32>() {
                             if fd != 1 && fd != 2 {
                                 panic!("fd redirect only support stdout(1) and stderr(2) {}:{}", self.file, self.line);
                             }
                             ret.set_redirect(fd, self.parse_redirect(s, i));
+                            arg.clear();
                         } else {
-                            ret.add_arg(arg.clone());
                             ret.set_redirect(1, self.parse_redirect(s, i));
                         }
                     } else {
                         ret.set_redirect(1, self.parse_redirect(s, i));
                     }
-                    arg.clear();
+                }
+
+                if *i < len && s[*i] == '<' {
+                    *i += 1;
+                    ret.set_redirect(0, self.parse_redirect(s, i));
                 }
 
                 let arg1 = self.parse_normal_arg(s, i);
@@ -196,6 +201,10 @@ impl Parser {
             }
 
             if s[*i] == '>' {                       // stdout redirect
+                break;
+            }
+
+            if s[*i] == '<' {                       // stdin redirect
                 break;
             }
 

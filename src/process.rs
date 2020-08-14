@@ -316,34 +316,43 @@ impl Cmd {
             match &target {
                 FdOrFile::Fd(fd, _append) => {
                     let out = unsafe {Stdio::from_raw_fd(*fd)};
-                    if *fd_src == 1 {
-                        cmd.stdout(out);
-                    } else if *fd_src == 2 {
-                        cmd.stderr(out);
-                    }
+                    match *fd_src {
+                        1 => cmd.stdout(out),
+                        2 => cmd.stderr(out),
+                        _ => panic!("invalid fd: {}", *fd_src),
+                    };
                 },
                 FdOrFile::File(file, append) => {
                     if file == "/dev/null" {
-                        if *fd_src == 1 {
-                            cmd.stdout(Stdio::null());
-                        } else if *fd_src == 2 {
-                            cmd.stderr(Stdio::null());
-                        }
+                        match *fd_src {
+                            0 => cmd.stdin(Stdio::null()),
+                            1 => cmd.stdout(Stdio::null()),
+                            2 => cmd.stderr(Stdio::null()),
+                            _ => panic!("invalid fd: {}", *fd_src),
+                        };
                     } else {
-                        let f = OpenOptions::new()
-                            .create(true)
-                            .truncate(!append)
-                            .write(true)
-                            .append(*append)
-                            .open(file)
-                            .unwrap();
+                        let f = if *fd_src == 0 {
+                            OpenOptions::new()
+                                .read(true)
+                                .open(file)
+                                .unwrap()
+                        } else {
+                            OpenOptions::new()
+                                .create(true)
+                                .truncate(!append)
+                                .write(true)
+                                .append(*append)
+                                .open(file)
+                                .unwrap()
+                        };
                         let fd = f.as_raw_fd();
                         let out = unsafe {Stdio::from_raw_fd(fd)};
-                        if *fd_src == 1 {
-                            cmd.stdout(out);
-                        } else if *fd_src == 2 {
-                            cmd.stderr(out);
-                        }
+                        match *fd_src {
+                            0 => cmd.stdin(out),
+                            1 => cmd.stdout(out),
+                            2 => cmd.stderr(out),
+                            _ => panic!("invalid fd: {}", *fd_src),
+                        };
                         *target = FdOrFile::OpenedFile(f, *append);
                     }
                 },
