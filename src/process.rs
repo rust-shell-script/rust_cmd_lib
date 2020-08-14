@@ -1,5 +1,7 @@
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::io::{Error, ErrorKind};
+use std::fs::{File, OpenOptions};
+use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::collections::HashSet;
 use crate::{CmdResult, FunResult, Env};
 use crate::proc_env::ENV_VARS;
@@ -59,7 +61,7 @@ pub struct BuiltinCmds {
 }
 
 impl BuiltinCmds {
-    pub fn from(cmds: &Vec<String>) -> Self {
+    pub fn from_vec(cmds: &Vec<String>) -> Self {
         Self {
             cmds: cmds.to_vec(),
         }
@@ -143,12 +145,10 @@ impl Cmds {
         }
     }
 
-    pub fn from(cmd: Cmd) -> Self {
+    pub fn from_cmd(mut cmd: Cmd) -> Self {
         let cmd_args: Vec<String> = cmd.get_args().to_vec();
-        let mut start_cmd = Command::new(&cmd_args[0]);
-        start_cmd.args(&cmd_args[1..]);
-        Self {
-            pipes: vec![start_cmd],
+         Self {
+            pipes: vec![cmd.gen_command()],
             children: vec![],
             full_cmd: cmd_args.join(" ").to_string(),
             cmd_args: vec![cmd],
@@ -159,15 +159,14 @@ impl Cmds {
         self.pipes.is_empty()
     }
 
-    pub fn pipe(&mut self, cmd: Cmd) -> &mut Self {
+    pub fn pipe(&mut self, mut cmd: Cmd) -> &mut Self {
         if !self.pipes.is_empty() {
             let last_i = self.pipes.len() - 1;
             self.pipes[last_i].stdout(Stdio::piped());
         }
 
         let cmd_args: Vec<String> = cmd.get_args().to_vec();
-        let mut pipe_cmd = Command::new(&cmd_args[0]);
-        pipe_cmd.args(&cmd_args[1..]);
+        let pipe_cmd = cmd.gen_command();
         self.pipes.push(pipe_cmd);
 
         if !self.full_cmd.is_empty() {
@@ -211,7 +210,7 @@ impl Cmds {
     pub fn run_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
         // check builtin commands
         if BuiltinCmds::is_builtin(&self.cmd_args[0].get_args()[0]) {
-            return BuiltinCmds::from(&self.cmd_args[0].get_args()).run_cmd(cmds_env);
+            return BuiltinCmds::from_vec(&self.cmd_args[0].get_args()).run_cmd(cmds_env);
         }
 
         self.spawn()?;
@@ -250,33 +249,40 @@ impl Cmds {
 }
 
 pub enum FdOrFile {
-    Fd(u32),
-    File(String),
+    Fd(i32, bool),          // fd, append?
+    File(String, bool),     // file, append?
+    OpenedFile(File, bool), // opened file, append?
+}
+impl FdOrFile {
+    pub fn is_orig_stdout(&self) -> bool {
+        if let FdOrFile::Fd(1, _) = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 pub struct Cmd {
     stdout: FdOrFile,
-    append: bool,
     args: Vec<String>,
 }
 
 impl Cmd {
     pub fn new() -> Self {
         Self {
-            stdout: FdOrFile::Fd(1),
-            append: false,
+            stdout: FdOrFile::Fd(1, false),
             args: vec![],
         }
     }
 
-    pub fn from<I, S>(args: I) -> Self
+    pub fn from_args<I, S>(args: I) -> Self
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
         Self {
-            stdout: FdOrFile::Fd(1),
-            append: false,
+            stdout: FdOrFile::Fd(1, false),
             args: args.into_iter()
                 .map(|s| s.as_ref().to_owned())
                 .collect(),
@@ -288,18 +294,55 @@ impl Cmd {
         self
     }
 
-    pub fn set_stdout(&mut self, stdout: (FdOrFile, bool)) -> &mut Self {
-        self.stdout = stdout.0;
-        self.append = stdout.1;
-        self
-    }
-
     pub fn get_args(&self) -> &Vec<String> {
         &self.args
     }
 
+    pub fn set_stdout(&mut self, stdout: FdOrFile) -> &mut Self {
+        self.stdout = stdout;
+        self
+    }
+
+    pub fn get_stdout(&self) -> &FdOrFile {
+        &self.stdout
+    }
+
     pub fn is_empty(&self) -> bool {
         self.args.is_empty()
+    }
+
+    pub fn gen_command(&mut self) -> Command {
+        let cmd_args: Vec<String> = self.get_args().to_vec();
+        let mut cmd = Command::new(&cmd_args[0]);
+        cmd.args(&cmd_args[1..]);
+        if self.get_stdout().is_orig_stdout() {
+            return cmd;
+        }
+
+        match &self.get_stdout() {
+            FdOrFile::Fd(fd, _append) => {
+                // from_raw_fd is only considered unsafe if the file is used for mmap
+                let out = unsafe {Stdio::from_raw_fd(*fd)};
+                cmd.stdout(out);
+            },
+            FdOrFile::File(file, append) => {
+                let f = OpenOptions::new()
+                    .create(true)
+                    .truncate(!*append)
+                    .write(true)
+                    .append(*append)
+                    .open(file)
+                    .unwrap();
+                let fd = f.as_raw_fd();
+                let out = unsafe {Stdio::from_raw_fd(fd)};
+                cmd.stdout(out);
+                self.stdout = FdOrFile::OpenedFile(f, *append);
+            },
+            _ => {
+                panic!("file is already opened");
+            }
+        };
+        cmd
     }
 }
 
@@ -309,23 +352,44 @@ mod tests {
 
     #[test]
     fn test_run_piped_cmds() {
-        assert!(Cmds::from(Cmd::from(vec!["echo", "rust"]))
-                .pipe(Cmd::from(vec!["wc"]))
+        assert!(Cmds::from_cmd(Cmd::from_args(vec!["echo", "rust"]))
+                .pipe(Cmd::from_args(vec!["wc"]))
                 .run_cmd(&mut Env::new())
                 .is_ok());
     }
 
     #[test]
     fn test_run_piped_funs() {
-        assert_eq!(Cmds::from(Cmd::from(vec!["echo", "rust"]))
+        assert_eq!(Cmds::from_cmd(Cmd::from_args(vec!["echo", "rust"]))
                    .run_fun(&mut Env::new())
                    .unwrap(),
                    "rust");
 
-        assert_eq!(Cmds::from(Cmd::from(vec!["echo", "rust"]))
-                   .pipe(Cmd::from(vec!["wc", "-c"]))
+        assert_eq!(Cmds::from_cmd(Cmd::from_args(vec!["echo", "rust"]))
+                   .pipe(Cmd::from_args(vec!["wc", "-c"]))
                    .run_fun(&mut Env::new())
                    .unwrap()
                    .trim(), "5");
+    }
+
+    #[test]
+    fn test_stdout_redirect() {
+        let tmp_file = "/tmp/file_echo_rust";
+        let mut write_cmd = Cmd::from_args(vec!["echo", "rust"]);
+        write_cmd.set_stdout(FdOrFile::File(tmp_file.to_string(), false));
+        assert!(Cmds::from_cmd(write_cmd)
+                .run_cmd(&mut Env::new())
+                .is_ok());
+
+        let read_cmd = Cmd::from_args(vec!["cat", tmp_file]);
+        assert_eq!(Cmds::from_cmd(read_cmd)
+                   .run_fun(&mut Env::new())
+                   .unwrap(),
+                   "rust");
+
+        let cleanup_cmd = Cmd::from_args(vec!["rm", tmp_file]);
+        assert!(Cmds::from_cmd(cleanup_cmd)
+                .run_cmd(&mut Env::new())
+                .is_ok());
     }
 }

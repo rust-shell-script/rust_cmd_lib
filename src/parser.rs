@@ -39,13 +39,13 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(src: String) -> Self {
+    pub fn new<S>(src: S) -> Self where S: Into<String> {
         Self {
             str_lits: VecDeque::new(),
             sym_table: HashMap::new(),
             file: "",
             line: 0,
-            src,
+            src: src.into(),
         }
     }
 
@@ -189,15 +189,12 @@ impl Parser {
         arg
     }
 
-    fn parse_stdout(&mut self, s: &Vec<char>, i: &mut usize) -> (FdOrFile, bool) {
+    fn parse_stdout(&mut self, s: &Vec<char>, i: &mut usize) -> FdOrFile {
         let mut append = false;
         let len = s.len();
 
         if *i < len && s[*i] == '>' {
             append = true;
-            *i += 1;
-        }
-        while *i < len && char::is_whitespace(s[*i]) {
             *i += 1;
         }
 
@@ -208,22 +205,30 @@ impl Parser {
                 fd_str.push(s[*i]);
                 *i += 1;
             }
-            return (FdOrFile::Fd(fd_str.parse().unwrap()), append);
+            return FdOrFile::Fd(fd_str.parse().unwrap(), append);
+        }
+
+        while *i < len && char::is_whitespace(s[*i]) {
+            *i += 1;
+        }
+
+        if s[*i] == '&' {
+            panic!("syntax error near unexpected token `&' at {}:{}", self.file, self.line);
         }
 
         if s[*i] == 'r' || s[*i] == 'b' ||
            (s[*i] == '\"' && (*i == 0 || s[*i - 1] != '\\')) {
             let file = self.parse_str_lit(s, i);
             if !file.is_empty() {
-                return (FdOrFile::File(file), append);
+                return FdOrFile::File(file, append);
             }
         }
 
         let file = self.parse_normal_arg(s, i);
-        (FdOrFile::File(crate::sym_table::resolve_name(&file,
-                                                       &self.sym_table,
-                                                       &self.file,
-                                                       self.line)), append)
+        FdOrFile::File(crate::sym_table::resolve_name(&file,
+                                                      &self.sym_table,
+                                                      &self.file,
+                                                      self.line), append)
     }
 
     fn parse_str_lit(&mut self, s: &Vec<char>, i: &mut usize) -> String {
@@ -302,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_parser_or_cmd() {
-        assert!(Parser::new("ls /nofile || true; echo continue".to_string())
+        assert!(Parser::new("ls /nofile || true; echo continue")
                 .parse()
                 .run_cmd()
                 .is_ok());
@@ -310,14 +315,9 @@ mod tests {
 
     #[test]
     fn test_parser_stdout_redirect() {
-        assert!(Parser::new("echo rust > file".to_string())
-                .parse()
-                .run_cmd()
-                .is_ok());
-        assert!(Parser::new("echo rust > &2".to_string())
-                .parse()
-                .run_cmd()
-                .is_ok());
+        Parser::new("echo rust > /tmp/echo_rust").parse();
+        Parser::new("echo rust >&2").parse();
+        assert!(Parser::new("rm /tmp/echo_rust").parse().run_cmd().is_ok());
     }
 }
 
