@@ -13,7 +13,7 @@ macro_rules! parse_string_literal {
     (&$sl:expr; $cur:literal $($other:tt)*) => {
         let s = stringify!($cur);
         // only save string literals
-        if s.starts_with("\"") || s.starts_with("r") || s.starts_with("b") {
+        if s.starts_with("\"") || s.starts_with("r") {
             $sl.push_back($cur.to_string());
         }
         $crate::parse_string_literal!{&$sl; $($other)*}
