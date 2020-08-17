@@ -6,8 +6,8 @@ fn foo() -> CmdResult {
     let gap = 3;
 
     run_cmd!{
-        cd $dir;
-        pwd;
+        cd $dir;    // change current directory
+        pwd;        // print pwd
         sleep $gap;
         cd $f;
     }

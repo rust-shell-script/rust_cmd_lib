@@ -91,6 +91,14 @@ impl Parser {
             if !cmd.0.is_empty() {
                 ret.add(cmd.0, cmd.1);
             }
+
+            // skip comments
+            while i < len  && char::is_whitespace(s[i]) { i += 1; }
+            if i == len { break; }
+            if i + 1 < len && s[i] == '/' && s[i + 1] == '/' {
+                i += 2;
+                while i < len && s[i] != '\n' { i += 1; }
+            }
         }
         ret
     }
