@@ -403,7 +403,7 @@ fn toggle_color() {
 }
 
 fn init() {
-    run_cmd!(clear).unwrap();
+    run_cmd("clear").unwrap();
     init_rands();
     hide_cursor();
     get_random_next();
@@ -544,14 +544,14 @@ fn cmd_exit() {
     flush_screen();                         // ... print final message ...
     show_cursor();
     let stty_g = proc_var_get!(old_stty_cfg);
-    run_cmd!(stty $stty_g).unwrap();        // ... and restore terminal state
+    run_cmd(format!("stty {}", stty_g)).unwrap();   // ... and restore terminal state
     std::process::exit(0);
 }
 
 fn main() -> CmdResult {
-    let old_cfg = run_fun!(stty -g)?;       // let's save terminal state ...
+    let old_cfg = run_fun("stty -g")?;  // let's save terminal state ...
     proc_var_set!(old_stty_cfg, |cfg| *cfg = old_cfg);
-    run_cmd!(stty raw -echo -isig -icanon min 0 time 0)?;
+    run_cmd("stty raw -echo -isig -icanon min 0 time 0")?;
 
     init();
     let mut tick = 0;

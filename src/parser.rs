@@ -29,8 +29,8 @@ macro_rules! parse_string_literal {
 
 #[doc(hidden)]
 pub struct Parser {
-    str_lits: VecDeque<String>,
-    sym_table: HashMap<String, String>,
+    str_lits: Option<VecDeque<String>>,
+    sym_table: Option<HashMap<String, String>>,
 
     file: &'static str,
     line: u32,
@@ -39,10 +39,10 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new<S>(src: S) -> Self where S: Into<String> {
+    pub fn new<S: Into<String>>(src: S) -> Self {
         Self {
-            str_lits: VecDeque::new(),
-            sym_table: HashMap::new(),
+            str_lits: None,
+            sym_table: None,
             file: "",
             line: 0,
             src: src.into(),
@@ -50,12 +50,12 @@ impl Parser {
     }
 
     pub fn with_lits(&mut self, str_lits: VecDeque<String>) -> &mut Self {
-        self.str_lits = str_lits;
+        self.str_lits = Some(str_lits);
         self
     }
 
     pub fn with_sym_table(&mut self, sym_table: HashMap<String, String>) -> &mut Self {
-        self.sym_table = sym_table;
+        self.sym_table = Some(sym_table);
         self
     }
 
@@ -171,13 +171,14 @@ impl Parser {
                     ret.set_redirect(0, self.parse_redirect(s, i));
                 }
 
-                let arg1 = self.parse_normal_arg(s, i);
-                if !arg1.is_empty() {
-                    arg += &crate::sym_table::resolve_name(&arg1,
-                                                           &self.sym_table,
-                                                           &self.file,
-                                                           self.line);
+                let mut arg1 = self.parse_normal_arg(s, i);
+                if let Some(sym_table) = self.sym_table.as_ref() {
+                    arg1 = crate::sym_table::resolve_name(&arg1,
+                                                          sym_table,
+                                                          &self.file,
+                                                          self.line);
                 }
+                arg += &arg1;
             }
             if !arg.is_empty() {
                 ret.add_arg(arg);
@@ -257,14 +258,18 @@ impl Parser {
             }
         }
 
-        let file = self.parse_normal_arg(s, i);
-        FdOrFile::File(crate::sym_table::resolve_name(&file,
-                                                      &self.sym_table,
-                                                      &self.file,
-                                                      self.line), append)
+        let mut file = self.parse_normal_arg(s, i);
+        if let Some(sym_table) = self.sym_table.as_ref() {
+            file = crate::sym_table::resolve_name(&file,
+                                                  sym_table,
+                                                  &self.file,
+                                                  self.line);
+        }
+        FdOrFile::File(file, append)
     }
 
     fn parse_str_lit(&mut self, s: &Vec<char>, i: &mut usize) -> String {
+        let mut str_lit = String::new();
         let len = s.len();
         let mut is_str_lit = false;
         let mut is_raw = false;
@@ -288,7 +293,6 @@ impl Parser {
         }
 
         let mut found_end = false;
-        *i += 1;
         while *i < len && !found_end {
             if s[*i] == '\"' {
                 let mut cnt2 = cnt;
@@ -303,21 +307,25 @@ impl Parser {
                     break;
                 }
             }
+            str_lit.push(s[*i]);
             *i += 1;
         }
         if !found_end {
             panic!("invalid raw string literal at {}:{}", self.file, self.line);
         }
 
-        let str_lit = self.str_lits.pop_front().unwrap();
+        if self.str_lits.is_none() {
+            return str_lit;
+        }
+
+        str_lit = self.str_lits.as_mut().unwrap().pop_front().unwrap();
         if is_raw {
             return str_lit; // don't resolve names for raw string literals
         } else {
             return crate::sym_table::resolve_name(&str_lit,
-                                                   &self.sym_table,
-                                                   &self.file,
-                                                   self.line);
-
+                                                  self.sym_table.as_ref().unwrap(),
+                                                  &self.file,
+                                                  self.line);
         }
     }
 }

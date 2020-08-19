@@ -10,3 +10,4 @@ pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use proc_env::Env;
 pub use parser::Parser;
+pub use cmd_fun::{run_cmd, run_fun};

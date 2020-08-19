@@ -1,3 +1,5 @@
+use crate::{CmdResult, FunResult, Parser};
+
 /// ## run_fun! --> FunResult
 /// ```no_run
 /// #[macro_use]
@@ -52,4 +54,33 @@ macro_rules! run_cmd {
            .parse()
            .run_cmd()
    };
+}
+
+pub fn run_cmd<S: Into<String>>(cmds: S) -> CmdResult {
+    Parser::new(cmds.into()).parse().run_cmd()
+}
+
+pub fn run_fun<S: Into<String>>(cmds: S) -> FunResult {
+    Parser::new(cmds.into()).parse().run_fun()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_optional_args() {
+        let show_all = true;
+        let show_details = true;
+
+        let mut ls_opts = String::new();
+        if show_all {
+            ls_opts += " -a";
+        }
+        if show_details {
+            ls_opts += " -l";
+        }
+        let ls_cmd = format!(r#"ls {} | grep "\.\.$" | awk "{{print $9}}""#, ls_opts);
+        assert_eq!(run_fun(ls_cmd).unwrap(), "..");
+    }
 }
