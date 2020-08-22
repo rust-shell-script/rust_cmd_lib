@@ -13,3 +13,7 @@ authors = ["rust-shell-script <rust-shell-script@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+cmd_lib_macros = { version = "0.1", path = "crates/macros" }
+# For nightly:
+# cmd_lib_macros = { version = "0.1", path = "crates/proc_macros" }
+cmd_lib_core = { version = "0.1", path = "crates/cmd_lib_core" }

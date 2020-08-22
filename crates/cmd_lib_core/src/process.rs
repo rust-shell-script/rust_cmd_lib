@@ -3,8 +3,9 @@ use std::io::{Error, ErrorKind};
 use std::fs::{File, OpenOptions};
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::collections::HashSet;
-use crate::{CmdResult, FunResult, Env};
+use crate::proc_env::Env;
 use crate::proc_env::ENV_VARS;
+use crate::{CmdResult, FunResult};
 
 pub struct GroupCmds {
      cmds: Vec<(Cmds, Option<Cmds>)>,  // (cmd, orCmd) pairs

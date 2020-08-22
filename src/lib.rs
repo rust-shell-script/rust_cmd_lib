@@ -1,13 +1,18 @@
-pub(crate) mod source_text;
-pub(crate) mod sym_table;
-pub(crate) mod process;
-pub(crate) mod parser;
-pub(crate) mod cmd_fun;
-pub(crate) mod proc_env;
-pub(crate) mod proc_var;
+use cmd_lib_core;
+use cmd_lib_macros;
 
-pub type FunResult = std::io::Result<String>;
-pub type CmdResult = std::io::Result<()>;
-pub use proc_env::Env;
-pub use parser::Parser;
-pub use cmd_fun::{run_cmd, run_fun};
+pub use cmd_lib_macros::{
+    run_cmd,
+    run_fun,
+};
+
+pub use cmd_lib_core::{
+    run_cmd,
+    run_fun,
+    CmdResult,
+    FunResult,
+    proc_env_set,
+    proc_var,
+    proc_var_get,
+    proc_var_set,
+};

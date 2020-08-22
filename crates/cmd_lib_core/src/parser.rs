@@ -2,35 +2,9 @@ use std::collections::{VecDeque, HashMap};
 use crate::process::{GroupCmds, Cmds, Cmd, FdOrFile};
 
 #[doc(hidden)]
-#[macro_export]
-macro_rules! parse_string_literal {
-    (&$sl:expr;) => {
-        $sl
-    };
-    (&$sl:expr; - $($other:tt)*) => {
-        $crate::parse_string_literal!{&$sl; $($other)*}
-    };
-    (&$sl:expr; $cur:literal $($other:tt)*) => {
-        let s = stringify!($cur);
-        // only save string literals
-        if s.starts_with("\"") || s.starts_with("r") {
-            $sl.push_back($cur.to_string());
-        }
-        $crate::parse_string_literal!{&$sl; $($other)*}
-    };
-    (&$sl:expr; $cur:tt $($other:tt)*) => {
-        $crate::parse_string_literal!{&$sl; $($other)*}
-    };
-    ($cur:tt $($other:tt)*) => {{
-        let mut __str_lits = std::collections::VecDeque::<String>::new();
-        $crate::parse_string_literal!{&__str_lits; $cur $($other)*}
-    }};
-}
-
-#[doc(hidden)]
 pub struct Parser {
     str_lits: Option<VecDeque<String>>,
-    sym_table: Option<HashMap<String, String>>,
+    sym_table: Option<HashMap<&'static str, String>>,
 
     file: &'static str,
     line: u32,
@@ -54,7 +28,7 @@ impl Parser {
         self
     }
 
-    pub fn with_sym_table(&mut self, sym_table: HashMap<String, String>) -> &mut Self {
+    pub fn with_sym_table(&mut self, sym_table: HashMap<&'static str, String>) -> &mut Self {
         self.sym_table = Some(sym_table);
         self
     }
@@ -63,6 +37,47 @@ impl Parser {
         self.file = file;
         self.line = line;
         self
+    }
+
+    fn resolve_name(src: &str, sym_table: &HashMap<&'static str, String>, file: &str, line: u32) -> String {
+        let mut output = String::new();
+        let input: Vec<char> = src.chars().collect();
+        let len = input.len();
+
+        let mut i = 0;
+        while i < len {
+            if input[i] == '$' && (i == 0 || input[i - 1] != '\\') {
+                i += 1;
+                let with_bracket = i < len && input[i] == '{';
+                let mut var = String::new();
+                if with_bracket { i += 1; }
+                while i < len
+                    && ((input[i] >= 'a' && input[i] <= 'z')
+                        || (input[i] >= 'A' && input[i] <= 'Z')
+                        || (input[i] >= '0' && input[i] <= '9')
+                        || (input[i] == '_'))
+                {
+                    var.push(input[i]);
+                    i += 1;
+                }
+                if with_bracket {
+                    if input[i] != '}' {
+                        panic!("invalid name {}, {}:{}\n{}", var, file, line, src);
+                    }
+                } else {
+                    i -= 1; // back off 1 char
+                }
+                match sym_table.get(var.as_str()) {
+                    None => panic!("resolve {} failed, {}:{}\n{}", var, file, line, src),
+                    Some(v) => output += v,
+                };
+            } else {
+                output.push(input[i]);
+            }
+            i += 1;
+        }
+
+        output
     }
 
     pub fn parse(&mut self) -> GroupCmds {
@@ -173,10 +188,7 @@ impl Parser {
 
                 let mut arg1 = self.parse_normal_arg(s, i);
                 if let Some(sym_table) = self.sym_table.as_ref() {
-                    arg1 = crate::sym_table::resolve_name(&arg1,
-                                                          sym_table,
-                                                          &self.file,
-                                                          self.line);
+                    arg1 = Parser::resolve_name(&arg1, sym_table, &self.file, self.line);
                 }
                 arg += &arg1;
             }
@@ -260,10 +272,7 @@ impl Parser {
 
         let mut file = self.parse_normal_arg(s, i);
         if let Some(sym_table) = self.sym_table.as_ref() {
-            file = crate::sym_table::resolve_name(&file,
-                                                  sym_table,
-                                                  &self.file,
-                                                  self.line);
+            file = Parser::resolve_name(&file, sym_table, &self.file, self.line);
         }
         FdOrFile::File(file, append)
     }
@@ -318,14 +327,11 @@ impl Parser {
             return str_lit;
         }
 
-        str_lit = self.str_lits.as_mut().unwrap().pop_front().unwrap();
+        str_lit = self.str_lits.as_mut().unwrap().pop_front().unwrap().to_string();
         if is_raw {
             return str_lit; // don't resolve names for raw string literals
         } else {
-            return crate::sym_table::resolve_name(&str_lit,
-                                                  self.sym_table.as_ref().unwrap(),
-                                                  &self.file,
-                                                  self.line);
+            return Parser::resolve_name(&str_lit, self.sym_table.as_ref().unwrap(), &self.file, self.line);
         }
     }
 }
@@ -333,18 +339,6 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_parse_string_literal() {
-        let str_lits1 = parse_string_literal!(ls "/tmp" "/");
-        assert_eq!(str_lits1, ["/tmp", "/"]);
-
-        let str_lits2 = parse_string_literal!(ping -c 3 r"127.0.0.1");
-        assert_eq!(str_lits2, ["127.0.0.1"]);
-
-        let str_lits3 = parse_string_literal!(echo r#"rust"cmd_lib"#);
-        assert_eq!(str_lits3, ["rust\"cmd_lib"]);
-    }
 
     #[test]
     fn test_parser_or_cmd() {

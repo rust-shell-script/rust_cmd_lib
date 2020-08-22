@@ -84,6 +84,7 @@ fn test_args_with_spaces() {
 #[test]
 fn test_args_with_spaces_check_result() {
     let dir: &str = "folder with spaces2";
+    assert!(run_cmd!(rm -rf /tmp/$dir).is_ok());
     assert!(run_cmd!(mkdir /tmp/$dir).is_ok());
     assert!(run_cmd!(ls "/tmp/folder with spaces2").is_ok());
     assert!(run_cmd!(rmdir /tmp/$dir).is_ok());
