@@ -15,13 +15,14 @@ set up the parent and child IO handles manually, like this in the
 [rust cookbook](https://rust-lang-nursery.github.io/rust-cookbook/os/external.html), which is often a tedious
 work.
 
-A lot developers just choose shell(sh, bash, ...) scripts for such tasks, by using `<` to redirect input,
+A lot of developers just choose shell(sh, bash, ...) scripts for such tasks, by using `<` to redirect input,
 `>` to redirect output and '|' to pipe outputs. In my experience, this is **the only good parts** of shell script.
 You can find all kinds of pitfalls and mysterious tricks to make other parts of shell script work. As the shell
 scripts grow, they will ultimately be unmaintainable and no one wants to touch them any more.
 
 This cmd_lib library is trying to provide the redirection and piping capabilities, and other facilities to make writing
-shell-script like tasks easily. For the [rust cookbook examples](https://rust-lang-nursry.github.io/rust-cookbook/os/external.html),
+shell-script like tasks easily without launching any shell. For the
+[rust cookbook examples](https://rust-lang-nursry.github.io/rust-cookbook/os/external.html),
 they can usually be implemented as one line of rust macro with the help of this library, as in the
 [examples/rust_cookbook_external.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/rust_cookbook_external.rs).
 Since they are rust code, you can always rewrite them in rust natively in the future, if necessary without spawning external commands.
@@ -51,7 +52,8 @@ Since they are rust code, you can always rewrite them in rust natively in the fu
         ls oops;
         cat oops;
     }.is_err() {
-        eprintln!("Run group command failed");
+        // your error handling code
+        ...
     }
     ```
 
@@ -75,9 +77,13 @@ like $a or ${a} in `run_cmd!` or `run_fun!` macros.
 If they are part of string literals, you need to capture the declarations with `| a, b, ... |` at the macros'
 beginnings. e.g.
 ```rust
-let msg = "I love rust";
-run_cmd!(echo $msg)?;
-run_cmd!(|msg| echo "This is the message: $msg")?;
+let dir = "my folder";
+run_cmd!(|dir| echo "Creating $dir at /tmp")?;
+run_cmd!(mkdir -p /tmp/$dir)?;
+
+// or with group commands:
+let dir = "my folder";
+run_cmd!(echo "Creating $dir at /tmp"; mkdir -p /tmp/$dir)?;
 ```
 You can consider "" as glue, so everything inside the quotes will be treated as a single atomic component.
 
