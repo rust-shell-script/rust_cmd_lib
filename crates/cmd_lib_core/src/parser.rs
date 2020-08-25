@@ -39,7 +39,11 @@ impl Parser {
         self
     }
 
-    fn resolve_name(src: &str, sym_table: &HashMap<&'static str, String>, file: &str, line: u32) -> String {
+    fn resolve_name(&self, src: String) -> String {
+        if self.sym_table.is_none() {
+            return src;
+        }
+
         let mut output = String::new();
         let input: Vec<char> = src.chars().collect();
         let len = input.len();
@@ -62,13 +66,13 @@ impl Parser {
                 }
                 if with_bracket {
                     if input[i] != '}' {
-                        panic!("invalid name {}, {}:{}\n{}", var, file, line, src);
+                        panic!("invalid name {}, {}:{}\n{}", var, self.file, self.line, src);
                     }
                 } else {
                     i -= 1; // back off 1 char
                 }
-                match sym_table.get(var.as_str()) {
-                    None => panic!("resolve {} failed, {}:{}\n{}", var, file, line, src),
+                match self.sym_table.as_ref().unwrap().get(var.as_str()) {
+                    None => panic!("resolve {} failed, {}:{}\n{}", var, self.file, self.line, src),
                     Some(v) => output += v,
                 };
             } else {
@@ -186,11 +190,8 @@ impl Parser {
                     ret.set_redirect(0, self.parse_redirect(s, i));
                 }
 
-                let mut arg1 = self.parse_normal_arg(s, i);
-                if let Some(sym_table) = self.sym_table.as_ref() {
-                    arg1 = Parser::resolve_name(&arg1, sym_table, &self.file, self.line);
-                }
-                arg += &arg1;
+                let arg1 = self.parse_normal_arg(s, i);
+                arg += &self.resolve_name(arg1);
             }
             if !arg.is_empty() {
                 ret.add_arg(arg);
@@ -270,11 +271,8 @@ impl Parser {
             }
         }
 
-        let mut file = self.parse_normal_arg(s, i);
-        if let Some(sym_table) = self.sym_table.as_ref() {
-            file = Parser::resolve_name(&file, sym_table, &self.file, self.line);
-        }
-        FdOrFile::File(file, append)
+        let file = self.parse_normal_arg(s, i);
+        FdOrFile::File(self.resolve_name(file), append)
     }
 
     fn parse_str_lit(&mut self, s: &Vec<char>, i: &mut usize) -> String {
@@ -331,7 +329,7 @@ impl Parser {
         if is_raw {
             return str_lit; // don't resolve names for raw string literals
         } else {
-            return Parser::resolve_name(&str_lit, self.sym_table.as_ref().unwrap(), &self.file, self.line);
+            return self.resolve_name(str_lit);
         }
     }
 }
