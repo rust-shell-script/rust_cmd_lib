@@ -179,6 +179,8 @@ impl Cmds {
     }
 
     fn spawn(&mut self) -> CmdResult {
+        let mut pipe_error = false;
+
         ENV_VARS.with(|vars| {
             if let Some(dir) = vars.borrow().get("PWD") {
                 self.full_cmd += &format!(" (cd: {})", dir);
@@ -193,6 +195,12 @@ impl Cmds {
             if debug == "1" {
                 eprintln!("Running \"{}\" ...", self.full_cmd);
             }
+
+            if let Some("1") = vars.borrow().get("CMD_LIB_PIPE_FAIL").map(|v| v as &str) {
+                pipe_error = true;
+            } else if let Ok("1") = std::env::var("CMD_LIB_PIPE_FAIL").as_ref().map(|v| v as &str) {
+                pipe_error = true;
+            }
         });
 
         for (i, cmd) in self.pipes.iter_mut().enumerate() {
@@ -202,6 +210,12 @@ impl Cmds {
             self.children.push(cmd.spawn()?);
             if i % 2 != 0 {
                 self.children[i - 1].wait()?;
+            }
+            if pipe_error {
+                let status = self.children[i].wait()?;
+                if !status.success() {
+                    return Err(Self::to_io_error(&format!("{:?}", cmd), status))
+                }
             }
         }
 
