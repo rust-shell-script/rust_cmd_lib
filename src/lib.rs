@@ -1,6 +1,3 @@
-use cmd_lib_core;
-use cmd_lib_macros;
-
 pub use cmd_lib_macros::{
     run_cmd,
     run_fun,

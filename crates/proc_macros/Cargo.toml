@@ -17,4 +17,4 @@ proc-macro = true
 [dependencies]
 quote = "1.0"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
-cmd_lib_core = { version = "0.1", path = "../cmd_lib_core" }
+cmd_lib_core = { path = "../cmd_lib_core" }

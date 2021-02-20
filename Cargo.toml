@@ -12,6 +12,13 @@ version = "0.8.5"
 authors = ["rust-shell-script <rust-shell-script@gmail.com>"]
 edition = "2018"
 
+[workspace]
+members = [
+  "crates/proc_macros",
+  "crates/cmd_lib_core",
+]
+
 [dependencies]
-cmd_lib_core = { version = "0.1", path = "crates/cmd_lib_core" }
-cmd_lib_macros = { version = "0.1", path = "crates/proc_macros" }
+cmd_lib_core = { path = "crates/cmd_lib_core" }
+cmd_lib_macros = { path = "crates/proc_macros" }
+
