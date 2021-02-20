@@ -1,21 +1,15 @@
-#![feature(proc_macro_span)]
-
-extern crate proc_macro;
-use std::iter::Peekable;
 use proc_macro2::{
-    token_stream::IntoIter,
     TokenStream,
     TokenTree,
-    LineColumn,
     Ident,
     Literal,
+    Span,
 };
 use quote::quote;
 
 #[proc_macro]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let mut s = Source::new();
-    let (vars, lits, src) = s.reconstruct_from(TokenStream::from(input));
+    let (vars, lits, src) = source_text(input);
     quote! (
         cmd_lib_core::run_cmd_with_ctx(
             #src,
@@ -31,8 +25,7 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let mut s = Source::new();
-    let (vars, lits, src) = s.reconstruct_from(TokenStream::from(input));
+    let (vars, lits, src) = source_text(input);
     quote! (
         cmd_lib_core::run_fun_with_ctx(
             #src,
@@ -46,105 +39,87 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     ).into()
 }
 
-// from inline-python: https://blog.m-ou.se/writing-python-inside-rust-1/
-struct Source {
-    source: String,
-    line: usize,
-    col: usize,
-    sym_table_vars: Vec<Ident>,
-    str_lits: Vec<Literal>,
+fn span_location(span: &Span) -> (usize, usize) {
+    let s = format!("{:?}", span);
+    let mut start = 0;
+    let mut end = 0;
+    let mut parse_second = false;
+    for c in s.chars().skip(6) {
+        if c == '.' {
+            parse_second = true;
+        } else if c.is_ascii_digit() {
+            let digit = c.to_digit(10).unwrap() as usize;
+            if !parse_second {
+                start = start * 10 + digit;
+            } else {
+                end = end * 10 + digit;
+            }
+        }
+    }
+    (start, end)
 }
 
-impl Source {
-    fn new() -> Self {
-        Self {
-            source: String::new(),
-            sym_table_vars: vec![],
-            str_lits: vec![],
-            line: 1,
-            col: 0,
-        }
-    }
-
-    fn reconstruct_from(&mut self, input: TokenStream) -> (&Vec<Ident>, &Vec<Literal>, &str) {
-        let mut input = input.into_iter().peekable();
-        let mut with_captures = false;
-
-        if let Some(t) = input.peek() {
-            if let TokenTree::Punct(ch) = &t {
-                if ch.as_char() == '|' {
-                    with_captures = true;
-                }
-            }
-        }
+fn source_text(input: proc_macro::TokenStream) -> (Vec<Ident>, Vec<Literal>, String) {
+    let input = TokenStream::from(input);
+    let mut source_text = String::new();
+    let mut sym_table_vars: Vec<Ident> = vec![];
+    let mut str_lits: Vec<Literal> = vec![];
+    let mut end = 0;
+    let mut with_captures = false;
+    let mut expect_var = false;
+    for t in input {
+        let (_start, _end) = span_location(&t.span());
+        let src = t.to_string();
         if with_captures {
-            self.parse_captures(&mut input);
-        }
-
-        while let Some(t) = input.next() {
-            if let TokenTree::Group(g) = t {
-                let s = g.to_string();
-                self.add_whitespace(g.span_open().start());
-                self.add_str(&s[..1]); // the '[', '{', or '('.
-                self.reconstruct_from(g.stream());
-                self.add_whitespace(g.span_close().start());
-                self.add_str(&s[s.len() - 1..]); // the ']', '}', or ')'.
+            if expect_var {
+                if let TokenTree::Ident(var) = t {
+                    sym_table_vars.push(var);
+                }
             } else {
-                self.add_whitespace(t.span().start());
-                if let TokenTree::Literal(lit) = t {
-                    let s = lit.to_string();
-                    if s.starts_with("\"") || s.starts_with("r") {
-                        self.str_lits.push(lit);
-                    }
-                    self.add_str(&s);
-                } else if let TokenTree::Ident(var) = t {
-                    if self.source.ends_with("$") || self.source.ends_with("${") {
-                        self.add_str(&var.to_string());
-                        self.sym_table_vars.push(var);
+                if let TokenTree::Punct(ch) = t {
+                    if ch.as_char() == '|' {
+                        with_captures = false;
                     } else {
-                        self.add_str(&var.to_string());
+                        assert_eq!(ch.as_char(), ',');
                     }
-                } else {
-                    self.add_str(&t.to_string());
                 }
             }
-        }
-        (&self.sym_table_vars, &self.str_lits, &self.source)
-    }
-
-    fn parse_captures(&mut self, input: &mut Peekable<IntoIter>) {
-        input.next();
-        while let Some(TokenTree::Ident(var)) = input.next() {
-            self.sym_table_vars.push(var);
-            if let Some(TokenTree::Punct(ch)) = input.next() {
-                if ch.as_char() == ',' {
+            expect_var = !expect_var;
+        } else if source_text.ends_with("$") {
+            if let TokenTree::Group(g) = t {
+                for tt in g.stream() {
+                    if let TokenTree::Ident(var) = tt {
+                        source_text += "{";
+                        source_text += &var.to_string();
+                        source_text += "}";
+                        sym_table_vars.push(var);
+                        break;
+                    }
+                }
+            } else if let TokenTree::Ident(var) = t {
+                source_text += &var.to_string();
+                sym_table_vars.push(var);
+            }
+        } else {
+            if let TokenTree::Punct(ch) = t {
+                if end == 0 && ch.as_char() == '|' {
+                    with_captures = true;
+                    expect_var = true;
                     continue;
-                } else if ch.as_char() == '|' {
-                    break;
-                } else {
-                    unreachable!();
                 }
-            } else {
-                unreachable!();
+            } else if let TokenTree::Literal(lit) = t {
+                let s = lit.to_string();
+                if s.starts_with("\"") || s.starts_with("r") {
+                    str_lits.push(lit);
+                }
             }
-        }
-    }
 
-    fn add_str(&mut self, s:&str) {
-        // let's assume for now s contains no newlines.
-        self.source += s;
-        self.col += s.len();
-    }
-
-    fn add_whitespace(&mut self, loc: LineColumn) {
-        while self.line < loc.line {
-            self.source.push('\n');
-            self.line += 1;
-            self.col = 0;
+            if end != 0 && end < _start {
+                source_text += " ";
+            }
+            source_text += &src;
         }
-        while self.col < loc.column {
-            self.source.push(' ');
-            self.col += 1;
-        }
+        end = _end;
     }
+    (sym_table_vars, str_lits, source_text)
 }
