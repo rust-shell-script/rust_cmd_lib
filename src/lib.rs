@@ -1,4 +1,5 @@
 pub use cmd_lib_core::{
+    self,
     run_cmd,
     run_fun,
     CmdResult,
@@ -13,4 +14,3 @@ pub use cmd_lib_macros::{
     run_cmd,
     run_fun,
 };
-

@@ -8,7 +8,7 @@ documentation = "https://docs.rs/cmd_lib"
 keywords = ["shell", "scripts", "commandline", "subprocess", "pipeline"]
 categories = ["command-line-interface", "command-line-utilities"]
 readme = "README.md"
-version = "0.9.6"
+version = "0.9.7"
 authors = ["rust-shell-script <rust-shell-script@gmail.com>"]
 edition = "2018"
 
@@ -19,6 +19,6 @@ members = [
 ]
 
 [dependencies]
-cmd_lib_core = { version = "0.3", path = "crates/cmd_lib_core" }
-cmd_lib_macros = { version = "0.3", path = "crates/proc_macros" }
+cmd_lib_core = { version = "0.4", path = "crates/cmd_lib_core" }
+cmd_lib_macros = { version = "0.4", path = "crates/proc_macros" }
 
