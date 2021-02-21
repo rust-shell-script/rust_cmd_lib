@@ -35,7 +35,7 @@ Since they are rust code, you can always rewrite them in rust natively in the fu
     use cmd_lib::run_cmd;
     let msg = "I love rust";
     run_cmd!(echo $msg)?;
-    run_cmd!(|msg| echo "This is the message: $msg")?;
+    run_cmd!(echo "This is the message: $msg")?;
 
     // pipe commands are also supported
     run_cmd!(du -ah . | sort -hr | head -n 10)?;
@@ -74,11 +74,9 @@ When passing parameters to `run_cmd!` and `run_fun!` macros, if they are not par
 converted to string as an atomic component, so you don't need to quote them. The parameters will be
 like $a or ${a} in `run_cmd!` or `run_fun!` macros.
 
-If they are part of string literals, you need to capture the declarations with `| a, b, ... |` at the macros'
-beginnings. e.g.
 ```rust
 let dir = "my folder";
-run_cmd!(|dir| echo "Creating $dir at /tmp")?;
+run_cmd!(echo "Creating $dir at /tmp")?;
 run_cmd!(mkdir -p /tmp/$dir)?;
 
 // or with group commands:

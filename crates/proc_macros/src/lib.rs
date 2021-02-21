@@ -65,27 +65,10 @@ fn source_text(input: proc_macro::TokenStream) -> (Vec<Ident>, Vec<Literal>, Str
     let mut sym_table_vars: Vec<Ident> = vec![];
     let mut str_lits: Vec<Literal> = vec![];
     let mut end = 0;
-    let mut with_captures = false;
-    let mut expect_var = false;
     for t in input {
         let (_start, _end) = span_location(&t.span());
         let src = t.to_string();
-        if with_captures {
-            if expect_var {
-                if let TokenTree::Ident(var) = t {
-                    sym_table_vars.push(var);
-                }
-            } else {
-                if let TokenTree::Punct(ch) = t {
-                    if ch.as_char() == '|' {
-                        with_captures = false;
-                    } else {
-                        assert_eq!(ch.as_char(), ',');
-                    }
-                }
-            }
-            expect_var = !expect_var;
-        } else if source_text.ends_with("$") {
+        if source_text.ends_with("$") {
             if let TokenTree::Group(g) = t {
                 for tt in g.stream() {
                     if let TokenTree::Ident(var) = tt {
@@ -101,15 +84,12 @@ fn source_text(input: proc_macro::TokenStream) -> (Vec<Ident>, Vec<Literal>, Str
                 sym_table_vars.push(var);
             }
         } else {
-            if let TokenTree::Punct(ch) = t {
-                if end == 0 && ch.as_char() == '|' {
-                    with_captures = true;
-                    expect_var = true;
-                    continue;
-                }
-            } else if let TokenTree::Literal(lit) = t {
+            if let TokenTree::Literal(lit) = t {
                 let s = lit.to_string();
                 if s.starts_with("\"") || s.starts_with("r") {
+                    if s.starts_with("\"") {
+                        parse_vars(&s, &mut sym_table_vars);
+                    }
                     str_lits.push(lit);
                 }
             }
@@ -122,4 +102,34 @@ fn source_text(input: proc_macro::TokenStream) -> (Vec<Ident>, Vec<Literal>, Str
         end = _end;
     }
     (sym_table_vars, str_lits, source_text)
+}
+
+fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
+    let input: Vec<char> = src.chars().collect();
+    let len = input.len();
+
+    let mut i = 0;
+    while i < len {
+        if input[i] == '$' && (i == 0 || input[i - 1] != '\\') {
+            i += 1;
+            let with_bracket = i < len && input[i] == '{';
+            let mut var = String::new();
+            if with_bracket { i += 1; }
+            while i < len
+                && ((input[i] >= 'a' && input[i] <= 'z')
+                    || (input[i] >= 'A' && input[i] <= 'Z')
+                    || (input[i] >= '0' && input[i] <= '9')
+                    || (input[i] == '_')) {
+                var.push(input[i]);
+                i += 1;
+            }
+            if with_bracket {
+                assert_eq!(input[i], '}');
+            } else {
+                i -= 1; // back off 1 char
+            }
+            sym_table_vars.push(syn::parse_str::<Ident>(&var).unwrap());
+        }
+        i += 1;
+    }
 }

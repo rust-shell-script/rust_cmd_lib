@@ -25,7 +25,7 @@ fn main() -> CmdResult {
 
     let name = "rust";
     run_cmd!(echo $name)?;
-    run_cmd!(|name| echo "hello, $name")?;
+    run_cmd!(echo "hello, $name")?;
     run_cmd!(du -ah . | sort -hr | head -n 5 | wc -w)?;
 
     let result = run_fun!(du -ah . | sort -hr | head -n 5)?;

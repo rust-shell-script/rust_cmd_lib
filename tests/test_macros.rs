@@ -65,20 +65,20 @@ fn test_args_passing() {
     let dir: &str = "folder";
     assert!(run_cmd!(rm -rf /tmp/$dir).is_ok());
     assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir).is_ok());
-    assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
-    assert!(run_cmd!(|dir| mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_err());
-    assert!(run_cmd!(|dir| rmdir "/tmp/$dir").is_ok());
+    assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
+    assert!(run_cmd!(mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_err());
+    assert!(run_cmd!(rmdir "/tmp/$dir").is_ok());
 }
 
 #[test]
 fn test_args_with_spaces() {
     let dir: &str = "folder with spaces";
     assert!(run_cmd!(rm -rf /tmp/$dir).is_ok());
-    assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_ok());
+    assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_ok());
     assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir).is_ok());
-    assert!(run_cmd!(|dir| mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
-    assert!(run_cmd!(|dir| mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_err());
-    assert!(run_cmd!(|dir| rmdir "/tmp/$dir").is_ok());
+    assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
+    assert!(run_cmd!(mkdir "/tmp/$dir"; ls "/tmp/$dir"; rmdir "/tmp/$dir").is_err());
+    assert!(run_cmd!(rmdir "/tmp/$dir").is_ok());
 }
 
 #[test]
