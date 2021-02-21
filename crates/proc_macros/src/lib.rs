@@ -10,7 +10,8 @@ use quote::quote;
 #[proc_macro]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (vars, lits, src) = source_text(input);
-    quote! (
+    quote! ({
+        use cmd_lib_core;
         cmd_lib_core::run_cmd_with_ctx(
             #src,
             |sym_table| {
@@ -20,13 +21,14 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 #(str_lits.push_back(#lits.to_string());)*
             }
         )
-    ).into()
+    }).into()
 }
 
 #[proc_macro]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (vars, lits, src) = source_text(input);
-    quote! (
+    quote! ({
+        use cmd_lib_core;
         cmd_lib_core::run_fun_with_ctx(
             #src,
             |sym_table| {
@@ -36,7 +38,7 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 #(str_lits.push_back(#lits.to_string());)*
             }
         )
-    ).into()
+    }).into()
 }
 
 fn span_location(span: &Span) -> (usize, usize) {

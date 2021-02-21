@@ -1,8 +1,3 @@
-pub use cmd_lib_macros::{
-    run_cmd,
-    run_fun,
-};
-
 pub use cmd_lib_core::{
     run_cmd,
     run_fun,
@@ -13,3 +8,9 @@ pub use cmd_lib_core::{
     proc_var_get,
     proc_var_set,
 };
+
+pub use cmd_lib_macros::{
+    run_cmd,
+    run_fun,
+};
+

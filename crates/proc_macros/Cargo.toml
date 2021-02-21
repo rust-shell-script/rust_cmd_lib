@@ -5,7 +5,7 @@ license = "MIT OR Apache-2.0"
 homepage = "https://github.com/rust-shell-script/rust_cmd_lib"
 repository = "https://github.com/rust-shell-script/rust_cmd_lib"
 keywords = ["shell", "scripts", "commandline", "subprocess", "pipeline"]
-version = "0.1.0"
+version = "0.3.0"
 authors = ["Tao Guo <tao.guo.code@gmail.com>"]
 edition = "2018"
 
@@ -18,4 +18,4 @@ proc-macro = true
 syn = "1.0"
 quote = "1.0"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
-cmd_lib_core = { path = "../cmd_lib_core" }
+cmd_lib_core = { version = "0.3", path = "../cmd_lib_core" }
