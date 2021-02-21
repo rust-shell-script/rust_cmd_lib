@@ -13,12 +13,8 @@ authors = ["rust-shell-script <rust-shell-script@gmail.com>"]
 edition = "2018"
 
 [workspace]
-members = [
-  "crates/proc_macros",
-  "crates/cmd_lib_core",
-]
+members = ["macros"]
 
 [dependencies]
-cmd_lib_core = { version = "0.4", path = "crates/cmd_lib_core" }
-cmd_lib_macros = { version = "0.4", path = "crates/proc_macros" }
+cmd_lib_macros = { version = "0.4", path = "./macros" }
 

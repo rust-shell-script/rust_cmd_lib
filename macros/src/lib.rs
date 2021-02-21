@@ -11,7 +11,7 @@ use quote::quote;
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (vars, lits, src) = source_text(input);
     quote! (
-        cmd_lib::cmd_lib_core::run_cmd_with_ctx(
+        cmd_lib::run_cmd_with_ctx(
             #src,
             |sym_table| {
                 #(sym_table.insert(stringify!(#vars), #vars.to_string());)*
@@ -27,7 +27,7 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (vars, lits, src) = source_text(input);
     quote! (
-        cmd_lib::cmd_lib_core::run_fun_with_ctx(
+        cmd_lib::run_fun_with_ctx(
             #src,
             |sym_table| {
                 #(sym_table.insert(stringify!(#vars), #vars.to_string());)*
