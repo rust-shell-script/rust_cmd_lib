@@ -97,6 +97,13 @@ fn test_non_string_args() {
 }
 
 #[test]
+fn test_non_eng_args() {
+    let msg = "你好！";
+    assert!(run_cmd!(echo "$msg").is_ok());
+    assert!(run_cmd!(echo $msg).is_ok());
+}
+
+#[test]
 fn test_proc_env_set() {
     proc_env_set!(PWD = "/var/tmp");
     let pwd = run_fun!(pwd).unwrap();

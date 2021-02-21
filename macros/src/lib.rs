@@ -9,7 +9,7 @@ use quote::quote;
 
 #[proc_macro]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (vars, lits, src) = source_text(input);
+    let (vars, lits, src) = source_text(input.into());
     quote! (
         cmd_lib::run_cmd_with_ctx(
             #src,
@@ -25,7 +25,7 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (vars, lits, src) = source_text(input);
+    let (vars, lits, src) = source_text(input.into());
     quote! (
         cmd_lib::run_fun_with_ctx(
             #src,
@@ -59,8 +59,7 @@ fn span_location(span: &Span) -> (usize, usize) {
     (start, end)
 }
 
-fn source_text(input: proc_macro::TokenStream) -> (Vec<Ident>, Vec<Literal>, String) {
-    let input = TokenStream::from(input);
+fn source_text(input: TokenStream) -> (Vec<Ident>, Vec<Literal>, String) {
     let mut source_text = String::new();
     let mut sym_table_vars: Vec<Ident> = vec![];
     let mut str_lits: Vec<Literal> = vec![];
