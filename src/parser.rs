@@ -52,9 +52,9 @@ impl Parser {
         while i < len {
             if input[i] == '$' && (i == 0 || input[i - 1] != '\\') {
                 i += 1;
-                let with_bracket = i < len && input[i] == '{';
+                let with_brace = i < len && input[i] == '{';
                 let mut var = String::new();
-                if with_bracket { i += 1; }
+                if with_brace { i += 1; }
                 while i < len && (input[i].is_ascii_alphanumeric() || (input[i] == '_')) {
                     if var.is_empty() && input[i].is_ascii_digit() {
                         break;
@@ -62,7 +62,7 @@ impl Parser {
                     var.push(input[i]);
                     i += 1;
                 }
-                if with_bracket {
+                if with_brace {
                     assert_eq!(input[i], '}');
                 } else {
                     i -= 1; // back off 1 char

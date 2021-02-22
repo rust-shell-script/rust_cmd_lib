@@ -130,9 +130,9 @@ fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
     while i < len {
         if input[i] == '$' && (i == 0 || input[i - 1] != '\\') {
             i += 1;
-            let with_bracket = i < len && input[i] == '{';
+            let with_brace = i < len && input[i] == '{';
             let mut var = String::new();
-            if with_bracket { i += 1; }
+            if with_brace { i += 1; }
             while i < len && (input[i].is_ascii_alphanumeric() || (input[i] == '_')) {
                 if var.is_empty() && input[i].is_ascii_digit() {
                     break;
@@ -140,10 +140,10 @@ fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
                 var.push(input[i]);
                 i += 1;
             }
-            if with_bracket {
-                let right_bracket = '}';
-                if input[i] != right_bracket {
-                    panic!("missing '{}'", right_bracket);
+            if with_brace {
+                let right_brace = '}';
+                if input[i] != right_brace {
+                    panic!("missing '{}'", right_brace);
                 }
             } else {
                 i -= 1; // back off 1 char
