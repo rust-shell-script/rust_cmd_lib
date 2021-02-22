@@ -59,22 +59,23 @@ impl Parser {
                     && ((input[i] >= 'a' && input[i] <= 'z')
                         || (input[i] >= 'A' && input[i] <= 'Z')
                         || (input[i] >= '0' && input[i] <= '9')
-                        || (input[i] == '_'))
-                {
+                        || (input[i] == '_')) {
                     var.push(input[i]);
                     i += 1;
                 }
                 if with_bracket {
-                    if input[i] != '}' {
-                        panic!("invalid name {}, {}:{}\n{}", var, self.file, self.line, src);
-                    }
+                    assert_eq!(input[i], '}');
                 } else {
                     i -= 1; // back off 1 char
                 }
-                match self.sym_table.as_ref().unwrap().get(var.as_str()) {
-                    None => panic!("resolve {} failed, {}:{}\n{}", var, self.file, self.line, src),
-                    Some(v) => output += v,
-                };
+                if var.is_empty() {
+                    output.push(input[i]);
+                } else {
+                    match self.sym_table.as_ref().unwrap().get(var.as_str()) {
+                        None => panic!("resolve {} failed, {}:{}\n{}", var, self.file, self.line, src),
+                        Some(v) => output += v,
+                    };
+                }
             } else {
                 output.push(input[i]);
             }

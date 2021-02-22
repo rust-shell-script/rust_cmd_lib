@@ -4,6 +4,7 @@ use proc_macro2::{
     Ident,
     Literal,
     Span,
+    Delimiter,
 };
 use quote::quote;
 
@@ -68,36 +69,54 @@ fn source_text(input: TokenStream) -> (Vec<Ident>, Vec<Literal>, String) {
         let (_start, _end) = span_location(&t.span());
         let src = t.to_string();
         if source_text.ends_with("$") {
-            if let TokenTree::Group(g) = t {
+            if let TokenTree::Group(g) = t.clone() {
+                if g.delimiter() != Delimiter::Brace {
+                    panic!("invalid grouping: found {:?}, only Brace is allowed", g.delimiter());
+                }
+                let mut found_var = false;
                 for tt in g.stream() {
                     if let TokenTree::Ident(var) = tt {
+                        if found_var {
+                            panic!("more than one variable in grouping");
+                        }
                         source_text += "{";
                         source_text += &var.to_string();
                         source_text += "}";
                         sym_table_vars.push(var);
-                        break;
+                        found_var = true;
+                    } else {
+                        panic!("invalid grouping: extra tokens");
                     }
                 }
+                end = _end; continue;
             } else if let TokenTree::Ident(var) = t {
-                source_text += &var.to_string();
-                sym_table_vars.push(var);
-            }
-        } else {
-            if let TokenTree::Literal(lit) = t {
-                let s = lit.to_string();
-                if s.starts_with("\"") || s.starts_with("r") {
-                    if s.starts_with("\"") {
-                        parse_vars(&s, &mut sym_table_vars);
-                    }
-                    str_lits.push(lit);
+                if _start == end {
+                    source_text += &var.to_string();
+                    sym_table_vars.push(var);
+                } else {
+                    source_text += " ";
+                    source_text += &src;
                 }
+                end = _end; continue;
             }
-
-            if end != 0 && end < _start {
-                source_text += " ";
-            }
-            source_text += &src;
         }
+
+        if let TokenTree::Group(_) = t {
+            panic!("grouping is only allowed for variable");
+        } else if let TokenTree::Literal(lit) = t {
+            let s = lit.to_string();
+            if s.starts_with("\"") || s.starts_with("r") {
+                if s.starts_with("\"") {
+                    parse_vars(&s, &mut sym_table_vars);
+                }
+                str_lits.push(lit);
+            }
+        }
+
+        if end != 0 && end < _start {
+            source_text += " ";
+        }
+        source_text += &src;
         end = _end;
     }
     (sym_table_vars, str_lits, source_text)
@@ -123,11 +142,16 @@ fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
                 i += 1;
             }
             if with_bracket {
-                assert_eq!(input[i], '}');
+                let right_bracket = '}';
+                if input[i] != right_bracket {
+                    panic!("missing '{}'", right_bracket);
+                }
             } else {
                 i -= 1; // back off 1 char
             }
-            sym_table_vars.push(syn::parse_str::<Ident>(&var).unwrap());
+            if !var.is_empty() {
+                sym_table_vars.push(syn::parse_str::<Ident>(&var).unwrap());
+            }
         }
         i += 1;
     }

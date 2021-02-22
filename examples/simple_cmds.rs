@@ -35,8 +35,8 @@ fn main() -> CmdResult {
         eprintln!("Failed to run foo()");
     }
 
-    if get_year()? == "2020" {
-        eprintln!("You are in year 2020");
+    if get_year()? == "2021" {
+        eprintln!("You are in year 2021");
     } else {
         eprintln!("Which year are you in ?");
     }
