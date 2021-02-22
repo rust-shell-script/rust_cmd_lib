@@ -55,11 +55,10 @@ impl Parser {
                 let with_bracket = i < len && input[i] == '{';
                 let mut var = String::new();
                 if with_bracket { i += 1; }
-                while i < len
-                    && ((input[i] >= 'a' && input[i] <= 'z')
-                        || (input[i] >= 'A' && input[i] <= 'Z')
-                        || (input[i] >= '0' && input[i] <= '9')
-                        || (input[i] == '_')) {
+                while i < len && (input[i].is_ascii_alphanumeric() || (input[i] == '_')) {
+                    if var.is_empty() && input[i].is_ascii_digit() {
+                        break;
+                    }
                     var.push(input[i]);
                     i += 1;
                 }
