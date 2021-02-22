@@ -101,6 +101,48 @@ fn test_non_eng_args() {
     let msg = "你好！";
     assert!(run_cmd!(echo "$msg").is_ok());
     assert!(run_cmd!(echo $msg).is_ok());
+    assert!(run_cmd!(echo ${msg}).is_ok());
+}
+
+#[test]
+fn test_vars_in_str0() {
+    assert_eq!(run_fun!(echo "$").unwrap(), "$");
+}
+
+#[test]
+fn test_vars_in_str1() {
+    assert_eq!(run_fun!(echo "$$").unwrap(), "$$");
+}
+
+#[test]
+fn test_vars_in_str2() {
+    assert_eq!(run_fun!(echo "$ hello").unwrap(), "$ hello");
+}
+
+#[test]
+fn test_vars_in_str3() {
+    let msg = "hello";
+    assert_eq!(run_fun!(echo "$msg").unwrap(), "hello");
+    assert_eq!(run_fun!(echo "$ msg").unwrap(), "$ msg");
+}
+
+#[test]
+/// ```compile_fail
+/// run_cmd!(echo "${msg0}").unwrap();
+/// assert_eq!(run_fun!(echo "${ msg }").unwrap(), "${ msg }");
+/// assert_eq!(run_fun!(echo "${}").unwrap(), "${}");
+/// assert_eq!(run_fun!(echo "${").unwrap(), "${");
+/// assert_eq!(run_fun!(echo "${msg").unwrap(), "${msg");
+/// assert_eq!(run_fun!(echo "$}").unwrap(), "$}");
+/// assert_eq!(run_fun!(echo "${}").unwrap(), "${}");
+/// assert_eq!(run_fun!(echo "${").unwrap(), "${");
+/// assert_eq!(run_fun!(echo "${0}").unwrap(), "${0}");
+/// assert_eq!(run_fun!(echo "${ 0 }").unwrap(), "${ 0 }");
+/// assert_eq!(run_fun!(echo "${0msg}").unwrap(), "${0msg}");
+/// assert_eq!(run_fun!(echo "${msg 0}").unwrap(), "${msg 0}");
+/// assert_eq!(run_fun!(echo "${msg 0}").unwrap(), "${msg 0}");
+/// ```
+fn test_vars_in_str4() {
 }
 
 #[test]

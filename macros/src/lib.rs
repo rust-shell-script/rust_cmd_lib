@@ -141,9 +141,8 @@ fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
                 i += 1;
             }
             if with_brace {
-                let right_brace = '}';
-                if input[i] != right_brace {
-                    panic!("missing '{}'", right_brace);
+                if i == len || input[i] != '}' {
+                    panic!("bad substitution");
                 }
             } else {
                 i -= 1; // back off 1 char
