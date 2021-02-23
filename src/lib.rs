@@ -3,24 +3,29 @@ mod process;
 mod proc_env;
 mod proc_var;
 
-pub type FunResult = std::io::Result<String>;
-pub type CmdResult = std::io::Result<()>;
-pub use proc_env::Env;
-pub use parser::Parser;
-
-pub fn run_cmd<S: Into<String>>(cmds: S) -> CmdResult {
-    Parser::new(cmds.into()).parse().run_cmd()
-}
-
-pub fn run_fun<S: Into<String>>(cmds: S) -> FunResult {
-    Parser::new(cmds.into()).parse().run_fun()
-}
-
 pub use cmd_lib_macros::{
+    cmd,
+    fun,
+    config_cmd,
+    config_fun,
     run_cmd,
     run_fun,
 };
 
+
+pub type FunResult = std::io::Result<String>;
+pub type CmdResult = std::io::Result<()>;
+pub use process::{config_cmd, config_fun};
+pub use proc_env::Env;
+pub use parser::Parser;
+
+pub fn run_cmd<S: Into<String>>(cmds: S) -> CmdResult {
+    parser::Parser::new(cmds.into()).parse().run_cmd()
+}
+
+pub fn run_fun<S: Into<String>>(cmds: S) -> FunResult {
+    parser::Parser::new(cmds.into()).parse().run_fun()
+}
 
 // APIs For proc_macros
 use std::collections::{HashMap, VecDeque};
@@ -52,7 +57,7 @@ fn parse_cmds_with_ctx(
     let mut str_lits = VecDeque::new();
     fn_str_lits(&mut str_lits);
 
-    Parser::new(code)
+    parser::Parser::new(code)
         .with_sym_table(sym_table)
         .with_lits(str_lits)
         .parse()
