@@ -6,7 +6,7 @@ use cmd_lib::{
 };
 
 #[cmd(ls)]
-fn foo(args: Option<&Vec<&str>>, envs: Option<&HashMap<&str, &str>>) -> FunResult {
+fn foo(args: &Vec<&str>, envs: Option<&HashMap<&str, &str>>) -> FunResult {
     println!("msg from foo(), args: {:?}, envs: {:?}", args, envs);
     Ok("".into())
 }
