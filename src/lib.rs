@@ -29,6 +29,7 @@ pub fn run_fun<S: Into<String>>(cmds: S) -> FunResult {
 
 // APIs For proc_macros
 use std::collections::{HashMap, VecDeque};
+#[doc(hidden)]
 pub fn parse_cmds_with_ctx(
     code: &str,
     fn_sym_table: impl FnOnce(&mut HashMap<&str, String>),
