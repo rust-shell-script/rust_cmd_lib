@@ -10,16 +10,16 @@ use crate::proc_env::Env;
 use crate::proc_env::ENV_VARS;
 use crate::{CmdResult, FunResult};
 
-type FnFun = fn(Option<Vec<String>>, Option<HashMap<String, String>>) -> FunResult;
+type FnFun = fn(Option<Vec<&str>>, Option<HashMap<&str, &str>>) -> FunResult;
 lazy_static! {
-    static ref CMD_MAP: Mutex<HashMap<String, FnFun>> = {
+    static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
         let m = HashMap::new();
         // m.insert("cd".to_owned(), "CD".to_owned());
         Mutex::new(m)
     };
 }
 
-pub fn config_cmd(cmd: String, func: FnFun) {
+pub fn config_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(cmd, func);
 }
 

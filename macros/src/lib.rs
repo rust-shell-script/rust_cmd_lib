@@ -28,7 +28,7 @@ pub fn cmd(attr: proc_macro::TokenStream, item: proc_macro::TokenStream)
     quote! (
         fn #config_cmd_fn() {
             println!("this is from bar, calling {}():", #fn_name);
-            config_cmd(#cmd_name.to_string(), #fn_ident);
+            config_cmd(#cmd_name, #fn_ident);
         }
     ).to_tokens(&mut output);
     output.into()
