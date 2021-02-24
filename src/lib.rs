@@ -14,7 +14,7 @@ pub type CmdResult = std::io::Result<()>;
 pub use process::{
     CmdArgs,
     export_cmd,
-    debug_cmd,
+    set_debug,
 };
 pub use proc_env::Env;
 pub use parser::Parser;

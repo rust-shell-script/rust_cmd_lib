@@ -2,9 +2,9 @@
 // Rewrite examples with rust_cmd_lib from
 // https://rust-lang-nursery.github.io/rust-cookbook/os/external.html
 //
-use cmd_lib::{debug_cmd, run_cmd, run_fun, CmdResult};
+use cmd_lib::{run_cmd, run_fun, CmdResult};
 fn main() -> CmdResult {
-    debug_cmd(true); // to print commands
+    cmd_lib::set_debug(true); // to print commands
 
     // Run an external command and process stdout
     run_cmd!(git log --oneline | head -5)?;

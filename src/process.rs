@@ -49,7 +49,7 @@ pub fn export_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(cmd, func);
 }
 
-pub fn debug_cmd(enable: bool) {
+pub fn set_debug(enable: bool) {
     env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 

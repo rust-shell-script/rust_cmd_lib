@@ -1,4 +1,4 @@
-use cmd_lib::{debug_cmd, run_cmd, run_fun, CmdResult, FunResult};
+use cmd_lib::{run_cmd, run_fun, CmdResult, FunResult};
 
 fn foo() -> CmdResult {
     let dir = "src";
@@ -18,7 +18,7 @@ fn get_year() -> FunResult {
 }
 
 fn main() -> CmdResult {
-    debug_cmd(true);
+    cmd_lib::set_debug(true);
     run_cmd!(ls /tmp/nofile || true; echo "continue")?;
     run_cmd!(cd /tmp; ls | wc -l;)?;
     run_cmd!(pwd)?;
