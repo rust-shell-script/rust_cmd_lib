@@ -35,7 +35,7 @@ pub fn export_cmd(attr: proc_macro::TokenStream, item: proc_macro::TokenStream)
 }
 
 #[proc_macro]
-pub fn export_cmds(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn use_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let cmd_name = item.to_string();
     let export_cmd_fn = syn::Ident::new(
         &format!("export_cmd_{}", cmd_name),

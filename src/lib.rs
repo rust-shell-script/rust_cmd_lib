@@ -5,7 +5,7 @@ mod proc_var;
 
 pub use cmd_lib_macros::{
     export_cmd,
-    export_cmds,
+    use_cmd,
     run_cmd,
     run_fun,
 };
