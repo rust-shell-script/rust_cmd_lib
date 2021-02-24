@@ -1,6 +1,6 @@
 use cmd_lib::{
-    cmd,
-    config_cmd,
+    export_cmd,
+    export_cmds,
     debug_cmd,
     run_cmd,
     run_fun,
@@ -8,7 +8,7 @@ use cmd_lib::{
     FunResult,
 };
 
-#[cmd(my_cmd)]
+#[export_cmd(my_cmd)]
 fn foo(args: CmdArgs) -> FunResult {
     println!("msg from foo(), args: {:?}", args);
     Ok("bar".into())
@@ -16,7 +16,7 @@ fn foo(args: CmdArgs) -> FunResult {
 
 fn main() {
     debug_cmd(true);
-    config_cmd!(my_cmd);
+    export_cmds!(my_cmd);
     run_cmd!(my_cmd).unwrap();
     println!("get result: {}", run_fun!(my_cmd).unwrap());
 }

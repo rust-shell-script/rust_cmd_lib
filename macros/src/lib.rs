@@ -12,12 +12,12 @@ use quote::{
 };
 
 #[proc_macro_attribute]
-pub fn cmd(attr: proc_macro::TokenStream, item: proc_macro::TokenStream)
+pub fn export_cmd(attr: proc_macro::TokenStream, item: proc_macro::TokenStream)
     -> proc_macro::TokenStream
 {
     let cmd_name = attr.to_string();
-    let config_cmd_fn = syn::Ident::new(
-        &format!("config_cmd_{}", cmd_name),
+    let export_cmd_fn = syn::Ident::new(
+        &format!("export_cmd_{}", cmd_name),
         Span::call_site()
     );
 
@@ -26,25 +26,25 @@ pub fn cmd(attr: proc_macro::TokenStream, item: proc_macro::TokenStream)
     let fn_ident = input.sig.ident;
     let fn_name = fn_ident.to_string();
     quote! (
-        fn #config_cmd_fn() {
+        fn #export_cmd_fn() {
             println!("this is from bar, calling {}():", #fn_name);
-            config_cmd(#cmd_name, #fn_ident);
+            export_cmd(#cmd_name, #fn_ident);
         }
     ).to_tokens(&mut output);
     output.into()
 }
 
 #[proc_macro]
-pub fn config_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn export_cmds(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let cmd_name = item.to_string();
-    let config_cmd_fn = syn::Ident::new(
-        &format!("config_cmd_{}", cmd_name),
+    let export_cmd_fn = syn::Ident::new(
+        &format!("export_cmd_{}", cmd_name),
         Span::call_site()
     );
 
     quote! (
-        println!("calling config_cmd!");
-        #config_cmd_fn();
+        println!("calling export_cmd!");
+        #export_cmd_fn();
     ).into()
 }
 

@@ -44,7 +44,7 @@ lazy_static! {
     };
 }
 
-pub fn config_cmd(cmd: &'static str, func: FnFun) {
+pub fn export_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(cmd, func);
 }
 

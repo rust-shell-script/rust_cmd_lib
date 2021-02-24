@@ -4,8 +4,8 @@ mod proc_env;
 mod proc_var;
 
 pub use cmd_lib_macros::{
-    cmd,
-    config_cmd,
+    export_cmd,
+    export_cmds,
     run_cmd,
     run_fun,
 };
@@ -13,7 +13,7 @@ pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use process::{
     CmdArgs,
-    config_cmd,
+    export_cmd,
     debug_cmd,
 };
 pub use proc_env::Env;
