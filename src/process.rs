@@ -4,6 +4,7 @@ use std::io::{Error, ErrorKind};
 use std::fs::{File, OpenOptions};
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::env;
 use lazy_static::lazy_static;
 use crate::proc_env::Env;
 use crate::proc_env::ENV_VARS;
@@ -22,16 +23,13 @@ fn true_cmd(_args: CmdArgs) -> FunResult {
 
 fn cd_cmd(args: CmdArgs) -> FunResult {
     if args.len() == 1 {
-        return Err(Error::new(
-            ErrorKind::Other,
-            format!("cd: missing directory"),
-        ));
+        return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
     } else if args.len() > 2 {
-        return Err(Error::new(
-            ErrorKind::Other,
-            format!("cd: too many arguments: {}", args.join(" ")),
-        ));
+        let err_msg = format!("cd: too many arguments: {}", args.join(" "));
+        return Err(Error::new(ErrorKind::Other, err_msg));
     }
+
+    env::set_current_dir(&args[1])?;
     Ok("".into())
 }
 
@@ -51,7 +49,7 @@ pub fn config_cmd(cmd: &'static str, func: FnFun) {
 }
 
 pub fn debug_cmd(enable: bool) {
-    std::env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
+    env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 
 fn to_cmd_result(res: FunResult) -> CmdResult {
@@ -113,76 +111,6 @@ impl GroupCmds {
         Ok(ret)
     }
 }
-
-// pub struct BuiltinCmds {
-//     cmds: Vec<String>,
-// }
-
-// impl BuiltinCmds {
-//     pub fn from_vec(cmds: &Vec<String>) -> Self {
-//         Self {
-//             cmds: cmds.to_vec(),
-//         }
-//     }
-
-//     pub fn is_builtin(cmd: &str) -> bool {
-//         let mut builtins = HashSet::new();
-//         builtins.insert("cd");
-//         builtins.insert("true");
-//         builtins.contains(cmd)
-//     }
-
-//     pub fn run_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
-//         match self.cmds[0].as_str() {
-//             "true" => self.run_true_cmd(cmds_env),
-//             "cd" => self.run_cd_cmd(cmds_env),
-//             _ => panic!("invalid builtin cmd: {}", self.cmds[0]),
-//         }
-//     }
-
-//     fn run_true_cmd(&mut self, _cmds_env: &mut Env) -> CmdResult {
-//         if self.cmds.len() != 1 {
-//             let err = Error::new(
-//                 ErrorKind::Other,
-//                 format!("true: too many arguments: {}", self.cmds.join(" ")),
-//             );
-//             return Err(err);
-//         }
-//         Ok(())
-//     }
-
-//     fn run_cd_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
-//         let mut dir = self.cmds[1].clone();
-//         if self.cmds.len() != 2 {
-//             let err = Error::new(
-//                 ErrorKind::Other,
-//                 format!("cd: too many arguments: {}", self.cmds.join(" ")),
-//             );
-//             return Err(err);
-//         }
-//         // if it is relative path, always convert it to absolute one
-//         if !dir.starts_with("/") {
-//             ENV_VARS.with(|vars| {
-//                 if let Some(cmd_lib_pwd) = vars.borrow().get("PWD") {
-//                     dir = format!("{}/{}", cmd_lib_pwd, dir);
-//                 } else {
-//                     dir = format!("{}/{}", std::env::current_dir().unwrap().to_str().unwrap(), dir);
-//                 }
-//             });
-//         }
-//         if !std::path::Path::new(&dir).exists() {
-//             let err_msg = format!("cd: {}: No such file or directory", dir);
-//             eprintln!("{}", err_msg);
-//             let err = Error::new(
-//                 ErrorKind::Other,
-//                 err_msg,
-//             );
-//             return Err(err);
-//         }
-//         cmds_env.set_var("PWD".to_string(), dir);
-//         Ok(())
-//     }
-// }
 
 pub struct Cmds {
     pipes: Vec<Command>,
@@ -280,9 +208,11 @@ impl Cmds {
 
     pub fn run_cmd(&mut self, _cmds_env: &mut Env) -> CmdResult {
         // check builtin commands
-        let cmd_name = &self.cmd_args[0].get_args()[0];
-        if CMD_MAP.lock().unwrap().contains_key(cmd_name.as_str()) {
-            return to_cmd_result(CMD_MAP.lock().unwrap()[cmd_name.as_str()](vec![]));
+        let args = self.cmd_args[0].get_args().clone();
+        let cmd = &args[0].as_str();
+        let is_builtin = CMD_MAP.lock().unwrap().contains_key(cmd);
+        if is_builtin {
+            return to_cmd_result(CMD_MAP.lock().unwrap()[cmd](args));
         }
 
         self.spawn()?;
