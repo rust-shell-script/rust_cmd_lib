@@ -55,7 +55,7 @@ pub fn debug_cmd(enable: bool) {
 fn to_cmd_result(res: FunResult) -> CmdResult {
     match res {
         Ok(v) => {
-            println!("{}", v);
+            print!("{}{}", v, if v.is_empty() {""} else {"\n"});
             Ok(())
         },
         Err(e) => Err(e)
