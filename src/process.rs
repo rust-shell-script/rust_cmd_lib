@@ -2,7 +2,6 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::io::{Error, ErrorKind};
 use std::fs::{File, OpenOptions};
-use std::collections::HashSet;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use lazy_static::lazy_static;
@@ -273,7 +272,7 @@ impl Cmds {
         Ok(())
     }
 
-    pub fn run_cmd(&mut self, cmds_env: &mut Env) -> CmdResult {
+    pub fn run_cmd(&mut self, _cmds_env: &mut Env) -> CmdResult {
         // check builtin commands
         let cmd_name = &self.cmd_args[0].get_args()[0];
         if CMD_MAP.lock().unwrap().contains_key(cmd_name.as_str()) {
