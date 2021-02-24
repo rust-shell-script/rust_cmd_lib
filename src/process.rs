@@ -13,14 +13,6 @@ use crate::{CmdResult, FunResult};
 pub type CmdArgs = Vec<String>;
 type FnFun = fn(CmdArgs) -> FunResult;
 
-fn echo_cmd(args: CmdArgs) -> FunResult {
-    Ok(args[1..].join(" "))
-}
-
-fn true_cmd(_args: CmdArgs) -> FunResult {
-    Ok("".into())
-}
-
 fn cd_cmd(args: CmdArgs) -> FunResult {
     if args.len() == 1 {
         return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
@@ -33,13 +25,21 @@ fn cd_cmd(args: CmdArgs) -> FunResult {
     Ok("".into())
 }
 
+fn echo_cmd(args: CmdArgs) -> FunResult {
+    Ok(args[1..].join(" "))
+}
+
+fn true_cmd(_args: CmdArgs) -> FunResult {
+    Ok("".into())
+}
+
 lazy_static! {
     static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
         // needs explicit type, or it won't compile
         let mut m: HashMap<&'static str, FnFun> = HashMap::new();
-        m.insert("true", true_cmd);
         m.insert("cd", cd_cmd);
         m.insert("echo", echo_cmd);
+        m.insert("true", true_cmd);
         Mutex::new(m)
     };
 }

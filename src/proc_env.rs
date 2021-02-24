@@ -44,35 +44,35 @@ impl Drop for Env {
     }
 }
 
-#[macro_export]
-macro_rules! proc_env_set {
-    () => {};
-    (&$env: expr) => {};
-    (&$env: expr, $key:ident = $v:tt $($other:tt)*) => {
-        $env.set_var(stringify!($key).to_string(), $v.to_string());
-        proc_env_set!(&$env $($other)*);
-    };
-    ($key:ident = $v:tt $($other:tt)*) => {
-        let mut _cmdlib_env = $crate::Env::new();
-        _cmdlib_env.set_var(stringify!($key).to_string(), $v.to_string());
-        proc_env_set!(&_cmdlib_env $($other)*);
-    };
-}
+// #[macro_export]
+// macro_rules! proc_env_set {
+//     () => {};
+//     (&$env: expr) => {};
+//     (&$env: expr, $key:ident = $v:tt $($other:tt)*) => {
+//         $env.set_var(stringify!($key).to_string(), $v.to_string());
+//         proc_env_set!(&$env $($other)*);
+//     };
+//     ($key:ident = $v:tt $($other:tt)*) => {
+//         let mut _cmdlib_env = $crate::Env::new();
+//         _cmdlib_env.set_var(stringify!($key).to_string(), $v.to_string());
+//         proc_env_set!(&_cmdlib_env $($other)*);
+//     };
+// }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_pwd_set() {
-        {
-            proc_env_set!(PWD = "/tmp", DEBUG = 1);
-            ENV_VARS.with(|vars| {
-                assert!(vars.borrow().get("PWD") == Some(&"/tmp".to_string()));
-                assert!(vars.borrow().get("DEBUG") == Some(&"1".to_string()));
-            });
-        }
-        ENV_VARS.with(|vars| {
-            assert!(vars.borrow().get("PWD").is_none());
-        });
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     #[test]
+//     fn test_pwd_set() {
+//         {
+//             proc_env_set!(PWD = "/tmp", DEBUG = 1);
+//             ENV_VARS.with(|vars| {
+//                 assert!(vars.borrow().get("PWD") == Some(&"/tmp".to_string()));
+//                 assert!(vars.borrow().get("DEBUG") == Some(&"1".to_string()));
+//             });
+//         }
+//         ENV_VARS.with(|vars| {
+//             assert!(vars.borrow().get("PWD").is_none());
+//         });
+//     }
+// }

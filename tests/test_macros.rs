@@ -1,5 +1,5 @@
 extern crate cmd_lib;
-use cmd_lib::{proc_env_set, proc_var, proc_var_set, proc_var_get, run_cmd, run_fun};
+use cmd_lib::{proc_var, proc_var_set, proc_var_get, run_cmd, run_fun};
 
 #[test]
 #[rustfmt::skip]
@@ -143,16 +143,6 @@ fn test_vars_in_str3() {
 /// assert_eq!(run_fun!(echo "${msg 0}").unwrap(), "${msg 0}");
 /// ```
 fn test_vars_in_str4() {
-}
-
-#[test]
-fn test_proc_env_set() {
-    proc_env_set!(PWD = "/var/tmp");
-    let pwd = run_fun!(pwd).unwrap();
-    assert_eq!(
-        pwd,
-        std::fs::canonicalize("/var/tmp").unwrap().to_str().unwrap()
-    );
 }
 
 #[test]
