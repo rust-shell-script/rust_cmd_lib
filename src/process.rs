@@ -10,27 +10,17 @@ use crate::proc_env::Env;
 use crate::proc_env::ENV_VARS;
 use crate::{CmdResult, FunResult};
 
-type FnCmd = fn(Option<Vec<String>>, Option<HashMap<String, String>>) -> CmdResult;
 type FnFun = fn(Option<Vec<String>>, Option<HashMap<String, String>>) -> FunResult;
-
 lazy_static! {
-    static ref CMD_MAP: Mutex<HashMap<String, FnCmd>> = {
+    static ref CMD_MAP: Mutex<HashMap<String, FnFun>> = {
         let m = HashMap::new();
         // m.insert("cd".to_owned(), "CD".to_owned());
         Mutex::new(m)
     };
-    static ref FUN_MAP: Mutex<HashMap<String, FnFun>> = {
-        let m = HashMap::new();
-        Mutex::new(m)
-    };
 }
 
-pub fn config_cmd(cmd: String, func: FnCmd) {
+pub fn config_cmd(cmd: String, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(cmd, func);
-}
-
-pub fn config_fun(fun: String, func: FnFun) {
-    FUN_MAP.lock().unwrap().insert(fun, func);
 }
 
 pub struct GroupCmds {

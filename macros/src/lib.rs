@@ -48,43 +48,6 @@ pub fn config_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     ).into()
 }
 
-#[proc_macro_attribute]
-pub fn fun(attr: proc_macro::TokenStream, item: proc_macro::TokenStream)
-    -> proc_macro::TokenStream
-{
-    let fun_name = attr.to_string();
-    let config_fun_fn = syn::Ident::new(
-        &format!("config_fun_{}", fun_name),
-        Span::call_site()
-    );
-
-    let input: syn::ItemFn = syn::parse2(item.into()).unwrap();
-    let mut output = input.to_token_stream();
-    let fn_ident = input.sig.ident;
-    let fn_name = fn_ident.to_string();
-    quote! (
-        fn #config_fun_fn() {
-            println!("this is from bar, calling {}():", #fn_name);
-            config_fun(#fun_name.to_string(), #fn_ident);
-        }
-    ).to_tokens(&mut output);
-    output.into()
-}
-
-#[proc_macro]
-pub fn config_fun(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let fun_name = item.to_string();
-    let config_fun_fn = syn::Ident::new(
-        &format!("config_fun_{}", fun_name),
-        Span::call_site()
-    );
-
-    quote! (
-        println!("calling config_fun!");
-        #config_fun_fn();
-    ).into()
-}
-
 #[proc_macro]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (vars, lits, src) = source_text(input.into());

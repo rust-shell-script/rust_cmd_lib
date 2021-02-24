@@ -5,9 +5,7 @@ mod proc_var;
 
 pub use cmd_lib_macros::{
     cmd,
-    fun,
     config_cmd,
-    config_fun,
     run_cmd,
     run_fun,
 };
@@ -15,7 +13,7 @@ pub use cmd_lib_macros::{
 
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
-pub use process::{config_cmd, config_fun};
+pub use process::config_cmd;
 pub use proc_env::Env;
 pub use parser::Parser;
 
