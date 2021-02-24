@@ -9,15 +9,18 @@ use crate::proc_env::Env;
 use crate::proc_env::ENV_VARS;
 use crate::{CmdResult, FunResult};
 
-fn echo_cmd(args: &Vec<&str>, _envs: Option<&HashMap<&str, &str>>) -> FunResult {
+pub type CmdArgs = Vec<String>;
+type FnFun = fn(CmdArgs) -> FunResult;
+
+fn echo_cmd(args: CmdArgs) -> FunResult {
     Ok(args[1..].join(" "))
 }
 
-fn true_cmd(_args: &Vec<&str>, _envs: Option<&HashMap<&str, &str>>) -> FunResult {
+fn true_cmd(_args: CmdArgs) -> FunResult {
     Ok("".into())
 }
 
-fn cd_cmd(args: &Vec<&str>, _envs: Option<&HashMap<&str, &str>>) -> FunResult {
+fn cd_cmd(args: CmdArgs) -> FunResult {
     if args.len() == 1 {
         return Err(Error::new(
             ErrorKind::Other,
@@ -32,7 +35,6 @@ fn cd_cmd(args: &Vec<&str>, _envs: Option<&HashMap<&str, &str>>) -> FunResult {
     Ok("".into())
 }
 
-type FnFun = fn(&Vec<&str>, Option<&HashMap<&str, &str>>) -> FunResult;
 lazy_static! {
     static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
         // needs explicit type, or it won't compile
@@ -46,6 +48,10 @@ lazy_static! {
 
 pub fn config_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(cmd, func);
+}
+
+pub fn debug_cmd(enable: bool) {
+    std::env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 
 fn to_cmd_result(res: FunResult) -> CmdResult {
@@ -276,7 +282,7 @@ impl Cmds {
         // check builtin commands
         let cmd_name = &self.cmd_args[0].get_args()[0];
         if CMD_MAP.lock().unwrap().contains_key(cmd_name.as_str()) {
-            return to_cmd_result(CMD_MAP.lock().unwrap()[cmd_name.as_str()](&vec![], None));
+            return to_cmd_result(CMD_MAP.lock().unwrap()[cmd_name.as_str()](vec![]));
         }
 
         self.spawn()?;
