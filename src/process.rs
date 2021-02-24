@@ -44,6 +44,7 @@ lazy_static! {
     };
 }
 
+#[doc(hidden)]
 pub fn export_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(cmd, func);
 }
