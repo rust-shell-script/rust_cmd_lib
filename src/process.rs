@@ -10,7 +10,7 @@ use crate::proc_env::Env;
 use crate::proc_env::ENV_VARS;
 use crate::{CmdResult, FunResult};
 
-type FnFun = fn(Option<Vec<&str>>, Option<HashMap<&str, &str>>) -> FunResult;
+type FnFun = fn(Option<&Vec<&str>>, Option<&HashMap<&str, &str>>) -> FunResult;
 lazy_static! {
     static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
         let m = HashMap::new();
