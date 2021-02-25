@@ -6,14 +6,13 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::env;
 use lazy_static::lazy_static;
-use crate::proc_env::Env;
-use crate::proc_env::ENV_VARS;
 use crate::{CmdResult, FunResult};
 
 pub type CmdArgs = Vec<String>;
-type FnFun = fn(CmdArgs) -> FunResult;
+pub type CmdEnvs = HashMap<String, String>;
+type FnFun = fn(CmdArgs, CmdEnvs) -> FunResult;
 
-fn cd_cmd(args: CmdArgs) -> FunResult {
+fn cd_cmd(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
     if args.len() == 1 {
         return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
     } else if args.len() > 2 {
@@ -25,11 +24,11 @@ fn cd_cmd(args: CmdArgs) -> FunResult {
     Ok("".into())
 }
 
-fn echo_cmd(args: CmdArgs) -> FunResult {
+fn echo_cmd(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
     Ok(args[1..].join(" "))
 }
 
-fn true_cmd(_args: CmdArgs) -> FunResult {
+fn true_cmd(_args: CmdArgs, _envs: CmdEnvs) -> FunResult {
     Ok("".into())
 }
 
@@ -65,14 +64,12 @@ fn to_cmd_result(res: FunResult) -> CmdResult {
 
 pub struct GroupCmds {
      cmds: Vec<(Cmds, Option<Cmds>)>,  // (cmd, orCmd) pairs
-     cmds_env: Env,
 }
 
 impl GroupCmds {
     pub fn new() -> Self {
         Self {
             cmds: vec![],
-            cmds_env: Env::new(),
         }
     }
 
@@ -83,9 +80,9 @@ impl GroupCmds {
 
     pub fn run_cmd(&mut self) -> CmdResult {
         for cmd in self.cmds.iter_mut() {
-            if let Err(err) = cmd.0.run_cmd(&mut self.cmds_env) {
+            if let Err(err) = cmd.0.run_cmd() {
                 if let Some(or_cmds) = &mut cmd.1 {
-                    or_cmds.run_cmd(&mut self.cmds_env)?;
+                    or_cmds.run_cmd()?;
                 } else {
                     return Err(err);
                 }
@@ -97,11 +94,11 @@ impl GroupCmds {
     pub fn run_fun(&mut self) -> FunResult {
         let mut ret = String::new();
         for cmd in self.cmds.iter_mut() {
-            let ret0 = cmd.0.run_fun(&mut self.cmds_env);
+            let ret0 = cmd.0.run_fun();
             match ret0 {
                 Err(e) => {
                     if let Some(or_cmds) = &mut cmd.1 {
-                        ret = or_cmds.run_fun(&mut self.cmds_env)?;
+                        ret = or_cmds.run_fun()?;
                     } else {
                         return Err(e);
                     }
@@ -164,29 +161,15 @@ impl Cmds {
     }
 
     fn spawn(&mut self) -> CmdResult {
-        let mut pipe_error = false;
-
-        ENV_VARS.with(|vars| {
-            if let Some(dir) = vars.borrow().get("PWD") {
-                self.full_cmd += &format!(" (cd: {})", dir);
-                self.pipes[0].current_dir(dir);
-            }
-            let mut debug = String::from("0");
-            if let Some(proc_debug) = vars.borrow().get("CMD_LIB_DEBUG") {
-                debug = proc_debug.clone();
-            } else if let Ok(global_debug) = std::env::var("CMD_LIB_DEBUG") {
-                debug = global_debug.clone();
-            }
+        if let Ok(debug) = std::env::var("CMD_LIB_DEBUG") {
             if debug == "1" {
                 eprintln!("Running \"{}\" ...", self.full_cmd);
             }
-
-            if let Some("1") = vars.borrow().get("CMD_LIB_PIPE_FAIL").map(|v| v as &str) {
-                pipe_error = true;
-            } else if let Ok("1") = std::env::var("CMD_LIB_PIPE_FAIL").as_ref().map(|v| v as &str) {
-                pipe_error = true;
-            }
-        });
+        }
+        let mut pipe_error = false;
+        if let Ok("1") = std::env::var("CMD_LIB_PIPE_FAIL").as_ref().map(|v| v as &str) {
+            pipe_error = true;
+        }
 
         for (i, cmd) in self.pipes.iter_mut().enumerate() {
             if i != 0 {
@@ -207,13 +190,14 @@ impl Cmds {
         Ok(())
     }
 
-    pub fn run_cmd(&mut self, _cmds_env: &mut Env) -> CmdResult {
+    pub fn run_cmd(&mut self) -> CmdResult {
         // check builtin commands
         let args = self.cmd_args[0].get_args().clone();
+        let envs = self.cmd_args[0].get_envs().clone();
         let cmd = &args[0].as_str();
         let is_builtin = CMD_MAP.lock().unwrap().contains_key(cmd);
         if is_builtin {
-            return to_cmd_result(CMD_MAP.lock().unwrap()[cmd](args));
+            return to_cmd_result(CMD_MAP.lock().unwrap()[cmd](args, envs));
         }
 
         self.spawn()?;
@@ -225,7 +209,7 @@ impl Cmds {
         }
     }
 
-    pub fn run_fun(&mut self, _cmds_env: &mut Env) -> FunResult {
+    pub fn run_fun(&mut self) -> FunResult {
         let last_i = self.pipes.len() - 1;
         self.pipes[last_i].stdout(Stdio::piped());
 
@@ -268,6 +252,7 @@ impl FdOrFile {
 
 pub struct Cmd {
     args: Vec<String>,
+    envs: HashMap<String, String>,
     redirects: Vec<(i32, FdOrFile)>,
 }
 
@@ -275,6 +260,7 @@ impl Cmd {
     pub fn new() -> Self {
         Self {
             args: vec![],
+            envs: HashMap::new(),
             redirects: vec![],
         }
     }
@@ -288,6 +274,7 @@ impl Cmd {
             args: args.into_iter()
                 .map(|s| s.as_ref().to_owned())
                 .collect(),
+            envs: HashMap::new(),
             redirects: vec![],
         }
     }
@@ -299,6 +286,10 @@ impl Cmd {
 
     pub fn get_args(&mut self) -> &mut Vec<String> {
         &mut self.args
+    }
+
+    pub fn get_envs(&mut self) -> &mut HashMap<String, String> {
+        &mut self.envs
     }
 
     pub fn set_redirect(&mut self, fd: i32, target: FdOrFile) -> &mut Self {
@@ -377,20 +368,20 @@ mod tests {
     fn test_run_piped_cmds() {
         assert!(Cmds::from_cmd(Cmd::from_args(vec!["echo", "rust"]))
                 .pipe(Cmd::from_args(vec!["wc"]))
-                .run_cmd(&mut Env::new())
+                .run_cmd()
                 .is_ok());
     }
 
     #[test]
     fn test_run_piped_funs() {
         assert_eq!(Cmds::from_cmd(Cmd::from_args(vec!["echo", "rust"]))
-                   .run_fun(&mut Env::new())
+                   .run_fun()
                    .unwrap(),
                    "rust");
 
         assert_eq!(Cmds::from_cmd(Cmd::from_args(vec!["echo", "rust"]))
                    .pipe(Cmd::from_args(vec!["wc", "-c"]))
-                   .run_fun(&mut Env::new())
+                   .run_fun()
                    .unwrap()
                    .trim(), "5");
     }
@@ -401,18 +392,18 @@ mod tests {
         let mut write_cmd = Cmd::from_args(vec!["echo", "rust"]);
         write_cmd.set_redirect(1, FdOrFile::File(tmp_file.to_string(), false));
         assert!(Cmds::from_cmd(write_cmd)
-                .run_cmd(&mut Env::new())
+                .run_cmd()
                 .is_ok());
 
         let read_cmd = Cmd::from_args(vec!["cat", tmp_file]);
         assert_eq!(Cmds::from_cmd(read_cmd)
-                   .run_fun(&mut Env::new())
+                   .run_fun()
                    .unwrap(),
                    "rust");
 
         let cleanup_cmd = Cmd::from_args(vec!["rm", tmp_file]);
         assert!(Cmds::from_cmd(cleanup_cmd)
-                .run_cmd(&mut Env::new())
+                .run_cmd()
                 .is_ok());
     }
 }

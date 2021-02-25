@@ -4,11 +4,12 @@ use cmd_lib::{
     run_cmd,
     run_fun,
     CmdArgs,
+    CmdEnvs,
     FunResult,
 };
 
 #[export_cmd(my_cmd)]
-fn foo(args: CmdArgs) -> FunResult {
+fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
     println!("msg from foo(), args: {:?}", args);
     Ok("bar".into())
 }

@@ -1,6 +1,5 @@
 mod parser;
 mod process;
-mod proc_env;
 mod proc_var;
 
 pub use cmd_lib_macros::{
@@ -13,10 +12,10 @@ pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use process::{
     CmdArgs,
+    CmdEnvs,
     export_cmd,
     set_debug,
 };
-pub use proc_env::Env;
 pub use parser::Parser;
 
 pub fn run_cmd<S: Into<String>>(cmds: S) -> CmdResult {
