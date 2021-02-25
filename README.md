@@ -104,7 +104,7 @@ for option in options {
 ```
 
 ### Redirection and Piping
-Right now piping and stdin, stdout, stderr redirections are supported. Most parts are the same as in
+Right now piping and stdin, stdout, stderr redirection are supported. Most parts are the same as in
 [bash scripts](https://www.gnu.org/software/bash/manual/html_node/Redirections.html#Redirections).
 See examples at [examples/redirect.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/redirect.rs)
 
@@ -154,7 +154,36 @@ use_cmd!(my_cmd);
 run_cmd!(my_cmd).unwrap();
 println!("get result: {}", run_fun!(my_cmd).unwrap());
 ```
-See exmaple in `examples/test_export_cmds.rs`
+See examples in `examples/test_export_cmds.rs`
+
+## Other Notes
+
+### Access Environment Variables
+
+You can use [std::env::var](https://doc.rust-lang.org/std/env/fn.var.html) to fetch the environment variable
+key from the current process. It will report error if the environment variable is not present, and it also
+includes other checks to avoid silent failures.
+
+### Security Notes
+Using macros can actually avoid command injection, since we do parsing before variable substitution.
+For example, below code is fine even without any quotes:
+```rust
+fn cleanup_uploaded_file(file: &str) {
+  run_cmd!(/bin/rm -f /var/upload/$file);
+}
+```
+It is not the case in bash, which will always do variable substitution at first.
+
+### Glob/Wildcard
+
+This library does not provide glob functions, to avoid silent errors and other surprises.
+You can use the [glob](https://github.com/rust-lang-nursery/glob) package instead.
+
+### Thread Safety
+
+This library tries very hard to not set global states, so parallel `cargo test` can be executed just fine.
+However, the process APIs are inherently not thread-safe, as a result I sometimes need to set
+`RUST_TEST_THREADS=1` before running tests.
 
 ## Complete Example
 See `examples` directory, which contains a [tetris game](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/tetris.rs)
