@@ -21,7 +21,7 @@ You can find all kinds of pitfalls and mysterious tricks to make other parts of 
 scripts grow, they will ultimately be unmaintainable and no one wants to touch them any more.
 
 This cmd_lib library is trying to provide the redirection and piping capabilities, and other facilities to make writing
-shell-script like tasks easily without launching any shell. For the
+shell-script like tasks easily **without launching any shell**. For the
 [rust cookbook examples](https://rust-lang-nursery.github.io/rust-cookbook/os/external.html),
 they can usually be implemented as one line of rust macro with the help of this library, as in the
 [examples/rust_cookbook_external.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/rust_cookbook_external.rs).
@@ -113,20 +113,6 @@ let d = proc_var_get!(DELAY);
 // check more examples in examples/tetris.rs
 ```
 
-### Macros to set scoped process environment variables
-- `proc_env_set!` to define process running related environment variables
-- Right now, only `PWD` and `CMD_LIB_DEBUG` are supported
-- More variables like GID, UID, UMASK ... are on the way
-```rust
-use cmd_lib::{proc_env_set, run_cmd, run_fun, CmdResult};
-proc_env_set!(CMD_LIB_DEBUG = 1); // to print commands
-{
-    proc_env_set!(PWD = "/tmp");
-    run_cmd!(pwd)?;
-}
-run_cmd!(pwd)?;
-```
-
 ### Builtin commands
 #### cd
 cd: set process current directory
@@ -142,6 +128,25 @@ exits the scope.
 
 Use `std::env::set_current_dir` if you want to change the current
 working directory for the whole program.
+
+### Register your own commands
+Declare your function with `export_cmd` attribute macro:
+
+```rust
+#[export_cmd(my_cmd)]
+fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
+    println!("msg from foo(), args: {:?}", args);
+    Ok("bar".into())
+}
+```
+
+To use it, just import it at first:
+```
+use_cmd!(my_cmd);
+run_cmd!(my_cmd).unwrap();
+println!("get result: {}", run_fun!(my_cmd).unwrap());
+```
+See exmaple in `examples/test_export_cmds.rs`
 
 ## Complete Example
 See `examples` directory, which contains a [tetris game](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/tetris.rs)
