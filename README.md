@@ -95,6 +95,14 @@ let awk_opts = format!(r#"/{}/ {{print $(NF-3) " " $(NF-1) " " $NF}}"#, key_word
 run_cmd!(ping -c 10 www.google.com | awk $awk_opts)?;
 ```
 
+If you want to use dynamic parameters, you can use functions instead of macros:
+```rust
+let options = vec!["-a -b 1", "-c 2"];
+for option in options {
+  run_cmd(format!("x {}", option)).unwrap();
+}
+```
+
 ### Redirection and Piping
 Right now piping and stdin, stdout, stderr redirections are supported. Most parts are the same as in
 [bash scripts](https://www.gnu.org/software/bash/manual/html_node/Redirections.html#Redirections).
@@ -141,7 +149,7 @@ fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
 ```
 
 To use it, just import it at first:
-```
+```rust
 use_cmd!(my_cmd);
 run_cmd!(my_cmd).unwrap();
 println!("get result: {}", run_fun!(my_cmd).unwrap());
