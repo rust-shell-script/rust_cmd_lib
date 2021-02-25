@@ -24,10 +24,8 @@ pub fn export_cmd(attr: proc_macro::TokenStream, item: proc_macro::TokenStream)
     let input: syn::ItemFn = syn::parse2(item.into()).unwrap();
     let mut output = input.to_token_stream();
     let fn_ident = input.sig.ident;
-    let fn_name = fn_ident.to_string();
     quote! (
         fn #export_cmd_fn() {
-            println!("this is from bar, calling {}():", #fn_name);
             export_cmd(#cmd_name, #fn_ident);
         }
     ).to_tokens(&mut output);
@@ -43,7 +41,6 @@ pub fn use_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     );
 
     quote! (
-        println!("calling export_cmd!");
         #export_cmd_fn();
     ).into()
 }
