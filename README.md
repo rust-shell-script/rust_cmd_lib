@@ -99,7 +99,7 @@ If you want to use dynamic parameters, you can use functions instead of macros:
 ```rust
 let options = vec!["-a -b 1", "-c 2"];
 for option in options {
-  run_cmd(format!("x {}", option)).unwrap();
+  run_cmd_unsafe(format!("x {}", option)).unwrap();
 }
 ```
 
@@ -168,8 +168,8 @@ includes other checks to avoid silent failures.
 Using macros can actually avoid command injection, since we do parsing before variable substitution.
 For example, below code is fine even without any quotes:
 ```rust
-fn cleanup_uploaded_file(file: &str) {
-  run_cmd!(/bin/rm -f /var/upload/$file);
+fn cleanup_uploaded_file(file: &str) -> CmdResult {
+  run_cmd!(/bin/rm -f /var/upload/$file)
 }
 ```
 It is not the case in bash, which will always do variable substitution at first.

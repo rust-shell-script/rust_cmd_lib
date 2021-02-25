@@ -17,11 +17,11 @@ pub use process::{
     set_debug,
 };
 
-pub fn run_cmd<S: Into<String>>(cmds: S) -> CmdResult {
+pub fn run_cmd_unsafe<S: Into<String>>(cmds: S) -> CmdResult {
     parser::Parser::new(cmds.into()).parse().run_cmd()
 }
 
-pub fn run_fun<S: Into<String>>(cmds: S) -> FunResult {
+pub fn run_fun_unsafe<S: Into<String>>(cmds: S) -> FunResult {
     parser::Parser::new(cmds.into()).parse().run_fun()
 }
 
