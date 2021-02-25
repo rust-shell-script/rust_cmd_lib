@@ -12,22 +12,6 @@ pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
 type FnFun = fn(CmdArgs, CmdEnvs) -> FunResult;
 
-fn cd_cmd(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
-    if args.len() == 1 {
-        return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
-    } else if args.len() > 2 {
-        let err_msg = format!("cd: too many arguments: {}", args.join(" "));
-        return Err(Error::new(ErrorKind::Other, err_msg));
-    }
-
-    env::set_current_dir(&args[1])?;
-    Ok("".into())
-}
-
-fn echo_cmd(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
-    Ok(args[1..].join(" "))
-}
-
 fn true_cmd(_args: CmdArgs, _envs: CmdEnvs) -> FunResult {
     Ok("".into())
 }
@@ -36,8 +20,6 @@ lazy_static! {
     static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
         // needs explicit type, or it won't compile
         let mut m: HashMap<&'static str, FnFun> = HashMap::new();
-        m.insert("cd", cd_cmd);
-        m.insert("echo", echo_cmd);
         m.insert("true", true_cmd);
         Mutex::new(m)
     };
@@ -78,33 +60,20 @@ impl GroupCmds {
         self
     }
 
-    fn restore_env_vars(vars: env::Vars) {
-        for (key, value) in vars {
-            if key == "PWD" {
-                env::set_current_dir(&value).unwrap();
-            }
-            env::set_var(key, value);
-        }
-    }
-
     pub fn run_cmd(&mut self) -> CmdResult {
-        let vars = env::vars();
         for cmd in self.cmds.iter_mut() {
             if let Err(err) = cmd.0.run_cmd() {
                 if let Some(or_cmds) = &mut cmd.1 {
                     or_cmds.run_cmd()?;
                 } else {
-                    Self::restore_env_vars(vars);
                     return Err(err);
                 }
             }
         }
-        Self::restore_env_vars(vars);
         Ok(())
     }
 
     pub fn run_fun(&mut self) -> FunResult {
-        let vars = env::vars();
         let mut ret = String::new();
         for cmd in self.cmds.iter_mut() {
             let ret0 = cmd.0.run_fun();
@@ -113,14 +82,12 @@ impl GroupCmds {
                     if let Some(or_cmds) = &mut cmd.1 {
                         ret = or_cmds.run_fun()?;
                     } else {
-                        Self::restore_env_vars(vars);
                         return Err(e);
                     }
                 },
                 Ok(r) => ret = r,
             };
         }
-        Self::restore_env_vars(vars);
         Ok(ret)
     }
 }
@@ -131,6 +98,8 @@ pub struct Cmds {
 
     cmd_args: Vec<Cmd>,
     full_cmd: String,
+
+    current_dir: String,
 }
 
 impl Cmds {
@@ -140,6 +109,7 @@ impl Cmds {
             children: vec![],
             cmd_args: vec![],
             full_cmd: String::new(),
+            current_dir: String::new(),
         }
     }
 
@@ -150,6 +120,7 @@ impl Cmds {
             children: vec![],
             full_cmd: cmd_args.join(" ").to_string(),
             cmd_args: vec![cmd],
+            current_dir: String::new(),
         }
     }
 
@@ -164,7 +135,10 @@ impl Cmds {
         }
 
         let cmd_args: Vec<String> = cmd.get_args().to_vec();
-        let pipe_cmd = cmd.gen_command();
+        let mut pipe_cmd = cmd.gen_command();
+        if !self.current_dir.is_empty() {
+            pipe_cmd.current_dir(self.current_dir.clone());
+        }
         self.pipes.push(pipe_cmd);
 
         if !self.full_cmd.is_empty() {
@@ -181,6 +155,7 @@ impl Cmds {
                 eprintln!("Running \"{}\" ...", self.full_cmd);
             }
         }
+
         let mut pipe_error = false;
         if let Ok("1") = std::env::var("CMD_LIB_PIPE_FAIL").as_ref().map(|v| v as &str) {
             pipe_error = true;
@@ -205,13 +180,34 @@ impl Cmds {
         Ok(())
     }
 
+    fn run_cd_cmd(&mut self, args: Vec<String>) -> CmdResult {
+        if args.len() == 1 {
+            return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
+        } else if args.len() > 2 {
+            let err_msg = format!("cd: too many arguments: {}", args.join(" "));
+            return Err(Error::new(ErrorKind::Other, err_msg));
+        }
+
+        let dir = &args[1];
+        if !std::path::Path::new(&dir).exists() {
+            let err_msg = format!("cd: {}: No such file or directory", dir);
+            eprintln!("{}", err_msg);
+            return Err(Error::new(ErrorKind::Other, err_msg));
+        }
+
+        self.current_dir = dir.clone();
+        Ok(())
+    }
+
     pub fn run_cmd(&mut self) -> CmdResult {
         // check builtin commands
         let args = self.cmd_args[0].get_args().clone();
         let envs = self.cmd_args[0].get_envs().clone();
         let cmd = &args[0].as_str();
         let is_builtin = CMD_MAP.lock().unwrap().contains_key(cmd);
-        if is_builtin {
+        if cmd == &"cd" {
+            return self.run_cd_cmd(args);
+        } else if is_builtin {
             return to_cmd_result(CMD_MAP.lock().unwrap()[cmd](args, envs));
         }
 
