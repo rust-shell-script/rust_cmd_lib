@@ -138,7 +138,7 @@ Use `std::env::set_current_dir` if you want to change the current
 working directory for the whole program.
 
 ### Register your own commands
-Declare your function with `export_cmd` attribute macro:
+Declare your function with `export_cmd` attribute:
 
 ```rust
 #[export_cmd(my_cmd)]
@@ -158,7 +158,7 @@ See examples in `examples/test_export_cmds.rs`
 
 ## Other Notes
 
-### Access Environment Variables
+### Environment Variables
 
 You can use [std::env::var](https://doc.rust-lang.org/std/env/fn.var.html) to fetch the environment variable
 key from the current process. It will report error if the environment variable is not present, and it also
@@ -191,6 +191,6 @@ converted from bash implementation and other simple examples.
 
 ## Related
 
-See [rust-shell-script](https://github.com/rust-shell-script/rust-shell-script/), which can compile
-rust-shell-script scripting language directly into rust code.
+- [inline-python](https://github.com/fusion-engineering/inline-python)
+- [typed-html](https://github.com/bodil/typed-html)
 
