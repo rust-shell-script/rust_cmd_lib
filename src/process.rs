@@ -34,16 +34,6 @@ pub fn set_debug(enable: bool) {
     env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 
-fn to_cmd_result(res: FunResult) -> CmdResult {
-    match res {
-        Ok(v) => {
-            print!("{}{}", v, if v.is_empty() {""} else {"\n"});
-            Ok(())
-        },
-        Err(e) => Err(e)
-    }
-}
-
 pub struct GroupCmds {
      cmds: Vec<(Cmds, Option<Cmds>)>,  // (cmd, orCmd) pairs
 }
@@ -208,7 +198,7 @@ impl Cmds {
         if cmd == &"cd" {
             return self.run_cd_cmd(args);
         } else if is_builtin {
-            return to_cmd_result(CMD_MAP.lock().unwrap()[cmd](args, envs));
+            return Self::to_cmd_result(CMD_MAP.lock().unwrap()[cmd](args, envs));
         }
 
         self.spawn()?;
@@ -252,7 +242,17 @@ impl Cmds {
         } else {
             Error::new(ErrorKind::Other, "Unknown error")
         }
-   }
+    }
+
+    fn to_cmd_result(res: FunResult) -> CmdResult {
+        match res {
+            Ok(v) => {
+                print!("{}{}", v, if v.is_empty() {""} else {"\n"});
+                Ok(())
+            },
+            Err(e) => Err(e)
+        }
+    }
 }
 
 pub enum FdOrFile {
