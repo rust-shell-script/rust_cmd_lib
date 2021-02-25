@@ -1,29 +1,18 @@
-use proc_macro2::{
-    TokenStream,
-    TokenTree,
-    Ident,
-    Literal,
-    Span,
-    Delimiter,
-};
-use quote::{
-    quote,
-    ToTokens,
-};
+use proc_macro2::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
+use quote::{quote, ToTokens};
 
 #[proc_macro_attribute]
-pub fn export_cmd(attr: proc_macro::TokenStream, item: proc_macro::TokenStream)
-    -> proc_macro::TokenStream
-{
+pub fn export_cmd(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let cmd_name = attr.to_string();
-    let export_cmd_fn = syn::Ident::new(
-        &format!("export_cmd_{}", cmd_name),
-        Span::call_site()
-    );
+    let export_cmd_fn = syn::Ident::new(&format!("export_cmd_{}", cmd_name), Span::call_site());
 
     let input: syn::ItemFn = syn::parse2(item.into()).unwrap();
     let mut output = input.to_token_stream();
     let fn_ident = input.sig.ident;
+
     quote! (
         fn #export_cmd_fn() {
             export_cmd(#cmd_name, #fn_ident);
@@ -34,20 +23,29 @@ pub fn export_cmd(attr: proc_macro::TokenStream, item: proc_macro::TokenStream)
 
 #[proc_macro]
 pub fn use_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmd_name = item.to_string();
-    let export_cmd_fn = syn::Ident::new(
-        &format!("export_cmd_{}", cmd_name),
-        Span::call_site()
-    );
+    let mut cmd_fns = vec![];
+    for t in item {
+        if let proc_macro::TokenTree::Punct(ch) = t {
+            if ch.as_char() != ',' {
+                panic!("only comma is allowed");
+            }
+        } else if let proc_macro::TokenTree::Ident(cmd) = t {
+            let cmd_fn = syn::Ident::new(&format!("export_cmd_{}", cmd), Span::call_site());
+            cmd_fns.push(cmd_fn);
+        } else {
+            panic!("expect a list of comma separated commands");
+        }
+    }
 
     quote! (
-        #export_cmd_fn();
+        #(#cmd_fns();)*
     ).into()
 }
 
 #[proc_macro]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (vars, lits, src) = source_text(input.into());
+
     quote! (
         cmd_lib::parse_cmds_with_ctx(
             #src,
@@ -64,6 +62,7 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (vars, lits, src) = source_text(input.into());
+
     quote! (
         cmd_lib::parse_cmds_with_ctx(
             #src,
@@ -108,7 +107,10 @@ fn source_text(input: TokenStream) -> (Vec<Ident>, Vec<Literal>, String) {
         if source_text.ends_with("$") {
             if let TokenTree::Group(g) = t.clone() {
                 if g.delimiter() != Delimiter::Brace {
-                    panic!("invalid grouping: found {:?}, only Brace is allowed", g.delimiter());
+                    panic!(
+                        "invalid grouping: found {:?}, only Brace is allowed",
+                        g.delimiter()
+                    );
                 }
                 let mut found_var = false;
                 for tt in g.stream() {
@@ -169,7 +171,9 @@ fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
             i += 1;
             let with_brace = i < len && input[i] == '{';
             let mut var = String::new();
-            if with_brace { i += 1; }
+            if with_brace {
+                i += 1;
+            }
             while i < len && (input[i].is_ascii_alphanumeric() || (input[i] == '_')) {
                 if var.is_empty() && input[i].is_ascii_digit() {
                     break;
