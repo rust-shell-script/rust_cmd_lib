@@ -5,10 +5,6 @@ use crate::process::{GroupCmds, Cmds, Cmd, FdOrFile};
 pub struct Parser {
     str_lits: Option<VecDeque<String>>,
     sym_table: Option<HashMap<&'static str, String>>,
-
-    file: &'static str,
-    line: u32,
-
     src: String,
 }
 
@@ -17,8 +13,6 @@ impl Parser {
         Self {
             str_lits: None,
             sym_table: None,
-            file: "",
-            line: 0,
             src: src.into(),
         }
     }
@@ -30,12 +24,6 @@ impl Parser {
 
     pub fn with_sym_table(&mut self, sym_table: HashMap<&'static str, String>) -> &mut Self {
         self.sym_table = Some(sym_table);
-        self
-    }
-
-    pub fn with_location(&mut self, file: &'static str, line: u32) -> &mut Self {
-        self.file = file;
-        self.line = line;
         self
     }
 
@@ -70,10 +58,8 @@ impl Parser {
                 if var.is_empty() {
                     output.push(input[i]);
                 } else {
-                    match self.sym_table.as_ref().unwrap().get(var.as_str()) {
-                        None => panic!("resolve {} failed, {}:{}\n{}", var, self.file, self.line, src),
-                        Some(v) => output += v,
-                    };
+                    let v = self.sym_table.as_ref().unwrap().get(var.as_str()).unwrap();
+                    output += v;
                 }
             } else {
                 output.push(input[i]);
@@ -173,7 +159,7 @@ impl Parser {
                             arg.clear();
                         } else if let Ok(fd) = arg.parse::<i32>() {
                             if fd != 1 && fd != 2 {
-                                panic!("fd redirect only support stdout(1) and stderr(2) {}:{}", self.file, self.line);
+                                panic!("fd redirect only support stdout(1) and stderr(2): {:?}", s);
                             }
                             ret.set_redirect(fd, self.parse_redirect(s, i));
                             arg.clear();
@@ -260,7 +246,7 @@ impl Parser {
         }
 
         if s[*i] == '&' {
-            panic!("syntax error near unexpected token `&' at {}:{}", self.file, self.line);
+            panic!("syntax error near unexpected token `&' at {:?}", s);
         }
 
         if s[*i] == 'r' || s[*i] == 'b' ||
@@ -318,7 +304,7 @@ impl Parser {
             *i += 1;
         }
         if !found_end {
-            panic!("invalid raw string literal at {}:{}", self.file, self.line);
+            panic!("invalid raw string literal at :{:?}", s);
         }
 
         if self.str_lits.is_none() {

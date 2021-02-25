@@ -16,7 +16,6 @@ pub use process::{
     export_cmd,
     set_debug,
 };
-pub use parser::Parser;
 
 pub fn run_cmd<S: Into<String>>(cmds: S) -> CmdResult {
     parser::Parser::new(cmds.into()).parse().run_cmd()

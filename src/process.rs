@@ -78,20 +78,33 @@ impl GroupCmds {
         self
     }
 
+    fn restore_env_vars(vars: env::Vars) {
+        for (key, value) in vars {
+            if key == "PWD" {
+                env::set_current_dir(&value).unwrap();
+            }
+            env::set_var(key, value);
+        }
+    }
+
     pub fn run_cmd(&mut self) -> CmdResult {
+        let vars = env::vars();
         for cmd in self.cmds.iter_mut() {
             if let Err(err) = cmd.0.run_cmd() {
                 if let Some(or_cmds) = &mut cmd.1 {
                     or_cmds.run_cmd()?;
                 } else {
+                    Self::restore_env_vars(vars);
                     return Err(err);
                 }
             }
         }
+        Self::restore_env_vars(vars);
         Ok(())
     }
 
     pub fn run_fun(&mut self) -> FunResult {
+        let vars = env::vars();
         let mut ret = String::new();
         for cmd in self.cmds.iter_mut() {
             let ret0 = cmd.0.run_fun();
@@ -100,12 +113,14 @@ impl GroupCmds {
                     if let Some(or_cmds) = &mut cmd.1 {
                         ret = or_cmds.run_fun()?;
                     } else {
+                        Self::restore_env_vars(vars);
                         return Err(e);
                     }
                 },
                 Ok(r) => ret = r,
             };
         }
+        Self::restore_env_vars(vars);
         Ok(ret)
     }
 }
@@ -212,6 +227,15 @@ impl Cmds {
     pub fn run_fun(&mut self) -> FunResult {
         let last_i = self.pipes.len() - 1;
         self.pipes[last_i].stdout(Stdio::piped());
+
+        // check builtin commands
+        let args = self.cmd_args[0].get_args().clone();
+        let envs = self.cmd_args[0].get_envs().clone();
+        let cmd = &args[0].as_str();
+        let is_builtin = CMD_MAP.lock().unwrap().contains_key(cmd);
+        if is_builtin {
+            return CMD_MAP.lock().unwrap()[cmd](args, envs);
+        }
 
         self.spawn()?;
         let output = self.children.pop().unwrap().wait_with_output()?;
