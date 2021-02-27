@@ -59,7 +59,8 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let args = get_args_from_stream(input.into());
     let mut ret = quote! ( ::cmd_lib::Parser::default() );
     for arg in args {
-        ret.extend(arg);
+        ret.extend(quote!(.arg));
+        ret.extend(Group::new(Delimiter::Parenthesis, arg).to_token_stream());
     }
     ret.extend(quote!(.parse().run_fun()));
     ret.into()
@@ -145,7 +146,7 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                     last_arg_stream.extend(quote!(+ #lit));
                 }
             } else {
-                last_arg_stream.extend(quote!(+ #lit));
+                last_arg_stream.extend(quote!(+ &#lit.to_string()));
             }
         } else {
             if let TokenTree::Punct(p) = t {

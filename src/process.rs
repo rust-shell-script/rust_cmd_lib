@@ -260,6 +260,20 @@ impl Cmd {
         self
     }
 
+    pub fn from_args<I, S>(args: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        Self {
+            args: args.into_iter()
+                .map(|s| s.as_ref().to_owned())
+                .collect(),
+            envs: HashMap::new(),
+            redirects: vec![],
+        }
+    }
+
     pub fn get_args(&mut self) -> &mut Vec<String> {
         &mut self.args
     }

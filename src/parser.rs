@@ -20,7 +20,6 @@ pub struct Parser {
 
 impl Parser {
     pub fn arg(&mut self, arg: ParseArg) -> &mut Self {
-        dbg!(&arg);
         self.args.push(arg);
         self
     }
@@ -43,7 +42,6 @@ impl Parser {
             let mut cmds = Cmds::default();
             while *i < self.args.len() {
                 if self.args[*i] == ParseSemicolon {
-                    dbg!("found semicolor");
                     *i += 1;
                     break;
                 }
