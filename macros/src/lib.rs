@@ -11,23 +11,6 @@ enum ParseArg {
     ParseFile(i32, String, bool),   // fd1, file, append?
     // ParseArgVec(Vec<String>),
 }
-impl ToTokens for ParseArg {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        tokens.extend(quote!(::cmd_lib::ParseArg::));
-        match &self {
-           ParseArg::ParsePipe => tokens.extend(quote!(ParsePipe)),
-           ParseArg::ParseOr => tokens.extend(quote!(ParseOr)),
-           ParseArg::ParseSemicolon => tokens.extend(quote!(ParseSemicolon)),
-           ParseArg::ParseArgStr(s) => tokens.extend(quote!(ParseArgStr(#s.to_owned()))),
-           ParseArg::ParseFd(fd1, fd2, append) => {
-               tokens.extend(quote!(ParseFd(#fd1, #fd2, #append)))
-           },
-           ParseArg::ParseFile(fd1, file, append) => {
-               tokens.extend(quote!(ParseFd(#fd1, #file, #append)))
-           },
-        };
-    }
-}
 
 #[proc_macro_attribute]
 pub fn export_cmd(
@@ -151,7 +134,7 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                     source_text += &var.to_string();
                     sym_table_vars.push(var);
                 } else {
-                    args.push(ParseArg::ParseArgStr(source_text.clone()).to_token_stream());
+                    args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#source_text.to_owned())));
                     source_text = src;
                 }
                 end = _end; continue;
@@ -171,13 +154,13 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
         }
 
         if end != 0 && end < _start {
-            args.push(ParseArg::ParseArgStr(source_text.clone()).to_token_stream());
+            args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#source_text.to_owned())));
             source_text.clear();
         }
         source_text += &src;
         end = _end;
     }
-    args.push(ParseArg::ParseArgStr(source_text.clone()).to_token_stream());
+    args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#source_text.to_owned())));
     args
 }
 
