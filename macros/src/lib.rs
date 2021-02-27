@@ -113,6 +113,7 @@ fn span_location(span: &Span) -> (usize, usize) {
 }
 
 fn source_text(input: TokenStream) -> Vec<ParseArg> {
+    let mut args = vec![];
     let mut source_text = String::new();
     let mut sym_table_vars: Vec<Ident> = vec![];
     let mut str_lits: Vec<Literal> = vec![];
@@ -149,8 +150,8 @@ fn source_text(input: TokenStream) -> Vec<ParseArg> {
                     source_text += &var.to_string();
                     sym_table_vars.push(var);
                 } else {
-                    source_text += " ";
-                    source_text += &src;
+                    args.push(ParseArg::ParseArgStr(source_text.clone()));
+                    source_text = src;
                 }
                 end = _end; continue;
             }
@@ -169,12 +170,14 @@ fn source_text(input: TokenStream) -> Vec<ParseArg> {
         }
 
         if end != 0 && end < _start {
-            source_text += " ";
+            args.push(ParseArg::ParseArgStr(source_text.clone()));
+            source_text.clear();
         }
         source_text += &src;
         end = _end;
     }
-    vec![ParseArg::ParseArgStr("ls".to_owned())]
+    args.push(ParseArg::ParseArgStr(source_text.clone()));
+    args
 }
 
 fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
