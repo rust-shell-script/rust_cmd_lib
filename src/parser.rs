@@ -66,10 +66,13 @@ impl Parser {
         let mut ret = Cmd::default();
         while *i < self.args.len() {
             match self.args[*i].clone() {
-                ParsePipe | ParseSemicolon | ParseOr => break,
                 ParseFd(fd1, fd2, append) => ret.set_redirect(fd1, FdOrFile::Fd(fd2, append)),
                 ParseFile(fd1, file, append) => ret.set_redirect(fd1, FdOrFile::File(file, append)),
                 ParseArgStr(s) => ret.add_arg(s),
+                ParsePipe | ParseSemicolon | ParseOr => {
+                    *i += 1;
+                    break;
+                },
             };
             *i += 1;
         }

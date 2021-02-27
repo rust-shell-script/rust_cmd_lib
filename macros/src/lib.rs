@@ -93,7 +93,9 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
     for t in input {
         let (_start, _end) = span_location(&t.span());
         if end != 0 && end < _start { // new argument with spacing
-            args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
+            if !last_arg_stream.is_empty() {
+                args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
+            }
             last_arg_stream = quote!(String::new());
         }
         end = _end;
@@ -141,14 +143,23 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                 last_arg_stream.extend(quote!(+ #lit));
             }
         } else {
-            last_is_dollar_sign = if let TokenTree::Punct(ch) = t {
-                ch.as_char() == '$'
-            } else {
-                false
-            };
-            if !last_is_dollar_sign {
-                last_arg_stream.extend(quote!(+ #src));
+            if let TokenTree::Punct(p) = t {
+                let ch = p.as_char();
+                if ch == '$' {
+                    last_is_dollar_sign = true;
+                    continue;
+                } else if ch == ';' {
+                    args.push(quote!(::cmd_lib::ParseArg::ParseSemicolon));
+                    last_arg_stream = TokenStream::new();
+                    continue;
+                } else if ch == '|' {
+                    args.push(quote!(::cmd_lib::ParseArg::ParsePipe));
+                    last_arg_stream = TokenStream::new();
+                    continue;
+                }
             }
+
+            last_arg_stream.extend(quote!(+ &#src.to_string()));
         }
     }
     if !last_arg_stream.is_empty() {
