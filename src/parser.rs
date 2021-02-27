@@ -20,6 +20,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn arg(&mut self, arg: ParseArg) -> &mut Self {
+        dbg!(&arg);
         self.args.push(arg);
         self
     }
@@ -42,6 +43,8 @@ impl Parser {
             let mut cmds = Cmds::default();
             while *i < self.args.len() {
                 if self.args[*i] == ParseSemicolon {
+                    dbg!("found semicolor");
+                    *i += 1;
                     break;
                 }
                 let cmd = self.parse_pipe(i);
@@ -49,11 +52,11 @@ impl Parser {
                     cmds.pipe(cmd);
                 }
             }
-            if *i < self.args.len() && self.args[*i] != ParseOr {
-                break;
-            }
             if j == 0 {
                 ret.0 = cmds;
+                if *i < self.args.len() && self.args[*i] != ParseOr {
+                    break;
+                }
             } else {
                 ret.1 = Some(cmds);
             }
@@ -69,10 +72,11 @@ impl Parser {
                 ParseFd(fd1, fd2, append) => ret.set_redirect(fd1, FdOrFile::Fd(fd2, append)),
                 ParseFile(fd1, file, append) => ret.set_redirect(fd1, FdOrFile::File(file, append)),
                 ParseArgStr(s) => ret.add_arg(s),
-                ParsePipe | ParseSemicolon | ParseOr => {
+                ParsePipe => {
                     *i += 1;
                     break;
                 },
+                ParseSemicolon | ParseOr => break,
             };
             *i += 1;
         }

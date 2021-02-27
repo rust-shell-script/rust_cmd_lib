@@ -4,6 +4,6 @@ fn main() -> CmdResult {
     cmd_lib::set_debug(true);
     let dir = "/tmp";
     // run_cmd!(ls -l -a "/tmp");
-    run_cmd!(ls -l | wc)?;
+    run_cmd!(ls -a $dir | wc)?;
     Ok(())
 }
