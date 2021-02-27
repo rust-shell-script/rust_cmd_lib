@@ -44,26 +44,27 @@ pub fn use_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let args = get_args_from_stream(input.into());
-    let mut ret = quote! ( ::cmd_lib::Parser::default() );
-    for arg in args {
-        ret.extend(quote!(.arg));
-        ret.extend(Group::new(Delimiter::Parenthesis, arg).to_token_stream());
-    }
-    ret.extend(quote!(.parse().run_cmd()));
-    ret.into()
+    let mut cmds = parse_cmds_from_stream(input.into());
+    cmds.extend(quote!(.run_cmd()));
+    cmds.into()
 }
 
 #[proc_macro]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let args = get_args_from_stream(input.into());
+    let mut cmds = parse_cmds_from_stream(input.into());
+    cmds.extend(quote!(.run_fun()));
+    cmds.into()
+}
+
+fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
+    let args = get_args_from_stream(input);
     let mut ret = quote! ( ::cmd_lib::Parser::default() );
     for arg in args {
         ret.extend(quote!(.arg));
         ret.extend(Group::new(Delimiter::Parenthesis, arg).to_token_stream());
     }
-    ret.extend(quote!(.parse().run_fun()));
-    ret.into()
+    ret.extend(quote!(.parse()));
+    ret
 }
 
 fn span_location(span: &Span) -> (usize, usize) {
