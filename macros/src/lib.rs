@@ -88,15 +88,21 @@ fn span_location(span: &Span) -> (usize, usize) {
 fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
     let mut args = vec![];
     let mut last_arg_stream = quote!(String::new());
-    let mut last_dollar_sign = false;
+    let mut last_is_dollar_sign = false;
     let mut source_text = String::new();
-    let mut sym_table_vars: Vec<Ident> = vec![];
     let mut end = 0;
     for t in input {
         let (_start, _end) = span_location(&t.span());
-        let mut src = t.to_string();
-        if last_dollar_sign {
-            last_dollar_sign = false;
+        if end != 0 && end < _start { // new argument with spacing
+            source_text += " ";
+            args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
+            last_arg_stream = quote!(String::new());
+        }
+        end = _end;
+
+        let src = t.to_string();
+        if last_is_dollar_sign {
+            last_is_dollar_sign = false;
             if let TokenTree::Group(g) = t.clone() {
                 if g.delimiter() != Delimiter::Brace {
                     panic!(
@@ -113,25 +119,17 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                         source_text += "{";
                         source_text += &var.to_string();
                         source_text += "}";
-                        sym_table_vars.push(var);
+                        last_arg_stream.extend(quote!(+ &#var.to_string()));
                         found_var = true;
                     } else {
                         panic!("invalid grouping: extra tokens");
                     }
                 }
-                end = _end; continue;
+                continue;
             } else if let TokenTree::Ident(var) = t {
-                dbg!(&source_text);
+                source_text += &var.to_string();
                 last_arg_stream.extend(quote!(+ &#var.to_string()));
-                if _start == end {
-                    source_text += &var.to_string();
-                } else {
-                    source_text += " ";
-                    args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
-                    last_arg_stream = quote!(String::new());
-                    source_text += &src;
-                }
-                end = _end; continue;
+                continue;
             }
         }
 
@@ -141,35 +139,24 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
             let s = lit.to_string();
             if s.starts_with("\"") || s.starts_with("r") {
                 if s.starts_with("\"") {
-                    parse_vars(&s, &mut sym_table_vars);
+                    parse_vars(&s[1..s.len()-1], &mut last_arg_stream);
+                } else {
+                    last_arg_stream.extend(quote!(+ #lit));
                 }
-            }
-            if end != 0 && end < _start {
-                source_text += " ";
-                args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
-                source_text += &s;
-                last_arg_stream = quote!(String::from(#lit));
             } else {
-                source_text += &s;
                 last_arg_stream.extend(quote!(+ #lit));
             }
         } else {
-            last_dollar_sign = if let TokenTree::Punct(ch) = t {
+            last_is_dollar_sign = if let TokenTree::Punct(ch) = t {
                 ch.as_char() == '$'
             } else {
                 false
             };
-            if end != 0 && end < _start {
-                source_text += " ";
-                args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
-                last_arg_stream = quote!(String::new());
-            }
-            source_text += &src;
-            if !last_dollar_sign {
+            if !last_is_dollar_sign {
                 last_arg_stream.extend(quote!(+ #src));
             }
         }
-        end = _end;
+        source_text += &src;
     }
     if !last_arg_stream.is_empty() {
         args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
@@ -178,7 +165,7 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
     args
 }
 
-fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
+fn parse_vars(src: &str, last_arg_stream: &mut TokenStream) {
     let input: Vec<char> = src.chars().collect();
     let len = input.len();
 
@@ -206,8 +193,14 @@ fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
                 i -= 1; // back off 1 char
             }
             if !var.is_empty() {
-                sym_table_vars.push(syn::parse_str::<Ident>(&var).unwrap());
+                let var = syn::parse_str::<Ident>(&var).unwrap();
+                last_arg_stream.extend(quote!(+ &#var.to_string()));
+            } else {
+                last_arg_stream.extend(quote!(+ &'$'.to_string()));
             }
+        } else {
+            let ch = input[i];
+            last_arg_stream.extend(quote!(+ &#ch.to_string()));
         }
         i += 1;
     }
