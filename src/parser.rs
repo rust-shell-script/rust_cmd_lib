@@ -20,13 +20,11 @@ pub struct Parser {
 
 impl Parser {
     pub fn arg(&mut self, arg: ParseArg) -> &mut Self {
-        dbg!(&arg);
         self.args.push(arg);
         self
     }
 
     pub fn parse(&mut self) -> GroupCmds {
-        dbg!(&self.args);
         let mut ret = GroupCmds::default();
         let mut i = 0;
         while i < self.args.len() {

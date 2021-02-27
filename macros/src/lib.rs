@@ -1,4 +1,4 @@
-use proc_macro2::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree, Group};
+use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree, Group};
 use quote::{quote, ToTokens};
 
 #[proc_macro_attribute]
@@ -89,12 +89,10 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
     let mut args = vec![];
     let mut last_arg_stream = quote!(String::new());
     let mut last_is_dollar_sign = false;
-    let mut source_text = String::new();
     let mut end = 0;
     for t in input {
         let (_start, _end) = span_location(&t.span());
         if end != 0 && end < _start { // new argument with spacing
-            source_text += " ";
             args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
             last_arg_stream = quote!(String::new());
         }
@@ -116,9 +114,6 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                         if found_var {
                             panic!("more than one variable in grouping");
                         }
-                        source_text += "{";
-                        source_text += &var.to_string();
-                        source_text += "}";
                         last_arg_stream.extend(quote!(+ &#var.to_string()));
                         found_var = true;
                     } else {
@@ -127,7 +122,6 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                 }
                 continue;
             } else if let TokenTree::Ident(var) = t {
-                source_text += &var.to_string();
                 last_arg_stream.extend(quote!(+ &#var.to_string()));
                 continue;
             }
@@ -156,12 +150,10 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                 last_arg_stream.extend(quote!(+ #src));
             }
         }
-        source_text += &src;
     }
     if !last_arg_stream.is_empty() {
         args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
     }
-    dbg!(source_text);
     args
 }
 
