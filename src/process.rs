@@ -260,15 +260,6 @@ pub enum FdOrFile {
     File(String, bool),     // file, append?
     OpenedFile(File, bool), // opened file, append?
 }
-impl FdOrFile {
-    pub fn is_orig_stdout(&self) -> bool {
-        if let FdOrFile::Fd(1, _) = self {
-            true
-        } else {
-            false
-        }
-    }
-}
 
 pub struct Cmd {
     args: Vec<String>,

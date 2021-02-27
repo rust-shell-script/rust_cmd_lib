@@ -76,17 +76,6 @@ impl Parser {
         let len = s.len();
         let mut i = 0;
 
-        // skip leading spaces
-        while i < len  && char::is_whitespace(s[i]) { i += 1; }
-        if i == len { return ret; }
-
-        // skip variables declaration part
-        if i < len && s[i] == '|' {
-            i += 1;
-            while i < len && s[i] != '|' { i += 1; }
-            i += 1;
-        }
-
         // real commands parsing starts
         while i < len {
             while i < len && char::is_whitespace(s[i]) { i += 1; }
