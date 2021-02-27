@@ -1,4 +1,4 @@
-use proc_macro2::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree, Group};
 use quote::{quote, ToTokens};
 
 #[derive(PartialEq, Clone)]
@@ -72,24 +72,25 @@ pub fn use_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let args = source_text(input.into());
-    quote! (
-        ::cmd_lib::Parser::default()
-            #(.arg(#args))*
-            .parse()
-            .run_cmd()
-    ).into()
+    let args = get_args_from_stream(input.into());
+    let mut ret = quote! ( ::cmd_lib::Parser::default() );
+    for arg in args {
+        ret.extend(quote!(.arg));
+        ret.extend(Group::new(Delimiter::Parenthesis, arg).to_token_stream());
+    }
+    ret.extend(quote!(.parse().run_cmd()));
+    ret.into()
 }
 
 #[proc_macro]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let args = source_text(input.into());
-    quote! (
-        ::cmd_lib::Parser::default()
-            #(.arg(#args))*
-            .parse()
-            .run_fun()
-    ).into()
+    let args = get_args_from_stream(input.into());
+    let mut ret = quote! ( ::cmd_lib::Parser::default() );
+    for arg in args {
+        ret.extend(arg);
+    }
+    ret.extend(quote!(.parse().run_fun()));
+    ret.into()
 }
 
 fn span_location(span: &Span) -> (usize, usize) {
@@ -112,7 +113,7 @@ fn span_location(span: &Span) -> (usize, usize) {
     (start, end)
 }
 
-fn source_text(input: TokenStream) -> Vec<ParseArg> {
+fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
     let mut args = vec![];
     let mut source_text = String::new();
     let mut sym_table_vars: Vec<Ident> = vec![];
@@ -150,7 +151,7 @@ fn source_text(input: TokenStream) -> Vec<ParseArg> {
                     source_text += &var.to_string();
                     sym_table_vars.push(var);
                 } else {
-                    args.push(ParseArg::ParseArgStr(source_text.clone()));
+                    args.push(ParseArg::ParseArgStr(source_text.clone()).to_token_stream());
                     source_text = src;
                 }
                 end = _end; continue;
@@ -170,13 +171,13 @@ fn source_text(input: TokenStream) -> Vec<ParseArg> {
         }
 
         if end != 0 && end < _start {
-            args.push(ParseArg::ParseArgStr(source_text.clone()));
+            args.push(ParseArg::ParseArgStr(source_text.clone()).to_token_stream());
             source_text.clear();
         }
         source_text += &src;
         end = _end;
     }
-    args.push(ParseArg::ParseArgStr(source_text.clone()));
+    args.push(ParseArg::ParseArgStr(source_text.clone()).to_token_stream());
     args
 }
 
