@@ -34,17 +34,12 @@ pub fn set_debug(enable: bool) {
     env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 
+#[derive(Default)]
 pub struct GroupCmds {
      cmds: Vec<(Cmds, Option<Cmds>)>,  // (cmd, orCmd) pairs
 }
 
 impl GroupCmds {
-    pub fn new() -> Self {
-        Self {
-            cmds: vec![],
-        }
-    }
-
     pub fn add(&mut self, cmds: Cmds, or_cmds: Option<Cmds>) -> &mut Self {
         self.cmds.push((cmds, or_cmds));
         self
@@ -82,6 +77,7 @@ impl GroupCmds {
     }
 }
 
+#[derive(Default)]
 pub struct Cmds {
     pipes: Vec<Command>,
     children: Vec<Child>,
@@ -93,16 +89,6 @@ pub struct Cmds {
 }
 
 impl Cmds {
-    pub fn new() -> Self {
-        Self {
-            pipes: vec![],
-            children: vec![],
-            cmd_args: vec![],
-            full_cmd: String::new(),
-            current_dir: String::new(),
-        }
-    }
-
     pub fn from_cmd(mut cmd: Cmd) -> Self {
         let cmd_args: Vec<String> = cmd.get_args().to_vec();
          Self {
@@ -261,6 +247,7 @@ pub enum FdOrFile {
     OpenedFile(File, bool), // opened file, append?
 }
 
+#[derive(Default)]
 pub struct Cmd {
     args: Vec<String>,
     envs: HashMap<String, String>,
@@ -268,28 +255,6 @@ pub struct Cmd {
 }
 
 impl Cmd {
-    pub fn new() -> Self {
-        Self {
-            args: vec![],
-            envs: HashMap::new(),
-            redirects: vec![],
-        }
-    }
-
-    pub fn from_args<I, S>(args: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
-        Self {
-            args: args.into_iter()
-                .map(|s| s.as_ref().to_owned())
-                .collect(),
-            envs: HashMap::new(),
-            redirects: vec![],
-        }
-    }
-
     pub fn add_arg(&mut self, arg: String) -> &mut Self {
         self.args.push(arg);
         self

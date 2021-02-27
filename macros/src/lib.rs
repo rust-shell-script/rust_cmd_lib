@@ -1,6 +1,34 @@
 use proc_macro2::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
 
+#[derive(PartialEq, Clone)]
+enum ParseArg {
+    ParsePipe,
+    ParseOr,
+    ParseSemicolon,
+    ParseArgStr(String),
+    ParseFd(i32, i32, bool),        // fd1, fd2, append?
+    ParseFile(i32, String, bool),   // fd1, file, append?
+    // ParseArgVec(Vec<String>),
+}
+impl ToTokens for ParseArg {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(quote!(::cmd_lib::ParseArg::));
+        match &self {
+           ParseArg::ParsePipe => tokens.extend(quote!(ParsePipe)),
+           ParseArg::ParseOr => tokens.extend(quote!(ParseOr)),
+           ParseArg::ParseSemicolon => tokens.extend(quote!(ParseSemicolon)),
+           ParseArg::ParseArgStr(s) => tokens.extend(quote!(ParseArgStr(#s.to_owned()))),
+           ParseArg::ParseFd(fd1, fd2, append) => {
+               tokens.extend(quote!(ParseFd(#fd1, #fd2, #append)))
+           },
+           ParseArg::ParseFile(fd1, file, append) => {
+               tokens.extend(quote!(ParseFd(#fd1, #file, #append)))
+           },
+        };
+    }
+}
+
 #[proc_macro_attribute]
 pub fn export_cmd(
     attr: proc_macro::TokenStream,
@@ -44,35 +72,23 @@ pub fn use_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (vars, lits, src) = source_text(input.into());
-
+    let args = source_text(input.into());
     quote! (
-        cmd_lib::parse_cmds_with_ctx(
-            #src,
-            |sym_table| {
-                #(sym_table.insert(stringify!(#vars), #vars.to_string());)*
-            },
-            |str_lits| {
-                #(str_lits.push_back(#lits.to_string());)*
-            }
-        ).run_cmd()
+        ::cmd_lib::Parser::default()
+            #(.arg(#args))*
+            .parse()
+            .run_cmd()
     ).into()
 }
 
 #[proc_macro]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (vars, lits, src) = source_text(input.into());
-
+    let args = source_text(input.into());
     quote! (
-        cmd_lib::parse_cmds_with_ctx(
-            #src,
-            |sym_table| {
-                #(sym_table.insert(stringify!(#vars), #vars.to_string());)*
-            },
-            |str_lits| {
-                #(str_lits.push_back(#lits.to_string());)*
-            }
-        ).run_fun()
+        ::cmd_lib::Parser::default()
+            #(.arg(#args))*
+            .parse()
+            .run_fun()
     ).into()
 }
 
@@ -96,7 +112,7 @@ fn span_location(span: &Span) -> (usize, usize) {
     (start, end)
 }
 
-fn source_text(input: TokenStream) -> (Vec<Ident>, Vec<Literal>, String) {
+fn source_text(input: TokenStream) -> Vec<ParseArg> {
     let mut source_text = String::new();
     let mut sym_table_vars: Vec<Ident> = vec![];
     let mut str_lits: Vec<Literal> = vec![];
@@ -158,7 +174,7 @@ fn source_text(input: TokenStream) -> (Vec<Ident>, Vec<Literal>, String) {
         source_text += &src;
         end = _end;
     }
-    (sym_table_vars, str_lits, source_text)
+    vec![ParseArg::ParseArgStr("ls".to_owned())]
 }
 
 fn parse_vars(src: &str, sym_table_vars: &mut Vec<Ident>) {
