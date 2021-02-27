@@ -88,49 +88,52 @@ fn span_location(span: &Span) -> (usize, usize) {
 fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
     let mut args = vec![];
     let mut last_arg_stream = quote!(String::new());
+    let mut last_dollar_sign = false;
     let mut source_text = String::new();
     let mut sym_table_vars: Vec<Ident> = vec![];
     let mut end = 0;
     for t in input {
         let (_start, _end) = span_location(&t.span());
         let mut src = t.to_string();
-        // if source_text.ends_with("$") {
-        //     if let TokenTree::Group(g) = t.clone() {
-        //         if g.delimiter() != Delimiter::Brace {
-        //             panic!(
-        //                 "invalid grouping: found {:?}, only Brace is allowed",
-        //                 g.delimiter()
-        //             );
-        //         }
-        //         let mut found_var = false;
-        //         for tt in g.stream() {
-        //             if let TokenTree::Ident(var) = tt {
-        //                 if found_var {
-        //                     panic!("more than one variable in grouping");
-        //                 }
-        //                 source_text += "{";
-        //                 source_text += &var.to_string();
-        //                 source_text += "}";
-        //                 sym_table_vars.push(var);
-        //                 found_var = true;
-        //             } else {
-        //                 panic!("invalid grouping: extra tokens");
-        //             }
-        //         }
-        //         end = _end; continue;
-        //     } else if let TokenTree::Ident(var) = t {
-        //         if _start == end {
-        //             source_text += &var.to_string();
-        //             sym_table_vars.push(var);
-        //         } else {
-        //             args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#src.to_owned())));
-        //             source_text += " ";
-        //             args.push(TokenStream::new());
-        //             source_text += &src;
-        //         }
-        //         end = _end; continue;
-        //     }
-        // }
+        if last_dollar_sign {
+            last_dollar_sign = false;
+            if let TokenTree::Group(g) = t.clone() {
+                if g.delimiter() != Delimiter::Brace {
+                    panic!(
+                        "invalid grouping: found {:?}, only Brace is allowed",
+                        g.delimiter()
+                    );
+                }
+                let mut found_var = false;
+                for tt in g.stream() {
+                    if let TokenTree::Ident(var) = tt {
+                        if found_var {
+                            panic!("more than one variable in grouping");
+                        }
+                        source_text += "{";
+                        source_text += &var.to_string();
+                        source_text += "}";
+                        sym_table_vars.push(var);
+                        found_var = true;
+                    } else {
+                        panic!("invalid grouping: extra tokens");
+                    }
+                }
+                end = _end; continue;
+            } else if let TokenTree::Ident(var) = t {
+                dbg!(&source_text);
+                last_arg_stream.extend(quote!(+ &#var.to_string()));
+                if _start == end {
+                    source_text += &var.to_string();
+                } else {
+                    source_text += " ";
+                    args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
+                    last_arg_stream = quote!(String::new());
+                    source_text += &src;
+                }
+                end = _end; continue;
+            }
+        }
 
         if let TokenTree::Group(_) = t {
             panic!("grouping is only allowed for variable");
@@ -151,13 +154,20 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                 last_arg_stream.extend(quote!(+ #lit));
             }
         } else {
+            last_dollar_sign = if let TokenTree::Punct(ch) = t {
+                ch.as_char() == '$'
+            } else {
+                false
+            };
             if end != 0 && end < _start {
                 source_text += " ";
                 args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
                 last_arg_stream = quote!(String::new());
             }
-                source_text += &src;
+            source_text += &src;
+            if !last_dollar_sign {
                 last_arg_stream.extend(quote!(+ #src));
+            }
         }
         end = _end;
     }
