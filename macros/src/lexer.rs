@@ -3,14 +3,10 @@ use quote::{quote, ToTokens};
 
 pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
     let args = Lexer::from(input).scan();
-    let mut ret = quote! ( ::cmd_lib::Parser::default() );
-
-    for arg in args {
-        ret.extend(quote!(.arg));
-        ret.extend(Group::new(Delimiter::Parenthesis, arg).to_token_stream());
-    }
-    ret.extend(quote!(.parse()));
-    ret
+    quote!(::cmd_lib::Parser::default()
+        #(.arg(#args))*
+        .parse()
+    ).into()
 }
 
 enum SepToken {
