@@ -137,7 +137,7 @@ exits the scope.
 Use `std::env::set_current_dir` if you want to change the current
 working directory for the whole program.
 
-### Register your own commands
+### Macros to register your own commands
 Declare your function with `export_cmd` attribute:
 
 ```rust
@@ -163,6 +163,12 @@ See examples in `examples/test_export_cmds.rs`
 You can use [std::env::var](https://doc.rust-lang.org/std/env/fn.var.html) to fetch the environment variable
 key from the current process. It will report error if the environment variable is not present, and it also
 includes other checks to avoid silent failures.
+
+To set environment variables for the command only, you can put the assignments before the command.
+Like this:
+```
+run_cmd!(FOO=100 /tmp/test_run_cmd_lib.sh)?;
+```
 
 ### Security Notes
 Using macros can actually avoid command injection, since we do parsing before variable substitution.
