@@ -1,12 +1,14 @@
-use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree, Group};
-use quote::{quote, ToTokens};
+use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
+use quote::quote;
 
 pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
     let args = Lexer::from(input).scan();
-    quote!(::cmd_lib::Parser::default()
+    quote! (
+        ::cmd_lib::Parser::default()
         #(.arg(#args))*
         .parse()
-    ).into()
+    )
+    .into()
 }
 
 enum SepToken {
@@ -29,6 +31,7 @@ pub struct Lexer {
 
     last_token: MarkerToken,
     last_arg_str: TokenStream,
+    last_redirect: Option<(i32, bool)>,
 }
 
 impl Lexer {
@@ -38,12 +41,8 @@ impl Lexer {
             args: vec![],
             last_token: MarkerToken::None,
             last_arg_str: TokenStream::new(),
+            last_redirect: None,
         }
-    }
-
-    fn reset(&mut self) {
-        self.last_token = MarkerToken::None;
-        self.last_arg_str = TokenStream::new();
     }
 
     fn last_is_pipe(&self) -> bool {
@@ -58,25 +57,54 @@ impl Lexer {
         self.last_token = value;
     }
 
+    fn reset_last_token(&mut self) {
+        self.last_arg_str = TokenStream::new();
+        self.last_token = MarkerToken::None;
+    }
+
+    fn set_redirect(&mut self, fd: i32) {
+        if let Some((_, append)) = self.last_redirect {
+            if append {
+                panic!("wrong redirect format: more than append");
+            }
+            if fd == 0 {
+                panic!("wrong input redirect format");
+            }
+            self.last_redirect = Some((fd, true));
+        } else {
+            self.last_redirect = Some((fd, false));
+        }
+    }
+
     fn last_arg_str_empty(&self) -> bool {
         self.last_arg_str.is_empty()
     }
 
     fn add_arg_with_token(&mut self, token: SepToken) {
-        if !self.last_arg_str_empty() {
-            let mut last_arg = quote!(::cmd_lib::ParseArg::ParseArgStr);
-            last_arg.extend(Group::new(Delimiter::Parenthesis, self.last_arg_str.clone()).to_token_stream());            self.args.push(last_arg);
+        if let Some((fd, append)) = self.last_redirect {
+            let last_arg_str = self.last_arg_str.clone();
+            let last_arg = quote! (
+                ::cmd_lib::ParseArg::ParseRedirectFile(#fd, #last_arg_str, #append)
+            );
+            self.args.push(last_arg);
+            self.last_redirect = None;
+        } else {
+            if !self.last_arg_str_empty() {
+                let last_arg_str = self.last_arg_str.clone();
+                let last_arg = quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_str));
+                self.args.push(last_arg);
+            }
         }
         match token {
-            SepToken::Space => {},
+            SepToken::Space => {}
             SepToken::SemiColon => self.args.push(quote!(::cmd_lib::ParseArg::ParseSemicolon)),
             SepToken::Or => {
                 self.args.pop();
                 self.args.push(quote!(::cmd_lib::ParseArg::ParseOr));
-            },
+            }
             SepToken::Pipe => self.args.push(quote!(::cmd_lib::ParseArg::ParsePipe)),
         }
-        self.reset();
+        self.reset_last_token();
     }
 
     fn extend_last_arg(&mut self, stream: TokenStream) {
@@ -92,8 +120,11 @@ impl Lexer {
         let mut end = 0;
         for t in self.input.clone() {
             let (_start, _end) = Self::span_location(&t.span());
-            if end != 0 && end < _start { // new argument with spacing
-                self.add_arg_with_token(SepToken::Space);
+            if end != 0 && end < _start {
+                // new argument with spacing
+                if !self.last_arg_str_empty() {
+                    self.add_arg_with_token(SepToken::Space); 
+                }
             }
             end = _end;
 
@@ -122,7 +153,7 @@ impl Lexer {
                                     ::cmd_lib::ParseArg::ParseArgVec(
                                         #var.iter().map(|s| s.to_string()).collect::<Vec<String>>()))
                                 );
-                                self.reset();
+                                self.reset_last_token();
                             }
                             found_var = true;
                         } else {
@@ -142,7 +173,7 @@ impl Lexer {
                 let s = lit.to_string();
                 if s.starts_with("\"") || s.starts_with("r") {
                     if s.starts_with("\"") {
-                        self.parse_vars(&s[1..s.len()-1]);
+                        self.parse_vars(&s[1..s.len() - 1]);
                     } else {
                         self.extend_last_arg(quote!(#lit));
                     }
@@ -166,6 +197,12 @@ impl Lexer {
                             self.add_arg_with_token(SepToken::Pipe);
                             self.set_last_token(MarkerToken::Pipe);
                         }
+                        continue;
+                    } else if ch == '>' {
+                        self.set_redirect(1);
+                        continue;
+                    } else if ch == '<' {
+                        self.set_redirect(0);
                         continue;
                     }
                 }
