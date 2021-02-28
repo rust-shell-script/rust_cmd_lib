@@ -13,6 +13,13 @@ pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
     ret
 }
 
+enum SepToken {
+    Space,
+    SemiColon,
+    Or,
+    Pipe,
+}
+
 #[derive(Default)]
 pub struct Lexer {
     input: TokenStream,
@@ -44,21 +51,20 @@ impl Lexer {
         self.last_arg_stream.is_empty()
     }
 
-    fn add_arg_with_token(&mut self, token: char) {
+    fn add_arg_with_token(&mut self, token: SepToken) {
         if !self.last_arg_empty() {
             let mut last_arg = quote!(::cmd_lib::ParseArg::ParseArgStr);
             last_arg.extend(Group::new(Delimiter::Parenthesis, self.last_arg_stream.clone()).to_token_stream());
             self.args.push(last_arg);
         }
         match token {
-            ' ' => {},
-            ';' => self.args.push(quote!(::cmd_lib::ParseArg::ParseSemicolon)),
-            'O' => {
+            SepToken::Space => {},
+            SepToken::SemiColon => self.args.push(quote!(::cmd_lib::ParseArg::ParseSemicolon)),
+            SepToken::Or => {
                 self.args.pop();
                 self.args.push(quote!(::cmd_lib::ParseArg::ParseOr));
             },
-            '|' => self.args.push(quote!(::cmd_lib::ParseArg::ParsePipe)),
-            _ => todo!()
+            SepToken::Pipe => self.args.push(quote!(::cmd_lib::ParseArg::ParsePipe)),
         }
         self.reset();
     }
@@ -76,7 +82,7 @@ impl Lexer {
         for t in self.input.clone() {
             let (_start, _end) = Self::span_location(&t.span());
             if end != 0 && end < _start { // new argument with spacing
-                self.add_arg_with_token(' ');
+                self.add_arg_with_token(SepToken::Space);
             }
             end = _end;
 
@@ -139,14 +145,14 @@ impl Lexer {
                         self.last_is_pipe = false;
                         continue;
                     } else if ch == ';' {
-                        self.add_arg_with_token(';');
+                        self.add_arg_with_token(SepToken::SemiColon);
                         continue;
                     } else if ch == '|' {
                         if self.last_is_pipe {
-                            self.add_arg_with_token('O');
+                            self.add_arg_with_token(SepToken::Or);
                             self.last_is_pipe = false;
                         } else {
-                            self.add_arg_with_token('|');
+                            self.add_arg_with_token(SepToken::Pipe);
                             self.last_is_pipe = true;
                         }
                         continue;
@@ -157,7 +163,7 @@ impl Lexer {
                 self.last_is_pipe = false;
             }
         }
-        self.add_arg_with_token(' ');
+        self.add_arg_with_token(SepToken::Space);
         self.args
     }
 
