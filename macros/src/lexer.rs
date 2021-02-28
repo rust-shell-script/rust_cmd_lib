@@ -130,7 +130,7 @@ impl Lexer {
                 let s = lit.to_string();
                 if s.starts_with("\"") || s.starts_with("r") {
                     if s.starts_with("\"") {
-                        Self::parse_vars(&s[1..s.len()-1], &mut self.last_arg_stream);
+                        self.parse_vars(&s[1..s.len()-1]);
                     } else {
                         self.extend_last_arg(quote!(#lit));
                     }
@@ -188,7 +188,7 @@ impl Lexer {
         (start, end)
     }
 
-    fn parse_vars(src: &str, last_arg_stream: &mut TokenStream) {
+    fn parse_vars(&mut self, src: &str) {
         let input: Vec<char> = src.chars().collect();
         let len = input.len();
 
@@ -217,13 +217,13 @@ impl Lexer {
                 }
                 if !var.is_empty() {
                     let var = syn::parse_str::<Ident>(&var).unwrap();
-                    last_arg_stream.extend(quote!(+ &#var.to_string()));
+                    self.extend_last_arg(quote!(&#var.to_string()));
                 } else {
-                    last_arg_stream.extend(quote!(+ &'$'.to_string()));
+                    self.extend_last_arg(quote!(&'$'.to_string()));
                 }
             } else {
                 let ch = input[i];
-                last_arg_stream.extend(quote!(+ &#ch.to_string()));
+                self.extend_last_arg(quote!(&#ch.to_string()));
             }
             i += 1;
         }
