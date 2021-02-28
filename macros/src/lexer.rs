@@ -20,13 +20,18 @@ enum SepToken {
     Pipe,
 }
 
-#[derive(Default)]
+#[derive(PartialEq)]
+enum MarkerToken {
+    Pipe,
+    DollarSign,
+    None,
+}
+
 pub struct Lexer {
     input: TokenStream,
     args: Vec<TokenStream>,
 
-    last_is_dollar_sign: bool,
-    last_is_pipe: bool,
+    last_token: MarkerToken,
     last_arg_str: TokenStream,
 }
 
@@ -35,26 +40,26 @@ impl Lexer {
         Self {
             input,
             args: vec![],
-            last_is_dollar_sign: false,
-            last_is_pipe: false,
+            last_token: MarkerToken::None,
             last_arg_str: TokenStream::new(),
         }
     }
 
     fn reset(&mut self) {
-        self.last_is_dollar_sign = false;
-        self.last_is_pipe = false;
+        self.last_token = MarkerToken::None;
         self.last_arg_str = TokenStream::new();
     }
 
-    fn set_last_dollar_sign(&mut self, value: bool) {
-        self.last_is_dollar_sign = value;
-        self.last_is_pipe = false;
+    fn last_is_pipe(&self) -> bool {
+        self.last_token == MarkerToken::Pipe
     }
 
-    fn set_last_pipe(&mut self, value: bool) {
-        self.last_is_pipe = value;
-        self.last_is_dollar_sign = false;
+    fn last_is_dollar_sign(&self) -> bool {
+        self.last_token == MarkerToken::DollarSign
+    }
+
+    fn set_last_token(&mut self, value: MarkerToken) {
+        self.last_token = value;
     }
 
     fn last_arg_str_empty(&self) -> bool {
@@ -64,8 +69,7 @@ impl Lexer {
     fn add_arg_with_token(&mut self, token: SepToken) {
         if !self.last_arg_str_empty() {
             let mut last_arg = quote!(::cmd_lib::ParseArg::ParseArgStr);
-            last_arg.extend(Group::new(Delimiter::Parenthesis, self.last_arg_str.clone()).to_token_stream());
-            self.args.push(last_arg);
+            last_arg.extend(Group::new(Delimiter::Parenthesis, self.last_arg_str.clone()).to_token_stream());            self.args.push(last_arg);
         }
         match token {
             SepToken::Space => {},
@@ -85,8 +89,7 @@ impl Lexer {
         }
         self.last_arg_str.extend(quote!(+));
         self.last_arg_str.extend(stream);
-        self.last_is_dollar_sign = false;
-        self.last_is_pipe = false;
+        self.last_token = MarkerToken::None;
     }
 
     fn scan(mut self) -> Vec<TokenStream> {
@@ -99,7 +102,7 @@ impl Lexer {
             end = _end;
 
             let src = t.to_string();
-            if self.last_is_dollar_sign {
+            if self.last_is_dollar_sign() {
                 if let TokenTree::Group(g) = t.clone() {
                     if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
                         panic!(
@@ -154,18 +157,19 @@ impl Lexer {
                 if let TokenTree::Punct(p) = t {
                     let ch = p.as_char();
                     if ch == '$' {
-                        self.set_last_dollar_sign(true);
+                        self.set_last_token(MarkerToken::DollarSign);
                         continue;
                     } else if ch == ';' {
                         self.add_arg_with_token(SepToken::SemiColon);
                         continue;
                     } else if ch == '|' {
-                        if self.last_is_pipe {
+                        if self.last_is_pipe() {
                             self.add_arg_with_token(SepToken::Or);
+                            self.set_last_token(MarkerToken::None);
                         } else {
                             self.add_arg_with_token(SepToken::Pipe);
+                            self.set_last_token(MarkerToken::Pipe);
                         }
-                        self.set_last_pipe(!self.last_is_pipe);
                         continue;
                     }
                 }
