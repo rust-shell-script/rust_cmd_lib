@@ -113,6 +113,9 @@ impl Cmds {
 
         let cmd_args: Vec<String> = cmd.get_args().to_vec();
         let mut pipe_cmd = cmd.gen_command();
+        for (k, v) in cmd.get_envs() {
+            pipe_cmd.env(k, v);
+        }
         if !self.current_dir.is_empty() {
             pipe_cmd.current_dir(self.current_dir.clone());
         }
@@ -257,6 +260,13 @@ pub struct Cmd {
 
 impl Cmd {
     pub fn add_arg(&mut self, arg: String) -> &mut Self {
+        if self.is_empty() {
+            let v: Vec<&str> = arg.split('=').collect();
+            if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                self.envs.insert(v[0].to_owned(), v[1].to_owned());
+                return self;
+            }
+        }
         self.args.push(arg);
         self
     }
