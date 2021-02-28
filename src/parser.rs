@@ -1,6 +1,7 @@
 use crate::process::{GroupCmds, Cmds, Cmd, FdOrFile};
 use ParseArg::*;
 
+#[doc(hidden)]
 #[derive(PartialEq, Clone, Debug)]
 pub enum ParseArg {
     ParsePipe,
