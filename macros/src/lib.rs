@@ -92,6 +92,7 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
     let mut last_arg_stream = quote!(String::new());
     let mut last_arg_empty = true;
     let mut last_is_dollar_sign = false;
+    let mut last_is_pipe = false;
     let mut end = 0;
     for t in input {
         let (_start, _end) = span_location(&t.span());
@@ -154,6 +155,7 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                 let ch = p.as_char();
                 if ch == '$' {
                     last_is_dollar_sign = true;
+                    last_is_pipe = false;
                     continue;
                 } else if ch == ';' {
                     if !last_arg_empty {
@@ -161,12 +163,20 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                     }
                     args.push(quote!(::cmd_lib::ParseArg::ParseSemicolon));
                     last_arg_empty = true;
+                    last_is_pipe = false;
                     continue;
                 } else if ch == '|' {
                     if !last_arg_empty {
                         args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
                     }
-                    args.push(quote!(::cmd_lib::ParseArg::ParsePipe));
+                    if last_is_pipe {
+                        args.pop();
+                        args.push(quote!(::cmd_lib::ParseArg::ParseOr));
+                        last_is_pipe = false;
+                    } else {
+                        args.push(quote!(::cmd_lib::ParseArg::ParsePipe));
+                        last_is_pipe = true;
+                    }
                     last_arg_empty = true;
                     continue;
                 }
@@ -174,6 +184,7 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
 
             last_arg_stream.extend(quote!(+ &#src.to_string()));
             last_arg_empty = false;
+            last_is_pipe = false;
         }
     }
     if !last_arg_empty {

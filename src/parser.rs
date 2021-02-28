@@ -41,18 +41,19 @@ impl Parser {
         for j in 0..2 {
             let mut cmds = Cmds::default();
             while *i < self.args.len() {
-                if self.args[*i] == ParseSemicolon {
-                    *i += 1;
-                    break;
-                }
                 let cmd = self.parse_pipe(i);
                 if !cmd.is_empty() {
                     cmds.pipe(cmd);
+                }
+                if *i < self.args.len() &&
+                    (self.args[*i] == ParseOr || self.args[*i] == ParseSemicolon) {
+                    break;
                 }
             }
             if j == 0 {
                 ret.0 = cmds;
                 if *i < self.args.len() && self.args[*i] != ParseOr {
+                    *i += 1;
                     break;
                 }
             } else {
@@ -70,11 +71,11 @@ impl Parser {
                 ParseFd(fd1, fd2, append) => ret.set_redirect(fd1, FdOrFile::Fd(fd2, append)),
                 ParseFile(fd1, file, append) => ret.set_redirect(fd1, FdOrFile::File(file, append)),
                 ParseArgStr(s) => ret.add_arg(s),
+                ParseOr | ParseSemicolon => break,
                 ParsePipe => {
                     *i += 1;
                     break;
                 },
-                ParseSemicolon | ParseOr => break,
             };
             *i += 1;
         }
