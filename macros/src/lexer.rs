@@ -27,7 +27,7 @@ pub struct Lexer {
 
     last_is_dollar_sign: bool,
     last_is_pipe: bool,
-    last_arg_stream: TokenStream,
+    last_arg_str: TokenStream,
 }
 
 impl Lexer {
@@ -37,24 +37,24 @@ impl Lexer {
             args: vec![],
             last_is_dollar_sign: false,
             last_is_pipe: false,
-            last_arg_stream: TokenStream::new(),
+            last_arg_str: TokenStream::new(),
         }
     }
 
     fn reset(&mut self) {
         self.last_is_dollar_sign = false;
         self.last_is_pipe = false;
-        self.last_arg_stream = TokenStream::new();
+        self.last_arg_str = TokenStream::new();
     }
 
-    fn last_arg_empty(&self) -> bool {
-        self.last_arg_stream.is_empty()
+    fn last_arg_str_empty(&self) -> bool {
+        self.last_arg_str.is_empty()
     }
 
     fn add_arg_with_token(&mut self, token: SepToken) {
-        if !self.last_arg_empty() {
+        if !self.last_arg_str_empty() {
             let mut last_arg = quote!(::cmd_lib::ParseArg::ParseArgStr);
-            last_arg.extend(Group::new(Delimiter::Parenthesis, self.last_arg_stream.clone()).to_token_stream());
+            last_arg.extend(Group::new(Delimiter::Parenthesis, self.last_arg_str.clone()).to_token_stream());
             self.args.push(last_arg);
         }
         match token {
@@ -70,11 +70,11 @@ impl Lexer {
     }
 
     fn extend_last_arg(&mut self, stream: TokenStream) {
-        if self.last_arg_empty() {
-            self.last_arg_stream = quote!(String::new());
+        if self.last_arg_str_empty() {
+            self.last_arg_str = quote!(String::new());
         }
-        self.last_arg_stream.extend(quote!(+));
-        self.last_arg_stream.extend(stream);
+        self.last_arg_str.extend(quote!(+));
+        self.last_arg_str.extend(stream);
     }
 
     fn scan(mut self) -> Vec<TokenStream> {
@@ -105,7 +105,9 @@ impl Lexer {
                             if g.delimiter() == Delimiter::Brace {
                                 self.extend_last_arg(quote!(&#var.to_string()));
                             } else {
-                                assert!(self.last_arg_empty());
+                                if !self.last_arg_str_empty() {
+                                    panic!("vector variable can only be used alone");
+                                }
                                 self.args.push(quote! (
                                     ::cmd_lib::ParseArg::ParseArgVec(
                                         #var.iter().map(|s| s.to_string()).collect::<Vec<String>>()))
