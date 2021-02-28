@@ -4,6 +4,7 @@ use quote::{quote, ToTokens};
 pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
     let args = Lexer::from(input).scan();
     let mut ret = quote! ( ::cmd_lib::Parser::default() );
+
     for arg in args {
         ret.extend(quote!(.arg));
         ret.extend(Group::new(Delimiter::Parenthesis, arg).to_token_stream());
@@ -43,6 +44,123 @@ impl Lexer {
         self.last_arg_stream.is_empty()
     }
 
+    fn add_arg_with_token(&mut self, token: char) {
+        if !self.last_arg_empty() {
+            let mut last_arg = quote!(::cmd_lib::ParseArg::ParseArgStr);
+            last_arg.extend(Group::new(Delimiter::Parenthesis, self.last_arg_stream.clone()).to_token_stream());
+            self.args.push(last_arg);
+        }
+        match token {
+            ' ' => {},
+            ';' => self.args.push(quote!(::cmd_lib::ParseArg::ParseSemicolon)),
+            'O' => {
+                self.args.pop();
+                self.args.push(quote!(::cmd_lib::ParseArg::ParseOr));
+            },
+            '|' => self.args.push(quote!(::cmd_lib::ParseArg::ParsePipe)),
+            _ => todo!()
+        }
+        self.reset();
+    }
+
+    fn extend_last_arg(&mut self, stream: TokenStream) {
+        if self.last_arg_empty() {
+            self.last_arg_stream = quote!(String::new());
+        }
+        self.last_arg_stream.extend(quote!(+));
+        self.last_arg_stream.extend(stream);
+    }
+
+    fn scan(mut self) -> Vec<TokenStream> {
+        let mut end = 0;
+        for t in self.input.clone() {
+            let (_start, _end) = Self::span_location(&t.span());
+            if end != 0 && end < _start { // new argument with spacing
+                self.add_arg_with_token(' ');
+            }
+            end = _end;
+
+            let src = t.to_string();
+            if self.last_is_dollar_sign {
+                self.last_is_dollar_sign = false;
+                if let TokenTree::Group(g) = t.clone() {
+                    if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
+                        panic!(
+                            "invalid grouping: found {:?}, only Brace/Bracket is allowed",
+                            g.delimiter()
+                        );
+                    }
+                    let mut found_var = false;
+                    for tt in g.stream() {
+                        if let TokenTree::Ident(var) = tt {
+                            if found_var {
+                                panic!("more than one variable in grouping");
+                            }
+                            if g.delimiter() == Delimiter::Brace {
+                                self.extend_last_arg(quote!(&#var.to_string()));
+                            } else {
+                                assert!(self.last_arg_empty());
+                                self.args.push(quote! (
+                                    ::cmd_lib::ParseArg::ParseArgVec(
+                                        #var.iter().map(|s| s.to_string()).collect::<Vec<String>>()))
+                                );
+                                self.reset();
+                            }
+                            found_var = true;
+                        } else {
+                            panic!("invalid grouping: extra tokens");
+                        }
+                    }
+                    continue;
+                } else if let TokenTree::Ident(var) = t {
+                    self.extend_last_arg(quote!(&#var.to_string()));
+                    continue;
+                }
+            }
+
+            if let TokenTree::Group(_) = t {
+                panic!("grouping is only allowed for variable");
+            } else if let TokenTree::Literal(lit) = t {
+                let s = lit.to_string();
+                if s.starts_with("\"") || s.starts_with("r") {
+                    if s.starts_with("\"") {
+                        Self::parse_vars(&s[1..s.len()-1], &mut self.last_arg_stream);
+                    } else {
+                        self.extend_last_arg(quote!(#lit));
+                    }
+                } else {
+                    self.extend_last_arg(quote!(&#lit.to_string()));
+                }
+            } else {
+                if let TokenTree::Punct(p) = t {
+                    let ch = p.as_char();
+                    if ch == '$' {
+                        self.last_is_dollar_sign = true;
+                        self.last_is_pipe = false;
+                        continue;
+                    } else if ch == ';' {
+                        self.add_arg_with_token(';');
+                        continue;
+                    } else if ch == '|' {
+                        if self.last_is_pipe {
+                            self.add_arg_with_token('O');
+                            self.last_is_pipe = false;
+                        } else {
+                            self.add_arg_with_token('|');
+                            self.last_is_pipe = true;
+                        }
+                        continue;
+                    }
+                }
+
+                self.extend_last_arg(quote!(&#src.to_string()));
+                self.last_is_pipe = false;
+            }
+        }
+        self.add_arg_with_token(' ');
+        self.args
+    }
+
     // helper function to get (start, end) of Span
     fn span_location(span: &Span) -> (usize, usize) {
         let s = format!("{:?}", span);
@@ -62,121 +180,6 @@ impl Lexer {
             }
         }
         (start, end)
-    }
-
-    fn scan(self) -> Vec<TokenStream> {
-        let mut args = vec![];
-        let mut last_arg_stream = quote!(String::new());
-        let mut last_arg_empty = true;
-        let mut last_is_dollar_sign = false;
-        let mut last_is_pipe = false;
-        let mut end = 0;
-        for t in self.input {
-            let (_start, _end) = Self::span_location(&t.span());
-            if end != 0 && end < _start { // new argument with spacing
-                if !last_arg_empty {
-                    args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
-                }
-                last_arg_stream = quote!(String::new());
-                last_arg_empty = true;
-            }
-            end = _end;
-
-            let src = t.to_string();
-            if last_is_dollar_sign {
-                last_is_dollar_sign = false;
-                if let TokenTree::Group(g) = t.clone() {
-                    if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
-                        panic!(
-                            "invalid grouping: found {:?}, only Brace/Bracket is allowed",
-                            g.delimiter()
-                        );
-                    }
-                    let mut found_var = false;
-                    for tt in g.stream() {
-                        if let TokenTree::Ident(var) = tt {
-                            if found_var {
-                                panic!("more than one variable in grouping");
-                            }
-                            if g.delimiter() == Delimiter::Brace {
-                                last_arg_stream.extend(quote!(+ &#var.to_string()));
-                                last_arg_empty = false;
-                            } else {
-                                assert!(last_arg_empty);
-                                args.push(quote! (
-                                    ::cmd_lib::ParseArg::ParseArgVec(
-                                        #var.iter().map(|s| s.to_string()).collect::<Vec<String>>()))
-                                );
-                            }
-                            found_var = true;
-                        } else {
-                            panic!("invalid grouping: extra tokens");
-                        }
-                    }
-                    continue;
-                } else if let TokenTree::Ident(var) = t {
-                    last_arg_stream.extend(quote!(+ &#var.to_string()));
-                    last_arg_empty = false;
-                    continue;
-                }
-            }
-
-            if let TokenTree::Group(_) = t {
-                panic!("grouping is only allowed for variable");
-            } else if let TokenTree::Literal(lit) = t {
-                last_arg_empty = false;
-                let s = lit.to_string();
-                if s.starts_with("\"") || s.starts_with("r") {
-                    if s.starts_with("\"") {
-                        Self::parse_vars(&s[1..s.len()-1], &mut last_arg_stream);
-                    } else {
-                        last_arg_stream.extend(quote!(+ #lit));
-                    }
-                } else {
-                    last_arg_stream.extend(quote!(+ &#lit.to_string()));
-                }
-            } else {
-                if let TokenTree::Punct(p) = t {
-                    let ch = p.as_char();
-                    if ch == '$' {
-                        last_is_dollar_sign = true;
-                        last_is_pipe = false;
-                        continue;
-                    } else if ch == ';' {
-                        if !last_arg_empty {
-                            args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
-                        }
-                        args.push(quote!(::cmd_lib::ParseArg::ParseSemicolon));
-                        last_arg_empty = true;
-                        last_is_pipe = false;
-                        continue;
-                    } else if ch == '|' {
-                        if !last_arg_empty {
-                            args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
-                        }
-                        if last_is_pipe {
-                            args.pop();
-                            args.push(quote!(::cmd_lib::ParseArg::ParseOr));
-                            last_is_pipe = false;
-                        } else {
-                            args.push(quote!(::cmd_lib::ParseArg::ParsePipe));
-                            last_is_pipe = true;
-                        }
-                        last_arg_empty = true;
-                        continue;
-                    }
-                }
-
-                last_arg_stream.extend(quote!(+ &#src.to_string()));
-                last_arg_empty = false;
-                last_is_pipe = false;
-            }
-        }
-        if !last_arg_empty {
-            args.push(quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_stream)));
-        }
-        args
-
     }
 
     fn parse_vars(src: &str, last_arg_stream: &mut TokenStream) {
