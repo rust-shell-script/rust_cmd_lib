@@ -10,7 +10,7 @@ pub enum ParseArg {
     ParseFd(i32, i32, bool),        // fd1, fd2, append?
     ParseFile(i32, String, bool),   // fd1, file, append?
     ParseArgStr(String),
-    // ParseArgVec(Vec<String>),
+    ParseArgVec(Vec<String>),
 }
 
 #[doc(hidden)]
@@ -69,9 +69,20 @@ impl Parser {
         let mut ret = Cmd::default();
         while *i < self.args.len() {
             match self.args[*i].clone() {
-                ParseFd(fd1, fd2, append) => ret.set_redirect(fd1, FdOrFile::Fd(fd2, append)),
-                ParseFile(fd1, file, append) => ret.set_redirect(fd1, FdOrFile::File(file, append)),
-                ParseArgStr(s) => ret.add_arg(s),
+                ParseFd(fd1, fd2, append) => {
+                    ret.set_redirect(fd1, FdOrFile::Fd(fd2, append));
+                },
+                ParseFile(fd1, file, append) => {
+                    ret.set_redirect(fd1, FdOrFile::File(file, append));
+                },
+                ParseArgStr(opt) => {
+                    ret.add_arg(opt);
+                },
+                ParseArgVec(opts) => {
+                    for opt in opts {
+                        ret.add_arg(opt);
+                    }
+                },
                 ParseOr | ParseSemicolon => break,
                 ParsePipe => {
                     *i += 1;

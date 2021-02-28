@@ -109,9 +109,9 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
         if last_is_dollar_sign {
             last_is_dollar_sign = false;
             if let TokenTree::Group(g) = t.clone() {
-                if g.delimiter() != Delimiter::Brace {
+                if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
                     panic!(
-                        "invalid grouping: found {:?}, only Brace is allowed",
+                        "invalid grouping: found {:?}, only Brace/Bracket is allowed",
                         g.delimiter()
                     );
                 }
@@ -121,8 +121,16 @@ fn get_args_from_stream(input: TokenStream) -> Vec<TokenStream> {
                         if found_var {
                             panic!("more than one variable in grouping");
                         }
-                        last_arg_stream.extend(quote!(+ &#var.to_string()));
-                        last_arg_empty = false;
+                        if g.delimiter() == Delimiter::Brace {
+                            last_arg_stream.extend(quote!(+ &#var.to_string()));
+                            last_arg_empty = false;
+                        } else {
+                            assert!(last_arg_empty);
+                            args.push(quote! (
+                                ::cmd_lib::ParseArg::ParseArgVec(
+                                    #var.iter().map(|s| s.to_string()).collect::<Vec<String>>()))
+                            );
+                        }
                         found_var = true;
                     } else {
                         panic!("invalid grouping: extra tokens");

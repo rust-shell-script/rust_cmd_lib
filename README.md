@@ -95,11 +95,11 @@ let awk_opts = format!(r#"/{}/ {{print $(NF-3) " " $(NF-1) " " $NF}}"#, key_word
 run_cmd!(ping -c 10 www.google.com | awk $awk_opts)?;
 ```
 
-If you want to use dynamic parameters, you can use functions instead of macros:
+If you want to use dynamic parameters, you can use $[] to access vector variable: 
 ```rust
-let options = vec!["-a -b 1", "-c 2"];
-for option in options {
-  run_cmd_unsafe(format!("x {}", option)).unwrap();
+let gopts = vec![vec!["-l", "-a", "/"], vec!["-a", "/var"]];
+for opts in gopts {
+  run_cmd!(ls $[opts]).unwrap();
 }
 ```
 
