@@ -47,6 +47,16 @@ impl Lexer {
         self.last_arg_str = TokenStream::new();
     }
 
+    fn set_last_dollar_sign(&mut self, value: bool) {
+        self.last_is_dollar_sign = value;
+        self.last_is_pipe = false;
+    }
+
+    fn set_last_pipe(&mut self, value: bool) {
+        self.last_is_pipe = value;
+        self.last_is_dollar_sign = false;
+    }
+
     fn last_arg_str_empty(&self) -> bool {
         self.last_arg_str.is_empty()
     }
@@ -75,6 +85,8 @@ impl Lexer {
         }
         self.last_arg_str.extend(quote!(+));
         self.last_arg_str.extend(stream);
+        self.last_is_dollar_sign = false;
+        self.last_is_pipe = false;
     }
 
     fn scan(mut self) -> Vec<TokenStream> {
@@ -88,7 +100,6 @@ impl Lexer {
 
             let src = t.to_string();
             if self.last_is_dollar_sign {
-                self.last_is_dollar_sign = false;
                 if let TokenTree::Group(g) = t.clone() {
                     if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
                         panic!(
@@ -143,8 +154,7 @@ impl Lexer {
                 if let TokenTree::Punct(p) = t {
                     let ch = p.as_char();
                     if ch == '$' {
-                        self.last_is_dollar_sign = true;
-                        self.last_is_pipe = false;
+                        self.set_last_dollar_sign(true);
                         continue;
                     } else if ch == ';' {
                         self.add_arg_with_token(SepToken::SemiColon);
@@ -152,17 +162,15 @@ impl Lexer {
                     } else if ch == '|' {
                         if self.last_is_pipe {
                             self.add_arg_with_token(SepToken::Or);
-                            self.last_is_pipe = false;
                         } else {
                             self.add_arg_with_token(SepToken::Pipe);
-                            self.last_is_pipe = true;
                         }
+                        self.set_last_pipe(!self.last_is_pipe);
                         continue;
                     }
                 }
 
                 self.extend_last_arg(quote!(&#src.to_string()));
-                self.last_is_pipe = false;
             }
         }
         self.add_arg_with_token(SepToken::Space);
