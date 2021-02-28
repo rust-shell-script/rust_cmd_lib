@@ -9,16 +9,16 @@ pub fn export_cmd(
     let cmd_name = attr.to_string();
     let export_cmd_fn = syn::Ident::new(&format!("export_cmd_{}", cmd_name), Span::call_site());
 
-    let input: syn::ItemFn = syn::parse2(item.into()).unwrap();
-    let mut output = input.to_token_stream();
-    let fn_ident = input.sig.ident;
+    let orig_function: syn::ItemFn = syn::parse2(item.into()).unwrap();
+    let fn_ident = &orig_function.sig.ident;
 
-    quote! (
+    let mut new_functions = orig_function.to_token_stream();
+    new_functions.extend(quote! (
         fn #export_cmd_fn() {
             export_cmd(#cmd_name, #fn_ident);
         }
-    ).to_tokens(&mut output);
-    output.into()
+    ));
+    new_functions.into()
 }
 
 #[proc_macro]
