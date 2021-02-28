@@ -46,10 +46,10 @@ impl Parser {
                 if !cmd.is_empty() {
                     cmds.pipe(cmd);
                 }
-                if *i < self.args.len() &&
-                    (self.args[*i] == ParseOr || self.args[*i] == ParseSemicolon) {
+                if *i < self.args.len() && self.args[*i] != ParsePipe {
                     break;
                 }
+                *i += 1;
             }
             if j == 0 {
                 ret.0 = cmds;
@@ -83,11 +83,7 @@ impl Parser {
                         ret.add_arg(opt);
                     }
                 },
-                ParseOr | ParseSemicolon => break,
-                ParsePipe => {
-                    *i += 1;
-                    break;
-                },
+                ParsePipe | ParseOr | ParseSemicolon => break,
             };
             *i += 1;
         }
