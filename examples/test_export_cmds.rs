@@ -15,6 +15,7 @@ fn foo2(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
 fn main() {
     cmd_lib::set_debug(true);
     use_cmd!(my_cmd, my_cmd2);
+    #[rustfmt::skip]
     run_cmd!(my_cmd -a).unwrap();
     run_cmd!(my_cmd2).unwrap();
     println!("get result: {}", run_fun!(my_cmd).unwrap());

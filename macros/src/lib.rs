@@ -39,7 +39,8 @@ pub fn use_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     quote! (
         #(#cmd_fns();)*
-    ).into()
+    )
+    .into()
 }
 
 #[proc_macro]
@@ -57,4 +58,3 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 mod lexer;
-

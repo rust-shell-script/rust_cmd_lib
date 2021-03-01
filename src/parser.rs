@@ -1,4 +1,4 @@
-use crate::process::{GroupCmds, Cmds, Cmd, FdOrFile};
+use crate::process::{Cmd, Cmds, FdOrFile, GroupCmds};
 use ParseArg::*;
 
 #[doc(hidden)]
@@ -7,8 +7,8 @@ pub enum ParseArg {
     ParsePipe,
     ParseOr,
     ParseSemicolon,
-    ParseRedirectFd(i32, i32, bool),        // fd1, fd2, append?
-    ParseRedirectFile(i32, String, bool),   // fd1, file, append?
+    ParseRedirectFd(i32, i32, bool),      // fd1, fd2, append?
+    ParseRedirectFile(i32, String, bool), // fd1, file, append?
     ParseArgStr(String),
     ParseArgVec(Vec<String>),
 }
@@ -71,18 +71,18 @@ impl Parser {
             match self.args[*i].clone() {
                 ParseRedirectFd(fd1, fd2, append) => {
                     ret.set_redirect(fd1, FdOrFile::Fd(fd2, append));
-                },
+                }
                 ParseRedirectFile(fd1, file, append) => {
                     ret.set_redirect(fd1, FdOrFile::File(file, append));
-                },
+                }
                 ParseArgStr(opt) => {
                     ret.add_arg(opt);
-                },
+                }
                 ParseArgVec(opts) => {
                     for opt in opts {
                         ret.add_arg(opt);
                     }
-                },
+                }
                 ParsePipe | ParseOr | ParseSemicolon => break,
             };
             *i += 1;

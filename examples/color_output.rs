@@ -1,4 +1,4 @@
-use cmd_lib::{ CmdResult, run_cmd, run_fun };
+use cmd_lib::{run_cmd, run_fun, CmdResult};
 
 fn main() -> CmdResult {
     let red = run_fun!(tput setaf 1)?;

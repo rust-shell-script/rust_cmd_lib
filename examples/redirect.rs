@@ -1,4 +1,4 @@
-use cmd_lib::{ CmdResult, run_cmd };
+use cmd_lib::{run_cmd, CmdResult};
 fn main() -> CmdResult {
     eprintln!("echo xxxx to /tmp/f");
     run_cmd!(echo xxxx > /tmp/f)?;
@@ -7,6 +7,7 @@ fn main() -> CmdResult {
     run_cmd!(echo yyyy >> /tmp/f)?;
 
     eprintln!("check /tmp/f");
+    #[rustfmt::skip]
     run_cmd!(cat /tmp/f).unwrap();
 
     eprintln!("redirect stderr to /tmp/f");

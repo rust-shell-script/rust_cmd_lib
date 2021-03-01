@@ -1,5 +1,5 @@
 use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
-use quote::{ToTokens, quote};
+use quote::{quote, ToTokens};
 
 pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
     let args = Lexer::from(input).scan();
@@ -7,7 +7,8 @@ pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
         ::cmd_lib::Parser::default()
             #(.arg(#args))*
             .parse()
-    ).into()
+    )
+    .into()
 }
 
 enum SepToken {
@@ -158,7 +159,7 @@ impl Lexer {
             if end != 0 && end < _start {
                 // new argument with spacing
                 if !self.last_arg_str_empty() {
-                    self.add_arg_with_token(SepToken::Space); 
+                    self.add_arg_with_token(SepToken::Space);
                 }
             }
             end = _end;
@@ -214,7 +215,7 @@ impl Lexer {
                     }
                 } else {
                     if self.last_token == MarkerToken::Ampersand {
-                        if &s != "1"  && &s != "2" {
+                        if &s != "1" && &s != "2" {
                             panic!("only &1 or &2 is allowed");
                         }
                         if let Some((fd, append)) = self.last_redirect.clone() {

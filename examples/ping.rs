@@ -1,4 +1,4 @@
-use cmd_lib::{ CmdResult, run_cmd };
+use cmd_lib::{run_cmd, CmdResult};
 fn main() -> CmdResult {
     // raw literal string
     run_cmd!(ping -c 10 www.google.com | awk r#"/time/ {print $(NF-3) " " $(NF-1) " " $NF}"#)?;

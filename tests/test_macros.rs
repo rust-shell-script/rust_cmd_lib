@@ -1,5 +1,5 @@
 extern crate cmd_lib;
-use cmd_lib::{proc_var, proc_var_set, proc_var_get, run_cmd, run_fun};
+use cmd_lib::{proc_var, proc_var_get, proc_var_set, run_cmd, run_fun};
 
 #[test]
 #[rustfmt::skip]
@@ -9,7 +9,6 @@ fn test_run_single_cmds() {
 }
 
 #[test]
-#[rustfmt::skip]
 fn test_run_single_cmd_with_quote() {
     assert_eq!(
         run_fun!(echo "hello, rust" | sed r"s/rust/cmd_lib1/g").unwrap(),
@@ -142,8 +141,7 @@ fn test_vars_in_str3() {
 /// assert_eq!(run_fun!(echo "${msg 0}").unwrap(), "${msg 0}");
 /// assert_eq!(run_fun!(echo "${msg 0}").unwrap(), "${msg 0}");
 /// ```
-fn test_vars_in_str4() {
-}
+fn test_vars_in_str4() {}
 
 #[test]
 fn test_proc_var_set() {

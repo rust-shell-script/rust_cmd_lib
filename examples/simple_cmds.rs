@@ -5,7 +5,7 @@ fn foo() -> CmdResult {
     let f = "nofile";
     let gap = 3;
 
-    run_cmd!{
+    run_cmd! {
         cd $dir;    // change current directory
         pwd;        // print pwd
         sleep $gap;
