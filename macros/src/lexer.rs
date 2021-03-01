@@ -1,5 +1,5 @@
 use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
-use quote::quote;
+use quote::{ToTokens, quote};
 
 pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
     let args = Lexer::from(input).scan();
@@ -22,6 +22,7 @@ enum SepToken {
 enum MarkerToken {
     Pipe,
     DollarSign,
+    Ampersand,
     None,
 }
 
@@ -107,6 +108,17 @@ impl Lexer {
         self.reset_last_token();
     }
 
+    fn add_fd_redirect_arg(&mut self, new_fd_stream: TokenStream) {
+        if let Some((fd, append)) = self.last_redirect {
+            let last_arg = quote! (
+                ::cmd_lib::ParseArg::ParseRedirectFd(#fd, #new_fd_stream, #append)
+            );
+            self.args.push(last_arg);
+            self.last_redirect = None;
+        }
+        self.reset_last_token();
+    }
+
     fn extend_last_arg(&mut self, stream: TokenStream) {
         if self.last_arg_str_empty() {
             self.last_arg_str = quote!(String::new());
@@ -178,6 +190,16 @@ impl Lexer {
                         self.extend_last_arg(quote!(#lit));
                     }
                 } else {
+                    if self.last_token == MarkerToken::Ampersand {
+                        if &s != "1"  && &s != "2" {
+                            panic!("only &1 or &2 is allowed");
+                        }
+                        if self.last_redirect.is_none() {
+                            panic!("& is only allowed for redirect");
+                        }
+                        self.add_fd_redirect_arg(lit.to_token_stream());
+                        continue;
+                    }
                     self.extend_last_arg(quote!(&#lit.to_string()));
                 }
             } else {
@@ -203,6 +225,9 @@ impl Lexer {
                         continue;
                     } else if ch == '<' {
                         self.set_redirect(0);
+                        continue;
+                    } else if ch == '&' {
+                        self.set_last_token(MarkerToken::Ampersand);
                         continue;
                     }
                 }
