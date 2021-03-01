@@ -23,6 +23,7 @@ enum MarkerToken {
     Pipe,
     DollarSign,
     Ampersand,
+    Fd(i32),
     None,
 }
 
@@ -226,6 +227,11 @@ impl Lexer {
                         continue;
                     }
                     self.extend_last_arg(quote!(&#lit.to_string()));
+                    if &s == "1" {
+                        self.last_token = MarkerToken::Fd(1);
+                    } else if &s == "2" {
+                        self.last_token = MarkerToken::Fd(2);
+                    }
                 }
             } else {
                 if let TokenTree::Punct(p) = t {
@@ -246,7 +252,16 @@ impl Lexer {
                         }
                         continue;
                     } else if ch == '>' {
-                        self.set_redirect(RedirectFd::Stdout);
+                        if let MarkerToken::Fd(fd) = self.last_token {
+                            self.set_redirect(if fd == 2 {
+                                RedirectFd::Stderr
+                            } else {
+                                RedirectFd::Stdout
+                            });
+                            self.reset_last_token();
+                        } else {
+                            self.set_redirect(RedirectFd::Stdout);
+                        }
                         continue;
                     } else if ch == '<' {
                         self.set_redirect(RedirectFd::Stdin);

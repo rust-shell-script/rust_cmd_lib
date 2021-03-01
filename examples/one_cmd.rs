@@ -2,7 +2,7 @@ use cmd_lib::{run_cmd, CmdResult};
 
 fn main() -> CmdResult {
     cmd_lib::set_debug(true);
-    run_cmd!(ls x / &> /tmp/f)?;
+    run_cmd!(ls x / 2> /tmp/f)?;
     // let f = "/tmp/test_rust_cmd_lib.sh";
     // let content = r##"
     // #!/bin/bash
