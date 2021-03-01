@@ -33,41 +33,41 @@ Since they are rust code, you can always rewrite them in rust natively in the fu
 
 #### Macros to run external commands
 - run_cmd! --> CmdResult
-    ```rust
-    use cmd_lib::run_cmd;
-    let msg = "I love rust";
-    run_cmd!(echo $msg).unwrap();
-    run_cmd!(echo "This is the message: $msg").unwrap();
 
-    // pipe commands are also supported
-    run_cmd!(du -ah . | sort -hr | head -n 10).unwrap();
+```rust
+let msg = "I love rust";
+run_cmd!(echo $msg)?;
+run_cmd!(echo "This is the message: $msg")?;
 
-    // or a group of commands
-    // if any command fails, just return Err(...)
-    let file = "/tmp/f";
-    let keyword = "rust";
-    if run_cmd! {
-        cat ${file} | grep ${keyword};
-        echo "bad cmd" >&2;
-        ls /nofile || true;
-        date;
-        ls oops;
-        cat oops;
-    }.is_err() {
-        // your error handling code
-    }
-    ```
+// pipe commands are also supported
+run_cmd!(du -ah . | sort -hr | head -n 10)?;
+
+// or a group of commands
+// if any command fails, just return Err(...)
+let file = "/tmp/f";
+let keyword = "rust";
+if run_cmd! {
+    cat ${file} | grep ${keyword};
+    echo "bad cmd" >&2;
+    ls /nofile || true;
+    date;
+    ls oops;
+    cat oops;
+}.is_err() {
+    // your error handling code
+}
+```
 
 - run_fun! --> FunResult
-    ```rust
-    use cmd_lib::run_fun;
-    let version = run_fun!(rustc --version).unwrap();
-    eprintln!("Your rust version is {}", version);
 
-    // with pipes
-    let n = run_fun!(echo "the quick brown fox jumped over the lazy dog" | wc -w).unwrap();
-    eprintln!("There are {} words in above sentence", n);
-    ```
+```rust
+let version = run_fun!(rustc --version)?;
+eprintln!("Your rust version is {}", version);
+
+// with pipes
+let n = run_fun!(echo "the quick brown fox jumped over the lazy dog" | wc -w)?;
+eprintln!("There are {} words in above sentence", n);
+```
 
 #### Intuitive parameters passing
 When passing parameters to `run_cmd!` and `run_fun!` macros, if they are not part to rust
@@ -76,14 +76,13 @@ converted to string as an atomic component, so you don't need to quote them. The
 like $a or ${a} in `run_cmd!` or `run_fun!` macros.
 
 ```rust
-use cmd_lib::run_cmd;
 let dir = "my folder";
-run_cmd!(echo "Creating $dir at /tmp").unwrap();
-run_cmd!(mkdir -p /tmp/$dir).unwrap();
+run_cmd!(echo "Creating $dir at /tmp")?;
+run_cmd!(mkdir -p /tmp/$dir)?;
 
 // or with group commands:
 let dir = "my folder";
-run_cmd!(echo "Creating $dir at /tmp"; mkdir -p /tmp/$dir).unwrap();
+run_cmd!(echo "Creating $dir at /tmp"; mkdir -p /tmp/$dir)?;
 ```
 You can consider "" as glue, so everything inside the quotes will be treated as a single atomic component.
 
@@ -91,19 +90,17 @@ If they are part of [Raw string literals](https://doc.rust-lang.org/reference/to
 there will be no string interpolation, the same as in idiomatic rust. However, you can always use `format!` macro
 to form the new string. For example:
 ```rust
-use cmd_lib::run_cmd;
 // string interpolation
 let key_word = "time";
 let awk_opts = format!(r#"/{}/ {{print $(NF-3) " " $(NF-1) " " $NF}}"#, key_word);
-run_cmd!(ping -c 10 www.google.com | awk $awk_opts).unwrap();
+run_cmd!(ping -c 10 www.google.com | awk $awk_opts)?;
 ```
 
 If you want to use dynamic parameters, you can use $[] to access vector variable:
 ```rust
-use cmd_lib::run_cmd;
 let gopts = vec![vec!["-l", "-a", "/"], vec!["-a", "/var"]];
 for opts in gopts {
-    run_cmd!(ls $[opts]).unwrap();
+    run_cmd!(ls $[opts])?;
 }
 ```
 
@@ -117,7 +114,6 @@ See examples at [examples/redirect.rs](https://github.com/rust-shell-script/rust
 - `proc_var_get!` to get the value
 - `proc_var_set!` to set the value
 ```rust
-use cmd_lib::{ proc_var, proc_var_get, proc_var_set };
 proc_var!(DELAY, f64, 1.0);
 const DELAY_FACTOR: f64 = 0.8;
 proc_var_set!(DELAY, |d| *d *= DELAY_FACTOR);
@@ -129,11 +125,10 @@ let d = proc_var_get!(DELAY);
 ##### cd
 cd: set process current directory
 ```rust
-use cmd_lib::run_cmd;
 run_cmd! (
     cd /tmp;
     ls | wc -l;
-).unwrap();
+)?;
 ```
 Notice that builtin `cd` will only change with current scope
 and it will restore the previous current directory when it
@@ -146,7 +141,6 @@ working directory for the whole program.
 Declare your function with `export_cmd` attribute:
 
 ```rust
-use cmd_lib::{export_cmd, use_cmd, run_cmd, run_fun, CmdArgs, CmdEnvs, FunResult};
 #[export_cmd(my_cmd)]
 fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
     println!("msg from foo(), args: {:?}", args);
@@ -155,8 +149,8 @@ fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
 
 // To use it, just import it at first:
 use_cmd!(my_cmd);
-run_cmd!(my_cmd).unwrap();
-println!("get result: {}", run_fun!(my_cmd).unwrap());
+run_cmd!(my_cmd)?;
+println!("get result: {}", run_fun!(my_cmd)?);
 ```
 See examples in `examples/test_export_cmds.rs`
 
@@ -171,15 +165,13 @@ includes other checks to avoid silent failures.
 To set environment variables for the command only, you can put the assignments before the command.
 Like this:
 ```rust
-use cmd_lib::run_cmd;
-run_cmd!(FOO=100 /tmp/test_run_cmd_lib.sh).unwrap();
+run_cmd!(FOO=100 /tmp/test_run_cmd_lib.sh)?;
 ```
 
 #### Security Notes
 Using macros can actually avoid command injection, since we do parsing before variable substitution.
 For example, below code is fine even without any quotes:
 ```rust
-use cmd_lib::{run_cmd, CmdResult};
 fn cleanup_uploaded_file(file: &str) -> CmdResult {
     run_cmd!(/bin/rm -f /var/upload/$file)
 }
