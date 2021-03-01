@@ -31,7 +31,7 @@
 //!
 //! ### Macros to run external commands
 //! - run_cmd! --> CmdResult
-//!     ```
+//!     ```rust
 //!     use cmd_lib::run_cmd;
 //!     let msg = "I love rust";
 //!     run_cmd!(echo $msg).unwrap();
@@ -57,7 +57,7 @@
 //!     ```
 //!
 //! - run_fun! --> FunResult
-//!     ```
+//!     ```rust
 //!     use cmd_lib::run_fun;
 //!     let version = run_fun!(rustc --version).unwrap();
 //!     eprintln!("Your rust version is {}", version);
@@ -101,7 +101,7 @@
 //! use cmd_lib::run_cmd;
 //! let gopts = vec![vec!["-l", "-a", "/"], vec!["-a", "/var"]];
 //! for opts in gopts {
-//!   run_cmd!(ls $[opts]).unwrap();
+//!     run_cmd!(ls $[opts]).unwrap();
 //! }
 //! ```
 //!
@@ -182,7 +182,7 @@
 //! ```
 //! use cmd_lib::{run_cmd, CmdResult};
 //! fn cleanup_uploaded_file(file: &str) -> CmdResult {
-//!   run_cmd!(/bin/rm -f /var/upload/$file)
+//!     run_cmd!(/bin/rm -f /var/upload/$file)
 //! }
 //! ```
 //! It is not the case in bash, which will always do variable substitution at first.

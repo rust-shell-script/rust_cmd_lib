@@ -33,7 +33,7 @@ Since they are rust code, you can always rewrite them in rust natively in the fu
 
 #### Macros to run external commands
 - run_cmd! --> CmdResult
-    ```
+    ```rust
     use cmd_lib::run_cmd;
     let msg = "I love rust";
     run_cmd!(echo $msg).unwrap();
@@ -59,7 +59,7 @@ Since they are rust code, you can always rewrite them in rust natively in the fu
     ```
 
 - run_fun! --> FunResult
-    ```
+    ```rust
     use cmd_lib::run_fun;
     let version = run_fun!(rustc --version).unwrap();
     eprintln!("Your rust version is {}", version);
@@ -103,7 +103,7 @@ If you want to use dynamic parameters, you can use $[] to access vector variable
 use cmd_lib::run_cmd;
 let gopts = vec![vec!["-l", "-a", "/"], vec!["-a", "/var"]];
 for opts in gopts {
-  run_cmd!(ls $[opts]).unwrap();
+    run_cmd!(ls $[opts]).unwrap();
 }
 ```
 
@@ -155,7 +155,7 @@ fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
 ```
 
 To use it, just import it at first:
-```compile_fail
+```rust
 use cmd_lib::{use_cmd, run_cmd, run_fun};
 use_cmd!(my_cmd);
 run_cmd!(my_cmd).unwrap();
@@ -184,7 +184,7 @@ For example, below code is fine even without any quotes:
 ```rust
 use cmd_lib::{run_cmd, CmdResult};
 fn cleanup_uploaded_file(file: &str) -> CmdResult {
-  run_cmd!(/bin/rm -f /var/upload/$file)
+    run_cmd!(/bin/rm -f /var/upload/$file)
 }
 ```
 It is not the case in bash, which will always do variable substitution at first.
