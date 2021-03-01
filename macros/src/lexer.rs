@@ -26,13 +26,30 @@ enum MarkerToken {
     None,
 }
 
+#[derive(PartialEq, Clone)]
+enum RedirectFd {
+    Stdin,
+    Stdout,
+    Stderr,
+    StdoutErr,
+}
+impl RedirectFd {
+    fn id(&self) -> i32 {
+        match self {
+            Self::Stdin => 0,
+            Self::Stdout => 1,
+            Self::Stderr | Self::StdoutErr => 2,
+        }
+    }
+}
+
 pub struct Lexer {
     input: TokenStream,
     args: Vec<TokenStream>,
 
     last_token: MarkerToken,
     last_arg_str: TokenStream,
-    last_redirect: Option<(i32, bool)>,
+    last_redirect: Option<(RedirectFd, bool)>,
 }
 
 impl Lexer {
@@ -63,17 +80,22 @@ impl Lexer {
         self.last_token = MarkerToken::None;
     }
 
-    fn set_redirect(&mut self, fd: i32) {
+    fn set_redirect(&mut self, fd: RedirectFd) {
         if let Some((_, append)) = self.last_redirect {
             if append {
                 panic!("wrong redirect format: more than append");
             }
-            if fd == 0 {
+            if fd == RedirectFd::Stdin {
                 panic!("wrong input redirect format");
             }
             self.last_redirect = Some((fd, true));
         } else {
-            self.last_redirect = Some((fd, false));
+            if self.last_token == MarkerToken::Ampersand {
+                self.last_redirect = Some((RedirectFd::StdoutErr, false));
+                self.reset_last_token();
+            } else {
+                self.last_redirect = Some((fd, false));
+            }
         }
     }
 
@@ -82,12 +104,17 @@ impl Lexer {
     }
 
     fn add_arg_with_token(&mut self, token: SepToken) {
-        if let Some((fd, append)) = self.last_redirect {
+        if let Some((fd, append)) = self.last_redirect.clone() {
             let last_arg_str = self.last_arg_str.clone();
-            let last_arg = quote! (
-                ::cmd_lib::ParseArg::ParseRedirectFile(#fd, #last_arg_str, #append)
-            );
-            self.args.push(last_arg);
+            let fd_id = fd.id();
+            self.args.push(quote! (
+                ::cmd_lib::ParseArg::ParseRedirectFile(#fd_id, #last_arg_str, #append)
+            ));
+            if fd == RedirectFd::StdoutErr {
+                self.args.push(quote! (
+                    ::cmd_lib::ParseArg::ParseRedirectFile(1, #last_arg_str, true)
+                ));
+            }
             self.last_redirect = None;
         } else {
             if !self.last_arg_str_empty() {
@@ -108,14 +135,11 @@ impl Lexer {
         self.reset_last_token();
     }
 
-    fn add_fd_redirect_arg(&mut self, new_fd_stream: TokenStream) {
-        if let Some((fd, append)) = self.last_redirect {
-            let last_arg = quote! (
-                ::cmd_lib::ParseArg::ParseRedirectFd(#fd, #new_fd_stream, #append)
-            );
-            self.args.push(last_arg);
-            self.last_redirect = None;
-        }
+    fn add_fd_redirect_arg(&mut self, old_fd: i32, new_fd_stream: TokenStream, append: bool) {
+        self.args.push(quote! (
+            ::cmd_lib::ParseArg::ParseRedirectFd(#old_fd, #new_fd_stream, #append)
+        ));
+        self.last_redirect = None;
         self.reset_last_token();
     }
 
@@ -194,10 +218,11 @@ impl Lexer {
                         if &s != "1"  && &s != "2" {
                             panic!("only &1 or &2 is allowed");
                         }
-                        if self.last_redirect.is_none() {
+                        if let Some((fd, append)) = self.last_redirect.clone() {
+                            self.add_fd_redirect_arg(fd.id(), lit.to_token_stream(), append);
+                        } else {
                             panic!("& is only allowed for redirect");
                         }
-                        self.add_fd_redirect_arg(lit.to_token_stream());
                         continue;
                     }
                     self.extend_last_arg(quote!(&#lit.to_string()));
@@ -221,10 +246,10 @@ impl Lexer {
                         }
                         continue;
                     } else if ch == '>' {
-                        self.set_redirect(1);
+                        self.set_redirect(RedirectFd::Stdout);
                         continue;
                     } else if ch == '<' {
-                        self.set_redirect(0);
+                        self.set_redirect(RedirectFd::Stdin);
                         continue;
                     } else if ch == '&' {
                         self.set_last_token(MarkerToken::Ampersand);
