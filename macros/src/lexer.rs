@@ -5,10 +5,9 @@ pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
     let args = Lexer::from(input).scan();
     quote! (
         ::cmd_lib::Parser::default()
-        #(.arg(#args))*
-        .parse()
-    )
-    .into()
+            #(.arg(#args))*
+            .parse()
+    ).into()
 }
 
 enum SepToken {
@@ -148,8 +147,7 @@ impl Lexer {
         if self.last_arg_str_empty() {
             self.last_arg_str = quote!(String::new());
         }
-        self.last_arg_str.extend(quote!(+));
-        self.last_arg_str.extend(stream);
+        self.last_arg_str.extend(quote!(+ #stream));
         self.last_token = MarkerToken::None;
     }
 
