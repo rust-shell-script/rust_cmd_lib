@@ -123,7 +123,7 @@ let d = proc_var_get!(DELAY);
 
 #### Builtin commands
 ##### cd
-cd: set process current directory
+cd: set process current directory, which is always enabled
 ```rust
 run_cmd! (
     cd /tmp;
@@ -136,6 +136,17 @@ exits the scope.
 
 Use `std::env::set_current_dir` if you want to change the current
 working directory for the whole program.
+
+##### true
+
+Just return true without launching any processes.
+
+##### echo
+
+```rust
+use_builtin_cmd!(true, echo); // find more builtin commands in src/builtins.rs
+run_cmd!(echo "This is from builtin command!")?;
+```
 
 #### Macros to register your own commands
 Declare your function with `export_cmd` attribute:

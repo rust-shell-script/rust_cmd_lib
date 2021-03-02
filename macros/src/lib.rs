@@ -1,4 +1,4 @@
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 
 #[proc_macro_attribute]
@@ -41,6 +41,26 @@ pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
         #(#cmd_fns();)*
     )
     .into()
+}
+
+#[proc_macro]
+pub fn use_builtin_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let mut ret = TokenStream::new();
+    for t in item {
+        if let proc_macro::TokenTree::Punct(ch) = t {
+            if ch.as_char() != ',' {
+                panic!("only comma is allowed");
+            }
+        } else if let proc_macro::TokenTree::Ident(cmd) = t {
+            let cmd_name = cmd.to_string();
+            let cmd_fn = syn::Ident::new(&format!("builtin_{}", cmd_name), Span::call_site());
+            ret.extend(quote!(::cmd_lib::export_cmd(#cmd_name, ::cmd_lib::#cmd_fn);));
+        } else {
+            panic!("expect a list of comma separated commands");
+        }
+    }
+
+    ret.into()
 }
 
 #[proc_macro]

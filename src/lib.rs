@@ -132,7 +132,7 @@
 //!
 //! ### Builtin commands
 //! #### cd
-//! cd: set process current directory
+//! cd: set process current directory, which is always enabled
 //! ```no_run
 //! # use cmd_lib::run_cmd;
 //! run_cmd! (
@@ -147,6 +147,19 @@
 //!
 //! Use `std::env::set_current_dir` if you want to change the current
 //! working directory for the whole program.
+//!
+//! #### true
+//!
+//! Just return true without launching any processes.
+//!
+//! #### echo
+//!
+//! ```
+//! # use cmd_lib::{run_cmd, use_builtin_cmd};
+//! use_builtin_cmd!(true, echo); // find more builtin commands in src/builtins.rs
+//! run_cmd!(echo "This is from builtin command!")?;
+//! # Ok::<(), std::io::Error>(())
+//! ```
 //!
 //! ### Macros to register your own commands
 //! Declare your function with `export_cmd` attribute:
@@ -211,10 +224,12 @@
 //! However, the process APIs are inherently not thread-safe, as a result I sometimes need to set
 //! `RUST_TEST_THREADS=1` before running tests.
 
-pub use cmd_lib_macros::{export_cmd, run_cmd, run_fun, use_custom_cmd};
+pub use cmd_lib_macros::{export_cmd, run_cmd, run_fun, use_builtin_cmd, use_custom_cmd};
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
+pub use builtins::{builtin_echo, builtin_true};
 pub use process::{export_cmd, set_debug, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds};
 
+mod builtins;
 mod proc_var;
 mod process;

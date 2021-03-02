@@ -12,15 +12,10 @@ pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
 type FnFun = fn(CmdArgs, CmdEnvs) -> FunResult;
 
-fn true_cmd(_args: CmdArgs, _envs: CmdEnvs) -> FunResult {
-    Ok("".into())
-}
-
 lazy_static! {
     static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
         // needs explicit type, or it won't compile
-        let mut m: HashMap<&'static str, FnFun> = HashMap::new();
-        m.insert("true", true_cmd);
+        let m: HashMap<&'static str, FnFun> = HashMap::new();
         Mutex::new(m)
     };
 }
