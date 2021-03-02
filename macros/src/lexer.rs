@@ -1,14 +1,9 @@
+use crate::parser::{ParseArg, Parser};
 use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
 
 pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
-    let args = Lexer::from(input).scan();
-    quote! (
-        ::cmd_lib::Parser::default()
-            #(.arg(#args))*
-            .parse()
-    )
-    .into()
+    Lexer::from(input).scan().parse().into()
 }
 
 enum SepToken {
@@ -46,7 +41,7 @@ impl RedirectFd {
 
 pub struct Lexer {
     input: TokenStream,
-    args: Vec<TokenStream>,
+    args: Vec<ParseArg>,
 
     last_token: MarkerToken,
     last_arg_str: TokenStream,
@@ -108,37 +103,40 @@ impl Lexer {
         if let Some((fd, append)) = self.last_redirect.clone() {
             let last_arg_str = self.last_arg_str.clone();
             let fd_id = fd.id();
-            self.args.push(quote! (
-                ::cmd_lib::ParseArg::ParseRedirectFile(#fd_id, #last_arg_str, #append)
+            self.args.push(ParseArg::ParseRedirectFile(
+                fd_id,
+                quote!(#last_arg_str),
+                append,
             ));
             if fd == RedirectFd::StdoutErr {
-                self.args.push(quote! (
-                    ::cmd_lib::ParseArg::ParseRedirectFile(1, #last_arg_str, true)
-                ));
+                self.args
+                    .push(ParseArg::ParseRedirectFile(1, quote!(#last_arg_str), true));
             }
             self.last_redirect = None;
         } else {
             if !self.last_arg_str_empty() {
                 let last_arg_str = self.last_arg_str.clone();
-                let last_arg = quote!(::cmd_lib::ParseArg::ParseArgStr(#last_arg_str));
+                let last_arg = ParseArg::ParseArgStr(quote!(#last_arg_str));
                 self.args.push(last_arg);
             }
         }
         match token {
             SepToken::Space => {}
-            SepToken::SemiColon => self.args.push(quote!(::cmd_lib::ParseArg::ParseSemicolon)),
+            SepToken::SemiColon => self.args.push(ParseArg::ParseSemicolon),
             SepToken::Or => {
                 self.args.pop();
-                self.args.push(quote!(::cmd_lib::ParseArg::ParseOr));
+                self.args.push(ParseArg::ParseOr);
             }
-            SepToken::Pipe => self.args.push(quote!(::cmd_lib::ParseArg::ParsePipe)),
+            SepToken::Pipe => self.args.push(ParseArg::ParsePipe),
         }
         self.reset_last_token();
     }
 
     fn add_fd_redirect_arg(&mut self, old_fd: i32, new_fd_stream: TokenStream, append: bool) {
-        self.args.push(quote! (
-            ::cmd_lib::ParseArg::ParseRedirectFd(#old_fd, #new_fd_stream, #append)
+        self.args.push(ParseArg::ParseRedirectFd(
+            old_fd,
+            quote!(#new_fd_stream),
+            append,
         ));
         self.last_redirect = None;
         self.reset_last_token();
@@ -152,7 +150,7 @@ impl Lexer {
         self.last_token = MarkerToken::None;
     }
 
-    fn scan(mut self) -> Vec<TokenStream> {
+    fn scan(mut self) -> Parser {
         let mut end = 0;
         for t in self.input.clone() {
             let (_start, _end) = Self::span_location(&t.span());
@@ -185,10 +183,7 @@ impl Lexer {
                                 if !self.last_arg_str_empty() {
                                     panic!("vector variable can only be used alone");
                                 }
-                                self.args.push(quote! (
-                                    ::cmd_lib::ParseArg::ParseArgVec(
-                                        #var.iter().map(|s| s.to_string()).collect::<Vec<String>>()))
-                                );
+                                self.args.push(ParseArg::ParseArgVec(quote!(#var)));
                                 self.reset_last_token();
                             }
                             found_var = true;
@@ -275,7 +270,7 @@ impl Lexer {
             }
         }
         self.add_arg_with_token(SepToken::Space);
-        self.args
+        Parser::from_args(self.args)
     }
 
     // helper function to get (start, end) of Span

@@ -103,10 +103,6 @@ impl Cmds {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.pipes.is_empty()
-    }
-
     pub fn pipe(mut self, mut cmd: Cmd) -> Self {
         if !self.pipes.is_empty() {
             let last_i = self.pipes.len() - 1;
