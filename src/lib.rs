@@ -155,7 +155,7 @@
 //! ```
 //!
 //! ### Macros to register your own commands
-//! Declare your function with `export_cmd` attribute:
+//! Declare your function with `export_cmd` attribute, and import it with `use_custom_cmd` macro:
 //!
 //! ```
 //! # use cmd_lib::{export_cmd, use_custom_cmd, run_cmd, run_fun, CmdArgs, CmdEnvs, FunResult};
@@ -165,17 +165,16 @@
 //!     Ok("bar".into())
 //! }
 //!
-//! // To use it, just import it at first:
 //! use_custom_cmd!(my_cmd);
 //! run_cmd!(my_cmd)?;
 //! println!("get result: {}", run_fun!(my_cmd)?);
 //! # Ok::<(), std::io::Error>(())
+//! // see examples in examples/test_export_cmds.rs
 //! ```
-//! See examples in `examples/test_export_cmds.rs`
 //!
 //! ### Low-level process spawning macro
 //!
-//! spawn!() macro Executes the whole command as a child process, returning a handle to it.
+//! spawn!() macro executes the whole command as a child process, returning a handle to it:
 //!
 //! ```
 //! # use cmd_lib::spawn;

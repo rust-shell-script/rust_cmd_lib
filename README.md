@@ -143,7 +143,7 @@ run_cmd!(echo "This is from builtin command!")?;
 ```
 
 #### Macros to register your own commands
-Declare your function with `export_cmd` attribute:
+Declare your function with `export_cmd` attribute, and import it with `use_custom_cmd` macro:
 
 ```rust
 #[export_cmd(my_cmd)]
@@ -152,16 +152,15 @@ fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
     Ok("bar".into())
 }
 
-// To use it, just import it at first:
 use_custom_cmd!(my_cmd);
 run_cmd!(my_cmd)?;
 println!("get result: {}", run_fun!(my_cmd)?);
+// see examples in examples/test_export_cmds.rs
 ```
-See examples in `examples/test_export_cmds.rs`
 
 #### Low-level process spawning macro
 
-spawn!() macro Executes the whole command as a child process, returning a handle to it.
+spawn!() macro executes the whole command as a child process, returning a handle to it:
 
 ```rust
 let child = spawn!(/bin/cat file.txt | sed s/a/b)?; // return Result<Child>
