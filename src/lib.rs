@@ -169,7 +169,6 @@
 //! run_cmd!(my_cmd)?;
 //! println!("get result: {}", run_fun!(my_cmd)?);
 //! # Ok::<(), std::io::Error>(())
-//! // see examples in examples/test_export_cmds.rs
 //! ```
 //!
 //! ### Low-level process spawning macro

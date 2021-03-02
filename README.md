@@ -155,7 +155,6 @@ fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
 use_custom_cmd!(my_cmd);
 run_cmd!(my_cmd)?;
 println!("get result: {}", run_fun!(my_cmd)?);
-// see examples in examples/test_export_cmds.rs
 ```
 
 #### Low-level process spawning macro
