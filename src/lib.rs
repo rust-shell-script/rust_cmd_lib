@@ -71,6 +71,12 @@
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
+//! ### Abstraction without overhead
+//! Since all the macros' lexical analysis and syntactic analysis happen at compile time, it can
+//! basically generate code the same as calling `std::process` APIs manually. It also includes
+//! command type checking, so most of the errors can be found at compile time instead of at
+//! runtime.
+//!
 //! ### Intuitive parameters passing
 //! When passing parameters to `run_cmd!` and `run_fun!` macros, if they are not part to rust
 //! [String literals](https://doc.rust-lang.org/reference/tokens.html#string-literals), they will be
@@ -116,19 +122,6 @@
 //! Right now piping and stdin, stdout, stderr redirection are supported. Most parts are the same as in
 //! [bash scripts](https://www.gnu.org/software/bash/manual/html_node/Redirections.html#Redirections).
 //! See examples at [examples/redirect.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/redirect.rs)
-//!
-//! ### Macros to define, get and set global variables
-//! - `proc_var!` to define thread local global variable
-//! - `proc_var_get!` to get the value
-//! - `proc_var_set!` to set the value
-//! ```
-//! # use cmd_lib::{ proc_var, proc_var_get, proc_var_set };
-//! proc_var!(DELAY, f64, 1.0);
-//! const DELAY_FACTOR: f64 = 0.8;
-//! proc_var_set!(DELAY, |d| *d *= DELAY_FACTOR);
-//! let d = proc_var_get!(DELAY);
-//! // check more examples in examples/tetris.rs
-//! ```
 //!
 //! ### Builtin commands
 //! #### cd
@@ -180,11 +173,18 @@
 //! ```
 //! See examples in `examples/test_export_cmds.rs`
 //!
-//! ### Abstraction without overhead
-//! Since all the macros' lexical analysis and syntactic analysis happen at compile time, it can
-//! basically generate code the same as calling `std::process` APIs manually. It also includes
-//! command type checking, so most of the errors can be found at compile time instead of at
-//! runtime.
+//! ### Macros to define, get and set global variables
+//! - `proc_var!` to define thread local global variable
+//! - `proc_var_get!` to get the value
+//! - `proc_var_set!` to set the value
+//! ```
+//! # use cmd_lib::{ proc_var, proc_var_get, proc_var_set };
+//! proc_var!(DELAY, f64, 1.0);
+//! const DELAY_FACTOR: f64 = 0.8;
+//! proc_var_set!(DELAY, |d| *d *= DELAY_FACTOR);
+//! let d = proc_var_get!(DELAY);
+//! // check more examples in examples/tetris.rs
+//! ```
 //!
 //! ## Other Notes
 //!
