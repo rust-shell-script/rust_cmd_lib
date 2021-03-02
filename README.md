@@ -156,9 +156,9 @@ See examples in `examples/test_export_cmds.rs`
 
 #### Abstraction without overhead
 Since all the macros' lexical analysis and syntactic analysis happen at compile time, it can
-basically generates code the same as calling `std::process` APIs manually. It also includes
-command type checking, so most of the errors can be found at compile time instead of introducing
-runtime errors.
+basically generate code the same as calling `std::process` APIs manually. It also includes
+command type checking, so most of the errors can be found at compile time instead of at
+runtime.
 
 ### Other Notes
 
