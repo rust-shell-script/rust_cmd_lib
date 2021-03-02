@@ -2,7 +2,6 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use ParseArg::*;
 
-#[doc(hidden)]
 #[derive(Clone, Debug)]
 pub enum ParseArg {
     ParsePipe,
@@ -14,7 +13,6 @@ pub enum ParseArg {
     ParseArgVec(TokenStream),
 }
 
-#[doc(hidden)]
 #[derive(Default)]
 pub struct Parser {
     args: Vec<ParseArg>,
