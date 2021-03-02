@@ -45,7 +45,7 @@ pub fn use_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::parse_cmds_from_stream(input.into());
+    let cmds = lexer::Lexer::from(input.into()).scan().parse();
     quote! ({
         #cmds.run_cmd()
     })
@@ -54,7 +54,7 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::parse_cmds_from_stream(input.into());
+    let cmds = lexer::Lexer::from(input.into()).scan().parse();
     quote! ({
         #cmds.run_fun()
     })

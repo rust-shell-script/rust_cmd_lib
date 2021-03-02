@@ -2,10 +2,6 @@ use crate::parser::{ParseArg, Parser};
 use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
 
-pub fn parse_cmds_from_stream(input: TokenStream) -> TokenStream {
-    Lexer::from(input).scan().parse().into()
-}
-
 enum SepToken {
     Space,
     SemiColon,
@@ -49,7 +45,7 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    fn from(input: TokenStream) -> Self {
+    pub fn from(input: TokenStream) -> Self {
         Self {
             input,
             args: vec![],
@@ -150,7 +146,7 @@ impl Lexer {
         self.last_token = MarkerToken::None;
     }
 
-    fn scan(mut self) -> Parser {
+    pub fn scan(mut self) -> Parser {
         let mut end = 0;
         for t in self.input.clone() {
             let (_start, _end) = Self::span_location(&t.span());
