@@ -152,7 +152,7 @@
 //! Declare your function with `export_cmd` attribute:
 //!
 //! ```
-//! # use cmd_lib::{export_cmd, use_cmd, run_cmd, run_fun, CmdArgs, CmdEnvs, FunResult};
+//! # use cmd_lib::{export_cmd, use_custom_cmd, run_cmd, run_fun, CmdArgs, CmdEnvs, FunResult};
 //! #[export_cmd(my_cmd)]
 //! fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
 //!     println!("msg from foo(), args: {:?}", args);
@@ -160,7 +160,7 @@
 //! }
 //!
 //! // To use it, just import it at first:
-//! use_cmd!(my_cmd);
+//! use_custom_cmd!(my_cmd);
 //! run_cmd!(my_cmd)?;
 //! println!("get result: {}", run_fun!(my_cmd)?);
 //! # Ok::<(), std::io::Error>(())
@@ -211,7 +211,7 @@
 //! However, the process APIs are inherently not thread-safe, as a result I sometimes need to set
 //! `RUST_TEST_THREADS=1` before running tests.
 
-pub use cmd_lib_macros::{export_cmd, run_cmd, run_fun, use_cmd};
+pub use cmd_lib_macros::{export_cmd, run_cmd, run_fun, use_custom_cmd};
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use process::{export_cmd, set_debug, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds};

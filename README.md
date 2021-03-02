@@ -148,7 +148,7 @@ fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
 }
 
 // To use it, just import it at first:
-use_cmd!(my_cmd);
+use_custom_cmd!(my_cmd);
 run_cmd!(my_cmd)?;
 println!("get result: {}", run_fun!(my_cmd)?);
 ```

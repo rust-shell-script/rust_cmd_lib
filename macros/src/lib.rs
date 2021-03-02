@@ -22,7 +22,7 @@ pub fn export_cmd(
 }
 
 #[proc_macro]
-pub fn use_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mut cmd_fns = vec![];
     for t in item {
         if let proc_macro::TokenTree::Punct(ch) = t {

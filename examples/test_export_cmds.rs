@@ -1,4 +1,4 @@
-use cmd_lib::{export_cmd, run_cmd, run_fun, use_cmd, CmdArgs, CmdEnvs, FunResult};
+use cmd_lib::{export_cmd, run_cmd, run_fun, use_custom_cmd, CmdArgs, CmdEnvs, FunResult};
 
 #[export_cmd(my_cmd)]
 fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
@@ -14,7 +14,7 @@ fn foo2(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
 
 fn main() {
     cmd_lib::set_debug(true);
-    use_cmd!(my_cmd, my_cmd2);
+    use_custom_cmd!(my_cmd, my_cmd2);
     #[rustfmt::skip]
     run_cmd!(my_cmd -a).unwrap();
     run_cmd!(my_cmd2).unwrap();
