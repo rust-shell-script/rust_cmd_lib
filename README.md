@@ -159,6 +159,14 @@ println!("get result: {}", run_fun!(my_cmd)?);
 ```
 See examples in `examples/test_export_cmds.rs`
 
+#### Low-level process spawning macro
+
+spawn!() macro Executes the whole command as a child process, returning a handle to it.
+
+```rust
+let child = spawn!(/bin/cat file.txt | sed s/a/b)?; // return Result<Child>
+```
+
 #### Macros to define, get and set global variables
 - `proc_var!` to define thread local global variable
 - `proc_var_get!` to get the value

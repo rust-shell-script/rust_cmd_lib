@@ -173,6 +173,16 @@
 //! ```
 //! See examples in `examples/test_export_cmds.rs`
 //!
+//! ### Low-level process spawning macro
+//!
+//! spawn!() macro Executes the whole command as a child process, returning a handle to it.
+//!
+//! ```
+//! # use cmd_lib::spawn;
+//! let child = spawn!(/bin/cat file.txt | sed s/a/b)?; // return Result<Child>
+//! # Ok::<(), std::io::Error>(())
+//! ```
+//!
 //! ### Macros to define, get and set global variables
 //! - `proc_var!` to define thread local global variable
 //! - `proc_var_get!` to get the value
@@ -224,7 +234,7 @@
 //! However, the process APIs are inherently not thread-safe, as a result I sometimes need to set
 //! `RUST_TEST_THREADS=1` before running tests.
 
-pub use cmd_lib_macros::{export_cmd, run_cmd, run_fun, use_builtin_cmd, use_custom_cmd};
+pub use cmd_lib_macros::{export_cmd, run_cmd, run_fun, spawn, use_builtin_cmd, use_custom_cmd};
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use builtins::{builtin_echo, builtin_true};

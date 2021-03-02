@@ -72,6 +72,11 @@ impl GroupCmds {
         }
         Ok(ret)
     }
+
+    pub fn spawn(&mut self) -> std::io::Result<Child> {
+        assert_eq!(self.cmds.len(), 1);
+        self.cmds[0].0.spawn()
+    }
 }
 
 #[doc(hidden)]
@@ -122,7 +127,7 @@ impl Cmds {
         self
     }
 
-    fn spawn(&mut self) -> CmdResult {
+    fn spawn(&mut self) -> std::io::Result<Child> {
         if let Ok(debug) = std::env::var("CMD_LIB_DEBUG") {
             if debug == "1" {
                 eprintln!("Running \"{}\" ...", self.full_cmd);
@@ -153,7 +158,7 @@ impl Cmds {
             }
         }
 
-        Ok(())
+        Ok(self.children.pop().unwrap())
     }
 
     fn run_cd_cmd(&mut self, args: Vec<String>) -> CmdResult {
@@ -187,8 +192,7 @@ impl Cmds {
             return Self::to_cmd_result(CMD_MAP.lock().unwrap()[cmd](args, envs));
         }
 
-        self.spawn()?;
-        let status = self.children.pop().unwrap().wait()?;
+        let status = self.spawn()?.wait()?;
         if !status.success() {
             Err(Self::to_io_error(&self.full_cmd, status))
         } else {
@@ -209,8 +213,7 @@ impl Cmds {
             return CMD_MAP.lock().unwrap()[cmd](args, envs);
         }
 
-        self.spawn()?;
-        let output = self.children.pop().unwrap().wait_with_output()?;
+        let output = self.spawn()?.wait_with_output()?;
         if !output.status.success() {
             Err(Self::to_io_error(&self.full_cmd, output.status))
         } else {
