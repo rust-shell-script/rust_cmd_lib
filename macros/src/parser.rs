@@ -30,14 +30,34 @@ impl Parser {
             let cmd = self.parse_cmd(&mut i);
             if !cmd.0.is_empty() {
                 let (cmd0, cmd1) = cmd;
-                ret.extend(quote!(.add(#cmd0, #cmd1)));
+                if cmd1.is_none() {
+                    ret.extend(quote!(.add(#cmd0, None)));
+                } else {
+                    ret.extend(quote!(.add(#cmd0, Some(#cmd1))));
+                }
             }
         }
         ret
     }
 
-    fn parse_cmd(&mut self, i: &mut usize) -> (TokenStream, TokenStream) {
-        let mut ret = (quote!(Cmds::default()), quote!(None));
+    pub fn parse_for_spawn(&mut self) -> TokenStream {
+        let mut ret = quote!(::cmd_lib::GroupCmds::default());
+        let mut i = 0;
+        while i < self.args.len() {
+            let cmd = self.parse_cmd(&mut i);
+            if !cmd.0.is_empty() {
+                let (cmd0, cmd1) = cmd;
+                if cmd1.is_some() || i < self.args.len() {
+                    panic!("wrong spawning format");
+                }
+                ret.extend(quote!(.add(#cmd0, None)));
+            }
+        }
+        ret
+    }
+
+    fn parse_cmd(&mut self, i: &mut usize) -> (TokenStream, Option<TokenStream>) {
+        let mut ret = (quote!(Cmds::default()), None);
         for j in 0..2 {
             let mut cmds = quote!(::cmd_lib::Cmds::default());
             while *i < self.args.len() {
@@ -61,9 +81,11 @@ impl Parser {
                             break;
                         }
                     }
+                } else {
+                    break;
                 }
             } else {
-                ret.1 = quote!(Some(#cmds));
+                ret.1 = Some(quote!(#cmds));
             }
             *i += 1;
         }
