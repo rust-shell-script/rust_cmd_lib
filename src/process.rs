@@ -35,6 +35,7 @@ pub fn set_debug(enable: bool) {
     env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 
+#[doc(hidden)]
 #[derive(Default)]
 pub struct GroupCmds {
     cmds: Vec<(Cmds, Option<Cmds>)>, // (cmd, orCmd) pairs
@@ -78,6 +79,7 @@ impl GroupCmds {
     }
 }
 
+#[doc(hidden)]
 #[derive(Default)]
 pub struct Cmds {
     pipes: Vec<Command>,
@@ -105,7 +107,7 @@ impl Cmds {
         self.pipes.is_empty()
     }
 
-    pub fn pipe(&mut self, mut cmd: Cmd) -> &mut Self {
+    pub fn pipe(mut self, mut cmd: Cmd) -> Self {
         if !self.pipes.is_empty() {
             let last_i = self.pipes.len() - 1;
             self.pipes[last_i].stdout(Stdio::piped());
@@ -248,12 +250,14 @@ impl Cmds {
     }
 }
 
+#[doc(hidden)]
 pub enum FdOrFile {
     Fd(i32, bool),          // fd, append?
     File(String, bool),     // file, append?
     OpenedFile(File, bool), // opened file, append?
 }
 
+#[doc(hidden)]
 #[derive(Default)]
 pub struct Cmd {
     args: Vec<String>,
@@ -262,7 +266,7 @@ pub struct Cmd {
 }
 
 impl Cmd {
-    pub fn add_arg(&mut self, arg: String) -> &mut Self {
+    pub fn add_arg(mut self, arg: String) -> Self {
         if self.is_empty() {
             let v: Vec<&str> = arg.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
@@ -271,6 +275,13 @@ impl Cmd {
             }
         }
         self.args.push(arg);
+        self
+    }
+
+    pub fn add_args(mut self, args: Vec<String>) -> Self {
+        for arg in args {
+            self = self.add_arg(arg);
+        }
         self
     }
 
@@ -294,7 +305,7 @@ impl Cmd {
         &mut self.envs
     }
 
-    pub fn set_redirect(&mut self, fd: i32, target: FdOrFile) -> &mut Self {
+    pub fn set_redirect(mut self, fd: i32, target: FdOrFile) -> Self {
         self.redirects.push((fd, target));
         self
     }
@@ -394,7 +405,7 @@ mod tests {
     fn test_stdout_redirect() {
         let tmp_file = "/tmp/file_echo_rust";
         let mut write_cmd = Cmd::from_args(vec!["echo", "rust"]);
-        write_cmd.set_redirect(1, FdOrFile::File(tmp_file.to_string(), false));
+        write_cmd = write_cmd.set_redirect(1, FdOrFile::File(tmp_file.to_string(), false));
         assert!(Cmds::from_cmd(write_cmd).run_cmd().is_ok());
 
         let read_cmd = Cmd::from_args(vec!["cat", tmp_file]);

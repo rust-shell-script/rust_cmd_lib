@@ -44,7 +44,7 @@ impl Parser {
             while *i < self.args.len() {
                 let cmd = self.parse_pipe(i);
                 if !cmd.is_empty() {
-                    cmds.pipe(cmd);
+                    cmds = cmds.pipe(cmd);
                 }
                 if *i < self.args.len() && self.args[*i] != ParsePipe {
                     break;
@@ -70,18 +70,16 @@ impl Parser {
         while *i < self.args.len() {
             match self.args[*i].clone() {
                 ParseRedirectFd(fd1, fd2, append) => {
-                    ret.set_redirect(fd1, FdOrFile::Fd(fd2, append));
+                    ret = ret.set_redirect(fd1, FdOrFile::Fd(fd2, append));
                 }
                 ParseRedirectFile(fd1, file, append) => {
-                    ret.set_redirect(fd1, FdOrFile::File(file, append));
+                    ret = ret.set_redirect(fd1, FdOrFile::File(file, append));
                 }
                 ParseArgStr(opt) => {
-                    ret.add_arg(opt);
+                    ret = ret.add_arg(opt);
                 }
                 ParseArgVec(opts) => {
-                    for opt in opts {
-                        ret.add_arg(opt);
-                    }
+                    ret = ret.add_args(opts);
                 }
                 ParsePipe | ParseOr | ParseSemicolon => break,
             };
