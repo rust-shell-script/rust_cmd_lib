@@ -1,33 +1,24 @@
-use crate::{CmdResult, FunResult};
-use lazy_static::lazy_static;
 use std::collections::HashMap;
-use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::Mutex;
+use crate::{proc_var, proc_var_get, proc_var_set, CmdResult, FunResult};
 
 pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
 type FnFun = fn(CmdArgs, CmdEnvs) -> FunResult;
 
-lazy_static! {
-    static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
-        // needs explicit type, or it won't compile
-        let m: HashMap<&'static str, FnFun> = HashMap::new();
-        Mutex::new(m)
-    };
-}
+proc_var!(CMD_MAP, HashMap<&'static str, FnFun>, HashMap::new());
 
 #[doc(hidden)]
 pub fn export_cmd(cmd: &'static str, func: FnFun) {
-    CMD_MAP.lock().unwrap().insert(cmd, func);
+    proc_var_set!(CMD_MAP, |map| map.insert(cmd, func));
 }
 
 #[doc(hidden)]
 pub fn set_debug(enable: bool) {
-    env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
+    std::env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 
 #[doc(hidden)]
@@ -184,11 +175,11 @@ impl Cmds {
         let args = self.cmd_args[0].get_args().clone();
         let envs = self.cmd_args[0].get_envs().clone();
         let cmd = &args[0].as_str();
-        let is_builtin = CMD_MAP.lock().unwrap().contains_key(cmd);
+        let is_builtin = proc_var_get!(CMD_MAP).contains_key(cmd);
         if cmd == &"cd" {
             return self.run_cd_cmd(args);
         } else if is_builtin {
-            return Self::to_cmd_result(CMD_MAP.lock().unwrap()[cmd](args, envs));
+            return Self::to_cmd_result(proc_var_get!(CMD_MAP)[cmd](args, envs));
         }
 
         let status = self.spawn()?.wait()?;
@@ -207,9 +198,9 @@ impl Cmds {
         let args = self.cmd_args[0].get_args().clone();
         let envs = self.cmd_args[0].get_envs().clone();
         let cmd = &args[0].as_str();
-        let is_builtin = CMD_MAP.lock().unwrap().contains_key(cmd);
+        let is_builtin = proc_var_get!(CMD_MAP).contains_key(cmd);
         if is_builtin {
-            return CMD_MAP.lock().unwrap()[cmd](args, envs);
+            return proc_var_get!(CMD_MAP)[cmd](args, envs);
         }
 
         let output = self.spawn()?.wait_with_output()?;
