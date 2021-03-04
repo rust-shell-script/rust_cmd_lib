@@ -159,11 +159,15 @@ println!("get result: {}", run_fun!(my_cmd)?);
 
 #### Low-level process spawning macro
 
-spawn!() macro executes the whole command as a child process, returning a handle to it:
+spawn!() macro executes the whole command as a child process, returning a handle to it. By
+default, stdin, stdout and stderr are inherited from the parent. To capture the output, you
+can use spawn_with_output!() macro instead.
 
 ```rust
-let child = spawn!(/bin/cat file.txt | sed s/a/b/)?; // return Result<Child>
+let child1 = spawn!(ping -c 10 192.168.0.1)?; // return Result<Child>
+let child2 = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?; // return Result<Child>
 ```
+
 
 #### Macros to define, get and set global variables
 - `proc_var!` to define thread local global variable

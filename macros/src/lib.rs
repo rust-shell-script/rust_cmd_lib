@@ -90,5 +90,14 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
+#[proc_macro]
+pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let cmds = lexer::Lexer::from(input.into()).scan().parse_for_spawn();
+    quote! ({
+        #cmds.spawn_with_output()
+    })
+    .into()
+}
+
 mod lexer;
 mod parser;

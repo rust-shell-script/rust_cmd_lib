@@ -173,13 +173,17 @@
 //!
 //! ### Low-level process spawning macro
 //!
-//! spawn!() macro executes the whole command as a child process, returning a handle to it:
+//! spawn!() macro executes the whole command as a child process, returning a handle to it. By
+//! default, stdin, stdout and stderr are inherited from the parent. To capture the output, you
+//! can use spawn_with_output!() macro instead.
 //!
 //! ```no_run
-//! # use cmd_lib::spawn;
-//! let child = spawn!(/bin/cat file.txt | sed s/a/b/)?; // return Result<Child>
+//! # use cmd_lib::{spawn, spawn_with_output};
+//! let child1 = spawn!(ping -c 10 192.168.0.1)?; // return Result<Child>
+//! let child2 = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?; // return Result<Child>
 //! # Ok::<(), std::io::Error>(())
 //! ```
+//!
 //!
 //! ### Macros to define, get and set global variables
 //! - `proc_var!` to define thread local global variable
@@ -232,7 +236,9 @@
 //! However, the process APIs are inherently not thread-safe, as a result I sometimes need to set
 //! `RUST_TEST_THREADS=1` before running tests.
 
-pub use cmd_lib_macros::{export_cmd, run_cmd, run_fun, spawn, use_builtin_cmd, use_custom_cmd};
+pub use cmd_lib_macros::{
+    export_cmd, run_cmd, run_fun, spawn, spawn_with_output, use_builtin_cmd, use_custom_cmd,
+};
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use builtins::{

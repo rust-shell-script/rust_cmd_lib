@@ -68,6 +68,11 @@ impl GroupCmds {
         assert_eq!(self.cmds.len(), 1);
         self.cmds[0].0.spawn()
     }
+
+    pub fn spawn_with_output(&mut self) -> std::io::Result<Child> {
+        assert_eq!(self.cmds.len(), 1);
+        self.cmds[0].0.spawn_with_output()
+    }
 }
 
 #[doc(hidden)]
@@ -116,6 +121,11 @@ impl Cmds {
         self.full_cmd += &cmd_args.join(" ");
         self.cmd_args.push(cmd);
         self
+    }
+
+    fn spawn_with_output(&mut self) -> std::io::Result<Child> {
+        self.pipes.last_mut().unwrap().stdout(Stdio::piped());
+        self.spawn()
     }
 
     fn spawn(&mut self) -> std::io::Result<Child> {
@@ -191,8 +201,7 @@ impl Cmds {
     }
 
     pub fn run_fun(&mut self) -> FunResult {
-        let last_i = self.pipes.len() - 1;
-        self.pipes[last_i].stdout(Stdio::piped());
+        self.pipes.last_mut().unwrap().stdout(Stdio::piped());
 
         // check builtin commands
         let args = self.cmd_args[0].get_args().clone();
