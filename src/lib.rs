@@ -243,7 +243,7 @@ pub use process::{export_cmd, set_debug, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, 
 #[macro_export]
 macro_rules! die {
     ($($arg:tt)*) => {{
-        eprintln!("{}", format!($($arg)*));
+        eprintln!("FATAL: {}", format!($($arg)*));
         std::process::exit(1);
     }};
 }
