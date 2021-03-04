@@ -175,9 +175,9 @@
 //!
 //! spawn!() macro executes the whole command as a child process, returning a handle to it:
 //!
-//! ```
+//! ```no_run
 //! # use cmd_lib::spawn;
-//! let child = spawn!(/bin/cat file.txt | sed s/a/b)?; // return Result<Child>
+//! let child = spawn!(/bin/cat file.txt | sed s/a/b/)?; // return Result<Child>
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!

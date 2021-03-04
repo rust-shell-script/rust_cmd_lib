@@ -162,7 +162,7 @@ println!("get result: {}", run_fun!(my_cmd)?);
 spawn!() macro executes the whole command as a child process, returning a handle to it:
 
 ```rust
-let child = spawn!(/bin/cat file.txt | sed s/a/b)?; // return Result<Child>
+let child = spawn!(/bin/cat file.txt | sed s/a/b/)?; // return Result<Child>
 ```
 
 #### Macros to define, get and set global variables
