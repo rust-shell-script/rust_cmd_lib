@@ -134,26 +134,25 @@ impl Cmds {
             }
         }
 
-        let mut pipe_error = false;
-        if let Ok("1") = std::env::var("CMD_LIB_PIPE_FAIL")
-            .as_ref()
-            .map(|v| v as &str)
-        {
-            pipe_error = true;
-        }
-
+        // spawning all the sub-processes
+        let mut cnt = 0;
         for (i, cmd) in self.pipes.iter_mut().enumerate() {
             if i != 0 {
                 cmd.stdin(self.children[i - 1].stdout.take().unwrap());
             }
             self.children.push(cmd.spawn()?);
-            if i % 2 != 0 {
-                self.children[i - 1].wait()?;
-            }
-            if pipe_error {
-                let status = self.children[i].wait()?;
+            cnt += 1;
+        }
+
+        // trying to get child wait status, except the last one
+        for i in 0..cnt-1 {
+            let status_opt = self.children[i].try_wait()?;
+            if let Some(status) = status_opt {
                 if !status.success() {
-                    return Err(Self::to_io_error(&format!("{:?}", cmd), status));
+                    return Err(Self::to_io_error(
+                        &format!("{}", self.cmd_args[i].get_args().join(" ")),
+                        status,
+                    ));
                 }
             }
         }
