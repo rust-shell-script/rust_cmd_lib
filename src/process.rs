@@ -1,9 +1,9 @@
+use crate::{proc_var, proc_var_get, proc_var_set, CmdResult, FunResult};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::process::{Child, Command, ExitStatus, Stdio};
-use crate::{proc_var, proc_var_get, proc_var_set, CmdResult, FunResult};
 
 pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
@@ -136,7 +136,7 @@ impl Cmds {
         }
 
         // trying to get child wait status, except the last one
-        for i in 0..cnt-1 {
+        for i in 0..cnt - 1 {
             let status_opt = self.children[i].try_wait()?;
             if let Some(status) = status_opt {
                 if !status.success() {
