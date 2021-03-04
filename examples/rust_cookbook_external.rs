@@ -22,6 +22,7 @@ fn main() -> CmdResult {
 
     // Redirect both stdout and stderr of child process to the same file
     run_cmd!(ls . oops &>out.txt || true)?;
+    run_cmd!(rm -f out.txt)?;
 
     // Continuously process child process' outputs
     run_cmd!(ping -c 5 www.google.com | awk r#"/time/ {print $(NF-3) " " $(NF-1) " " $NF}"#)?;
