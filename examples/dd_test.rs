@@ -51,12 +51,12 @@ fn main() -> CmdResult {
                     .parse()
                     .unwrap_or_else(|_| die_with_usage("invalid thread number"))
             }
-            _ => die_with_usage(""),
+            opt => die_with_usage(format!("invalid option: {}", opt).as_str()),
         }
     }
 
     if file.is_empty() {
-        die_with_usage("");
+        die_with_usage("file name is empty");
     }
 
     cmd_lib::set_debug(true);
@@ -70,7 +70,10 @@ fn main() -> CmdResult {
     let mut procs = vec![];
     for i in 0..thread_num {
         let off = cnt * i;
-        procs.push(spawn_with_output!(sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1")?);
+        let proc = spawn_with_output!(
+            sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
+        )?;
+        procs.push(proc);
     }
 
     let mut total_bandwidth = 0;
@@ -84,20 +87,21 @@ fn main() -> CmdResult {
         let output = String::from_utf8_lossy(&output.stdout).to_string();
         let bandwidth = run_fun!(echo $output | awk r"/MB/ {print $10}")?;
         total_bandwidth += bandwidth.parse::<i32>().unwrap();
-        println!("pid {} bandwidth: {} MB/s", pid, bandwidth);
+        run_cmd!(info "pid $pid bandwidth: $bandwidth MB/s")?;
     }
 
-    println!("Total bandwidth: {} MB/s", total_bandwidth);
+    run_cmd!(info "Total bandwidth: $total_bandwidth MB/s")?;
 
     Ok(())
 }
 
 fn die_with_usage(msg: &str) -> ! {
-    let prog = env::args().next().unwrap();
-    eprintln!("{}", msg);
-    eprintln!(
-        "Usage: {} [-b <block_size>] [-t <thread_num>] -f <file>",
-        run_fun!(basename $prog).unwrap()
-    );
+    let arg0 = env::args().next().unwrap();
+    let prog = run_fun!(basename $arg0).unwrap();
+    run_cmd! (
+        info $msg;
+        info "Usage: $prog [-b <block_size>] [-t <thread_num>] -f <file>"
+    )
+    .unwrap();
     std::process::exit(1)
 }
