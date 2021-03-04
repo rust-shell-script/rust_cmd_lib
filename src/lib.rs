@@ -235,8 +235,16 @@
 pub use cmd_lib_macros::{export_cmd, run_cmd, run_fun, spawn, use_builtin_cmd, use_custom_cmd};
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
-pub use builtins::{builtin_echo, builtin_true};
+pub use builtins::{builtin_echo, builtin_info, builtin_true};
 pub use process::{export_cmd, set_debug, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds};
+
+#[macro_export]
+macro_rules! die {
+    ($($arg:tt)*) => {{
+        eprintln!("{}", format!($($arg)*));
+        std::process::exit(1);
+    }};
+}
 
 mod builtins;
 mod proc_var;
