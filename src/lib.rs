@@ -27,6 +27,71 @@
 //! [examples/rust_cookbook_external.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/rust_cookbook_external.rs).
 //! Since they are rust code, you can always rewrite them in rust natively in the future, if necessary without spawning external commands.
 //!
+//! ## What this library looks like
+//!
+//! To get a first impression, here is an example from `examples/dd_test.rs`:
+//!
+//! ```no_run
+//! use cmd_lib::{die, run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult};
+//! # const DATA_SIZE: i64 = 10 * 1024 * 1024 * 1024; // 10GB data
+//! # let mut file = String::new();
+//! # let mut block_size: i32 = 4096;
+//! # let mut thread_num: i32 = 1;
+//!
+//! use_builtin_cmd!(info);
+//! cmd_lib::set_debug(true);
+//! run_cmd! (
+//!     info "Dropping caches at first";
+//!     sudo bash -c "echo 3 > /proc/sys/vm/drop_caches"
+//! )?;
+//!
+//! run_cmd!(info "Running with thread_num: $thread_num, block_size: $block_size")?;
+//! let cnt: i32 = (DATA_SIZE / thread_num as i64 / block_size as i64) as i32;
+//! let mut procs = vec![];
+//! for i in 0..thread_num {
+//!     let off = cnt * i;
+//!     let proc = spawn_with_output!(
+//!         sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
+//!     )?;
+//!     procs.push(proc);
+//! }
+//!
+//! let mut total_bandwidth = 0;
+//! cmd_lib::set_debug(false);
+//! for proc in procs {
+//!     let pid = proc.id();
+//!     let output = proc.wait_with_output()?;
+//!     if !output.status.success() {
+//!         die!("process exit with error: {:?}", output.status);
+//!     }
+//!     let output = String::from_utf8_lossy(&output.stdout).to_string();
+//!     let bandwidth = run_fun!(echo $output | awk r"/MB/ {print $10}")?;
+//!     total_bandwidth += bandwidth.parse::<i32>().unwrap();
+//!     run_cmd!(info "pid $pid bandwidth: $bandwidth MB/s")?;
+//! }
+//!
+//! run_cmd!(info "Total bandwidth: $total_bandwidth MB/s")?;
+//! # Ok::<(), std::io::Error>(())
+//! ```
+//!
+//! Output will be like this:
+//!
+//! ```console
+//! ➜  rust_cmd_lib git:(master) ✗ cargo run --example dd_test -- -b 4096 -f /dev/nvme0n1 -t 4
+//! Dropping caches at first
+//! Running "sudo bash -c echo 3 > /proc/sys/vm/drop_caches" ...
+//! Running with thread_num: 4, block_size: 4096
+//! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=0 count=655360 2>&1" ...
+//! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=655360 count=655360 2>&1" ...
+//! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1310720 count=655360 2>&1" ...
+//! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1966080 count=655360 2>&1" ...
+//! pid 22161 bandwidth: 267 MB/s
+//! pid 22162 bandwidth: 266 MB/s
+//! pid 22163 bandwidth: 274 MB/s
+//! pid 22164 bandwidth: 304 MB/s
+//! Total bandwidth: 1111 MB/s
+//! ```
+//!
 //! ## What this library provides
 //!
 //! ### Macros to run external commands
