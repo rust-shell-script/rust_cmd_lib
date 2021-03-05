@@ -1,11 +1,11 @@
 #![allow(non_upper_case_globals)]
 use cmd_lib::{run_cmd, run_fun, tls_get, tls_init, tls_set, CmdResult};
-use std::collections::VecDeque;
 use std::io::Read;
 use std::{thread, time};
 
 // Tetris game converted from bash version:
 // https://github.com/kt97679/tetris
+// @6fcb9400e7808189869efd4b745febed81313949
 
 // Original comments:
 // Tetris game written in pure bash
@@ -343,23 +343,8 @@ fn new_piece_location_ok(x_test: i32, y_test: i32) -> bool {
     true
 }
 
-tls_init!(rands, VecDeque<u8>, VecDeque::new());
-fn init_rands() {
-    use std::iter::FromIterator;
-    let mut f = std::fs::File::open("/dev/urandom").unwrap();
-    let mut buffer = [0; 1024];
-    f.read(&mut buffer).unwrap();
-    tls_set!(rands, |r| *r =
-        VecDeque::from_iter(buffer.iter().map(|c| c.to_owned())));
-}
-
-fn get_rand() -> u8 {
-    if tls_get!(rands).is_empty() {
-        init_rands();
-    }
-    let mut ret: u8 = 0;
-    tls_set!(rands, |r| ret = r.pop_front().unwrap());
-    ret
+fn rand() -> i32 {
+    run_fun!(bash -c r"echo $RANDOM").unwrap().parse().unwrap()
 }
 
 fn get_random_next() {
@@ -379,13 +364,12 @@ fn get_random_next() {
 
     draw_next(0);
     // now let's get next piece
-    tls_set!(next_piece, |nxt| *nxt =
-        (get_rand() % piece_data.len() as u8) as i32);
-    let rotations = piece_data[tls_get!(next_piece) as usize].len() / 4;
+    tls_set!(next_piece, |nxt| *nxt = rand() % (piece_data.len() as i32));
+    let rotations = piece_data[tls_get!(next_piece) as usize].len() as i32 / 4;
     tls_set!(next_piece_rotation, |nxt| *nxt =
-        (get_rand() % rotations as u8) as i32);
+        ((rand() % rotations) as u8) as i32);
     tls_set!(next_piece_color, |nxt| *nxt =
-        colors[(get_rand() as usize) % colors.len()]);
+        colors[(rand() as usize) % colors.len()]);
     draw_next(tls_get!(next_on));
 }
 
@@ -425,7 +409,6 @@ fn toggle_color() {
 
 fn init() {
     run_cmd!(clear).unwrap();
-    init_rands();
     hide_cursor();
     get_random_next();
     get_random_next();
