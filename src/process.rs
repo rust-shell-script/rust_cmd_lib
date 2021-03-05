@@ -1,4 +1,4 @@
-use crate::{proc_var, proc_var_get, proc_var_set, CmdResult, FunResult};
+use crate::{tls_get, tls_init, tls_set, CmdResult, FunResult};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
@@ -9,11 +9,11 @@ pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
 type FnFun = fn(CmdArgs, CmdEnvs) -> FunResult;
 
-proc_var!(CMD_MAP, HashMap<&'static str, FnFun>, HashMap::new());
+tls_init!(CMD_MAP, HashMap<&'static str, FnFun>, HashMap::new());
 
 #[doc(hidden)]
 pub fn export_cmd(cmd: &'static str, func: FnFun) {
-    proc_var_set!(CMD_MAP, |map| map.insert(cmd, func));
+    tls_set!(CMD_MAP, |map| map.insert(cmd, func));
 }
 
 #[doc(hidden)]
@@ -185,11 +185,11 @@ impl Cmds {
         let args = self.cmd_args[0].get_args().clone();
         let envs = self.cmd_args[0].get_envs().clone();
         let cmd = &args[0].as_str();
-        let is_builtin = proc_var_get!(CMD_MAP).contains_key(cmd);
+        let is_builtin = tls_get!(CMD_MAP).contains_key(cmd);
         if cmd == &"cd" {
             return self.run_cd_cmd(args);
         } else if is_builtin {
-            return Self::to_cmd_result(proc_var_get!(CMD_MAP)[cmd](args, envs));
+            return Self::to_cmd_result(tls_get!(CMD_MAP)[cmd](args, envs));
         }
 
         let status = self.spawn()?.wait()?;
@@ -207,9 +207,9 @@ impl Cmds {
         let args = self.cmd_args[0].get_args().clone();
         let envs = self.cmd_args[0].get_envs().clone();
         let cmd = &args[0].as_str();
-        let is_builtin = proc_var_get!(CMD_MAP).contains_key(cmd);
+        let is_builtin = tls_get!(CMD_MAP).contains_key(cmd);
         if is_builtin {
-            return proc_var_get!(CMD_MAP)[cmd](args, envs);
+            return tls_get!(CMD_MAP)[cmd](args, envs);
         }
 
         let output = self.spawn()?.wait_with_output()?;

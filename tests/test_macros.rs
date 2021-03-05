@@ -1,5 +1,5 @@
 extern crate cmd_lib;
-use cmd_lib::{proc_var, proc_var_get, proc_var_set, run_cmd, run_fun};
+use cmd_lib::{run_cmd, run_fun, tls_get, tls_init, tls_set};
 
 #[test]
 #[rustfmt::skip]
@@ -144,9 +144,9 @@ fn test_vars_in_str3() {
 fn test_vars_in_str4() {}
 
 #[test]
-fn test_proc_var_set() {
-    proc_var!(V, Vec<String>, vec![]);
-    proc_var_set!(V, |v| v.push("a".to_string()));
-    proc_var_set!(V, |v| v.push("b".to_string()));
-    assert_eq!(proc_var_get!(V)[0], "a");
+fn test_tls_set() {
+    tls_init!(V, Vec<String>, vec![]);
+    tls_set!(V, |v| v.push("a".to_string()));
+    tls_set!(V, |v| v.push("b".to_string()));
+    assert_eq!(tls_get!(V)[0], "a");
 }

@@ -250,16 +250,16 @@
 //! ```
 //!
 //!
-//! ### Macros to define, get and set global variables
-//! - `proc_var!` to define thread local global variable
-//! - `proc_var_get!` to get the value
-//! - `proc_var_set!` to set the value
+//! ### Macros to define, get and set thread-local global variables
+//! - `tls_init!` to define thread local global variable
+//! - `tls_get!` to get the value
+//! - `tls_set!` to set the value
 //! ```
-//! # use cmd_lib::{ proc_var, proc_var_get, proc_var_set };
-//! proc_var!(DELAY, f64, 1.0);
+//! # use cmd_lib::{ tls_init, tls_get, tls_set };
+//! tls_init!(DELAY, f64, 1.0);
 //! const DELAY_FACTOR: f64 = 0.8;
-//! proc_var_set!(DELAY, |d| *d *= DELAY_FACTOR);
-//! let d = proc_var_get!(DELAY);
+//! tls_set!(DELAY, |d| *d *= DELAY_FACTOR);
+//! let d = tls_get!(DELAY);
 //! // check more examples in examples/tetris.rs
 //! ```
 //!
@@ -320,5 +320,5 @@ macro_rules! die {
 }
 
 mod builtins;
-mod proc_var;
 mod process;
+mod thread_local;

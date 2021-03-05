@@ -1,5 +1,5 @@
 #![allow(non_upper_case_globals)]
-use cmd_lib::{proc_var, proc_var_get, proc_var_set, run_cmd, run_fun, CmdResult};
+use cmd_lib::{run_cmd, run_fun, tls_get, tls_init, tls_set, CmdResult};
 use std::collections::VecDeque;
 use std::io::Read;
 use std::{thread, time};
@@ -29,7 +29,7 @@ use std::{thread, time};
 // the terms of the Do What The Fuck You Want To Public License, Version 2, as
 // published by Sam Hocevar. See http://www.wtfpl.net/ for more details.
 
-proc_var!(DELAY, f64, 1.0); // initial delay between piece movements
+tls_init!(DELAY, f64, 1.0); // initial delay between piece movements
 const DELAY_FACTOR: f64 = 0.8; // this value controld delay decrease for each level up
 
 // color codes
@@ -74,21 +74,21 @@ const colors: [i32; 7] = [RED, GREEN, YELLOW, BLUE, FUCHSIA, CYAN, WHITE];
 const empty_cell: &str = " ."; // how we draw empty cell
 const filled_cell: &str = "[]"; // how we draw filled cell
 
-proc_var!(use_color, bool, true); // true if we use color, false if not
-proc_var!(score, i32, 0); // score variable initialization
-proc_var!(level, i32, 1); // level variable initialization
-proc_var!(lines_completed, i32, 0); // completed lines counter initialization
+tls_init!(use_color, bool, true); // true if we use color, false if not
+tls_init!(score, i32, 0); // score variable initialization
+tls_init!(level, i32, 1); // level variable initialization
+tls_init!(lines_completed, i32, 0); // completed lines counter initialization
                                     // screen_buffer is variable, that accumulates all screen changes
                                     // this variable is printed in controller once per game cycle
-proc_var!(screen_buffer, String, "".to_string());
+tls_init!(screen_buffer, String, "".to_string());
 
 fn puts(changes: &str) {
-    proc_var_set!(screen_buffer, |s| s.push_str(changes));
+    tls_set!(screen_buffer, |s| s.push_str(changes));
 }
 
 fn flush_screen() {
-    eprint!("{}", proc_var_get!(screen_buffer));
-    proc_var_set!(screen_buffer, |s| s.clear());
+    eprint!("{}", tls_get!(screen_buffer));
+    tls_set!(screen_buffer, |s| s.clear());
 }
 
 const ESC: char = '\x1b'; // escape key, '\033' in bash or c
@@ -109,14 +109,14 @@ fn hide_cursor() {
 
 // foreground color
 fn set_fg(color: i32) {
-    if proc_var_get!(use_color) {
+    if tls_get!(use_color) {
         puts(&format!("{}[3{}m", ESC, color));
     }
 }
 
 // background color
 fn set_bg(color: i32) {
-    if proc_var_get!(use_color) {
+    if tls_get!(use_color) {
         puts(&format!("{}[4{}m", ESC, color));
     }
 }
@@ -132,7 +132,7 @@ fn set_bold() {
 // playfield is an array, each row is represented by integer
 // each cell occupies 3 bits (empty if 0, other values encode color)
 // playfield is initialized with 0s (empty cells)
-proc_var!(
+tls_init!(
     playfield,
     [i32; PLAYFIELD_H as usize],
     [0; PLAYFIELD_H as usize]
@@ -142,7 +142,7 @@ fn redraw_playfield() {
     for y in 0..PLAYFIELD_H {
         xyprint(PLAYFIELD_X, PLAYFIELD_Y + y, "");
         for x in 0..PLAYFIELD_W {
-            let color = (proc_var_get!(playfield)[y as usize] >> (x * 3)) & 7;
+            let color = (tls_get!(playfield)[y as usize] >> (x * 3)) & 7;
             if color == 0 {
                 puts(empty_cell);
             } else {
@@ -157,32 +157,32 @@ fn redraw_playfield() {
 
 // Arguments: lines - number of completed lines
 fn update_score(lines: i32) {
-    proc_var_set!(lines_completed, |l| *l += lines);
+    tls_set!(lines_completed, |l| *l += lines);
     // Unfortunately I don't know scoring algorithm of original tetris
     // Here score is incremented with squared number of lines completed
     // this seems reasonable since it takes more efforts to complete several lines at once
-    proc_var_set!(score, |s| *s += lines * lines);
-    if proc_var_get!(score) > LEVEL_UP * proc_var_get!(level) {
+    tls_set!(score, |s| *s += lines * lines);
+    if tls_get!(score) > LEVEL_UP * tls_get!(level) {
         // if level should be increased
-        proc_var_set!(level, |l| *l += 1); // increment level
-        proc_var_set!(DELAY, |d| *d *= DELAY_FACTOR); // delay decreased
+        tls_set!(level, |l| *l += 1); // increment level
+        tls_set!(DELAY, |d| *d *= DELAY_FACTOR); // delay decreased
     }
     set_bold();
     set_fg(SCORE_COLOR);
     xyprint(
         SCORE_X,
         SCORE_Y,
-        &format!("Lines completed: {}", proc_var_get!(lines_completed)),
+        &format!("Lines completed: {}", tls_get!(lines_completed)),
     );
     xyprint(
         SCORE_X,
         SCORE_Y + 1,
-        &format!("Level:           {}", proc_var_get!(level)),
+        &format!("Level:           {}", tls_get!(level)),
     );
     xyprint(
         SCORE_X,
         SCORE_Y + 2,
-        &format!("Score:           {}", proc_var_get!(score)),
+        &format!("Score:           {}", tls_get!(score)),
     );
     reset_colors();
 }
@@ -199,7 +199,7 @@ const help: [&str; 9] = [
     "H: toggle this help",
 ];
 
-proc_var!(help_on, i32, 1); // if this flag is 1 help is shown
+tls_init!(help_on, i32, 1); // if this flag is 1 help is shown
 
 fn draw_help() {
     set_bold();
@@ -207,7 +207,7 @@ fn draw_help() {
     for (i, &h) in help.iter().enumerate() {
         // ternary assignment: if help_on is 1 use string as is,
         // otherwise substitute all characters with spaces
-        let s = if proc_var_get!(help_on) == 1 {
+        let s = if tls_get!(help_on) == 1 {
             h.to_owned()
         } else {
             " ".repeat(h.len())
@@ -218,7 +218,7 @@ fn draw_help() {
 }
 
 fn toggle_help() {
-    proc_var_set!(help_on, |h| *h ^= 1);
+    tls_set!(help_on, |h| *h ^= 1);
     draw_help();
 }
 
@@ -258,58 +258,58 @@ fn draw_piece(x: i32, y: i32, ctype: i32, rotation: i32, cell: &str) {
     }
 }
 
-proc_var!(next_piece, i32, 0);
-proc_var!(next_piece_rotation, i32, 0);
-proc_var!(next_piece_color, i32, 0);
+tls_init!(next_piece, i32, 0);
+tls_init!(next_piece_rotation, i32, 0);
+tls_init!(next_piece_color, i32, 0);
 
-proc_var!(next_on, i32, 1); // if this flag is 1 next piece is shown
+tls_init!(next_on, i32, 1); // if this flag is 1 next piece is shown
 
 // Argument: visible - visibility (0 - no, 1 - yes),
 // if this argument is skipped $next_on is used
 fn draw_next(visible: i32) {
     let mut s = filled_cell.to_string();
     if visible == 1 {
-        set_fg(proc_var_get!(next_piece_color));
-        set_bg(proc_var_get!(next_piece_color));
+        set_fg(tls_get!(next_piece_color));
+        set_bg(tls_get!(next_piece_color));
     } else {
         s = " ".repeat(s.len());
     }
     draw_piece(
         NEXT_X,
         NEXT_Y,
-        proc_var_get!(next_piece),
-        proc_var_get!(next_piece_rotation),
+        tls_get!(next_piece),
+        tls_get!(next_piece_rotation),
         &s,
     );
     reset_colors();
 }
 
 fn toggle_next() {
-    proc_var_set!(next_on, |x| *x ^= 1);
-    draw_next(proc_var_get!(next_on));
+    tls_set!(next_on, |x| *x ^= 1);
+    draw_next(tls_get!(next_on));
 }
 
-proc_var!(current_piece, i32, 0);
-proc_var!(current_piece_x, i32, 0);
-proc_var!(current_piece_y, i32, 0);
-proc_var!(current_piece_color, i32, 0);
-proc_var!(current_piece_rotation, i32, 0);
+tls_init!(current_piece, i32, 0);
+tls_init!(current_piece_x, i32, 0);
+tls_init!(current_piece_y, i32, 0);
+tls_init!(current_piece_color, i32, 0);
+tls_init!(current_piece_rotation, i32, 0);
 
 // Arguments: cell - string to draw single cell
 fn draw_current(cell: &str) {
     // factor 2 for x because each cell is 2 characters wide
     draw_piece(
-        proc_var_get!(current_piece_x) * 2 + PLAYFIELD_X,
-        proc_var_get!(current_piece_y) + PLAYFIELD_Y,
-        proc_var_get!(current_piece),
-        proc_var_get!(current_piece_rotation),
+        tls_get!(current_piece_x) * 2 + PLAYFIELD_X,
+        tls_get!(current_piece_y) + PLAYFIELD_Y,
+        tls_get!(current_piece),
+        tls_get!(current_piece_rotation),
         cell,
     );
 }
 
 fn show_current() {
-    set_fg(proc_var_get!(current_piece_color));
-    set_bg(proc_var_get!(current_piece_color));
+    set_fg(tls_get!(current_piece_color));
+    set_bg(tls_get!(current_piece_color));
     draw_current(filled_cell);
     reset_colors();
 }
@@ -322,9 +322,9 @@ fn clear_current() {
 // test if piece can be moved to new location
 fn new_piece_location_ok(x_test: i32, y_test: i32) -> bool {
     for i in 0..4 {
-        let c = piece_data[proc_var_get!(current_piece) as usize]
+        let c = piece_data[tls_get!(current_piece) as usize]
             .chars()
-            .nth((i + proc_var_get!(current_piece_rotation) * 4) as usize)
+            .nth((i + tls_get!(current_piece_rotation) * 4) as usize)
             .unwrap()
             .to_digit(16)
             .unwrap() as i32;
@@ -336,61 +336,57 @@ fn new_piece_location_ok(x_test: i32, y_test: i32) -> bool {
             return false;
         }
         // check if location is already ocupied
-        if ((proc_var_get!(playfield)[y as usize] >> (x * 3)) & 7) != 0 {
+        if ((tls_get!(playfield)[y as usize] >> (x * 3)) & 7) != 0 {
             return false;
         }
     }
     true
 }
 
-proc_var!(rands, VecDeque<u8>, VecDeque::new());
+tls_init!(rands, VecDeque<u8>, VecDeque::new());
 fn init_rands() {
     use std::iter::FromIterator;
     let mut f = std::fs::File::open("/dev/urandom").unwrap();
     let mut buffer = [0; 1024];
     f.read(&mut buffer).unwrap();
-    proc_var_set!(rands, |r| *r =
+    tls_set!(rands, |r| *r =
         VecDeque::from_iter(buffer.iter().map(|c| c.to_owned())));
 }
 
 fn get_rand() -> u8 {
-    if proc_var_get!(rands).is_empty() {
+    if tls_get!(rands).is_empty() {
         init_rands();
     }
     let mut ret: u8 = 0;
-    proc_var_set!(rands, |r| ret = r.pop_front().unwrap());
+    tls_set!(rands, |r| ret = r.pop_front().unwrap());
     ret
 }
 
 fn get_random_next() {
     // next piece becomes current
-    proc_var_set!(current_piece, |cur| *cur = proc_var_get!(next_piece));
-    proc_var_set!(current_piece_rotation, |cur| *cur =
-        proc_var_get!(next_piece_rotation));
-    proc_var_set!(current_piece_color, |cur| *cur =
-        proc_var_get!(next_piece_color));
+    tls_set!(current_piece, |cur| *cur = tls_get!(next_piece));
+    tls_set!(current_piece_rotation, |cur| *cur =
+        tls_get!(next_piece_rotation));
+    tls_set!(current_piece_color, |cur| *cur = tls_get!(next_piece_color));
     // place current at the top of play field, approximately at the center
-    proc_var_set!(current_piece_x, |cur| *cur = (PLAYFIELD_W - 4) / 2);
-    proc_var_set!(current_piece_y, |cur| *cur = 0);
+    tls_set!(current_piece_x, |cur| *cur = (PLAYFIELD_W - 4) / 2);
+    tls_set!(current_piece_y, |cur| *cur = 0);
     // check if piece can be placed at this location, if not - game over
-    if !new_piece_location_ok(
-        proc_var_get!(current_piece_x),
-        proc_var_get!(current_piece_y),
-    ) {
+    if !new_piece_location_ok(tls_get!(current_piece_x), tls_get!(current_piece_y)) {
         cmd_exit();
     }
     show_current();
 
     draw_next(0);
     // now let's get next piece
-    proc_var_set!(next_piece, |nxt| *nxt =
+    tls_set!(next_piece, |nxt| *nxt =
         (get_rand() % piece_data.len() as u8) as i32);
-    let rotations = piece_data[proc_var_get!(next_piece) as usize].len() / 4;
-    proc_var_set!(next_piece_rotation, |nxt| *nxt =
+    let rotations = piece_data[tls_get!(next_piece) as usize].len() / 4;
+    tls_set!(next_piece_rotation, |nxt| *nxt =
         (get_rand() % rotations as u8) as i32);
-    proc_var_set!(next_piece_color, |nxt| *nxt =
+    tls_set!(next_piece_color, |nxt| *nxt =
         colors[(get_rand() as usize) % colors.len()]);
-    draw_next(proc_var_get!(next_on));
+    draw_next(tls_get!(next_on));
 }
 
 fn draw_border() {
@@ -423,7 +419,7 @@ fn redraw_screen() {
 }
 
 fn toggle_color() {
-    proc_var_set!(use_color, |x| *x = !*x);
+    tls_set!(use_color, |x| *x = !*x);
     redraw_screen();
 }
 
@@ -440,22 +436,22 @@ fn init() {
 // this function updates occupied cells in playfield array after piece is dropped
 fn flatten_playfield() {
     for i in 0..4 {
-        let c: i32 = piece_data[proc_var_get!(current_piece) as usize]
+        let c: i32 = piece_data[tls_get!(current_piece) as usize]
             .chars()
-            .nth((i + proc_var_get!(current_piece_rotation) * 4) as usize)
+            .nth((i + tls_get!(current_piece_rotation) * 4) as usize)
             .unwrap()
             .to_digit(16)
             .unwrap() as i32;
-        let y = (c >> 2) + proc_var_get!(current_piece_y);
-        let x = (c & 3) + proc_var_get!(current_piece_x);
-        proc_var_set!(playfield, |f| f[y as usize] |=
-            proc_var_get!(current_piece_color) << (x * 3));
+        let y = (c >> 2) + tls_get!(current_piece_y);
+        let x = (c & 3) + tls_get!(current_piece_x);
+        tls_set!(playfield, |f| f[y as usize] |=
+            tls_get!(current_piece_color) << (x * 3));
     }
 }
 
 // this function takes row number as argument and checks if has empty cells
 fn line_full(y: i32) -> bool {
-    let row = proc_var_get!(playfield)[y as usize];
+    let row = tls_get!(playfield)[y as usize];
     for x in 0..PLAYFIELD_W {
         if ((row >> (x * 3)) & 7) == 0 {
             return false;
@@ -471,7 +467,7 @@ fn process_complete_lines() -> i32 {
     for y in (0..PLAYFIELD_H).rev() {
         if !line_full(y) {
             if last_idx != y {
-                proc_var_set!(playfield, |f| f[last_idx as usize] = f[y as usize]);
+                tls_set!(playfield, |f| f[last_idx as usize] = f[y as usize]);
             }
             last_idx -= 1;
         } else {
@@ -479,7 +475,7 @@ fn process_complete_lines() -> i32 {
         }
     }
     for y in 0..complete_lines {
-        proc_var_set!(playfield, |f| f[y as usize] = 0);
+        tls_set!(playfield, |f| f[y as usize] = 0);
     }
     complete_lines
 }
@@ -501,18 +497,18 @@ fn move_piece(nx: i32, ny: i32) -> bool {
     if new_piece_location_ok(nx, ny) {
         // if new location is ok
         clear_current(); // let's wipe out piece current location
-        proc_var_set!(
+        tls_set!(
             current_piece_x, // update x ...
             |x| *x = nx
         );
-        proc_var_set!(
+        tls_set!(
             current_piece_y, // ... and y of new location
             |y| *y = ny
         );
         show_current(); // and draw piece in new location
         return true; // nothing more to do here
     } // if we could not move piece to new location
-    if ny == proc_var_get!(current_piece_y) {
+    if ny == tls_get!(current_piece_y) {
         return true; // and this was not horizontal move
     }
     process_fallen_piece(); // let's finalize this piece
@@ -521,45 +517,36 @@ fn move_piece(nx: i32, ny: i32) -> bool {
 }
 
 fn cmd_right() {
-    move_piece(
-        proc_var_get!(current_piece_x) + 1,
-        proc_var_get!(current_piece_y),
-    );
+    move_piece(tls_get!(current_piece_x) + 1, tls_get!(current_piece_y));
 }
 
 fn cmd_left() {
-    move_piece(
-        proc_var_get!(current_piece_x) - 1,
-        proc_var_get!(current_piece_y),
-    );
+    move_piece(tls_get!(current_piece_x) - 1, tls_get!(current_piece_y));
 }
 
 fn cmd_rotate() {
     // local available_rotations old_rotation new_rotation
     // number of orientations for this piece
-    let available_rotations = piece_data[proc_var_get!(current_piece) as usize].len() as i32 / 4;
-    let old_rotation = proc_var_get!(current_piece_rotation); // preserve current orientation
+    let available_rotations = piece_data[tls_get!(current_piece) as usize].len() as i32 / 4;
+    let old_rotation = tls_get!(current_piece_rotation); // preserve current orientation
     let new_rotation = (old_rotation + 1) % available_rotations; // calculate new orientation
-    proc_var_set!(current_piece_rotation, |r| *r = new_rotation); // set orientation to new
+    tls_set!(current_piece_rotation, |r| *r = new_rotation); // set orientation to new
     if new_piece_location_ok(
-        proc_var_get!(current_piece_x), // check if new orientation is ok
-        proc_var_get!(current_piece_y),
+        tls_get!(current_piece_x), // check if new orientation is ok
+        tls_get!(current_piece_y),
     ) {
-        proc_var_set!(current_piece_rotation, |r| *r = old_rotation); // if yes - restore old orientation
+        tls_set!(current_piece_rotation, |r| *r = old_rotation); // if yes - restore old orientation
         clear_current(); // clear piece image
-        proc_var_set!(current_piece_rotation, |r| *r = new_rotation); // set new orientation
+        tls_set!(current_piece_rotation, |r| *r = new_rotation); // set new orientation
         show_current(); // draw piece with new orientation
     } else {
         // if new orientation is not ok
-        proc_var_set!(current_piece_rotation, |r| *r = old_rotation); // restore old orientation
+        tls_set!(current_piece_rotation, |r| *r = old_rotation); // restore old orientation
     }
 }
 
 fn cmd_down() {
-    move_piece(
-        proc_var_get!(current_piece_x),
-        proc_var_get!(current_piece_y) + 1,
-    );
+    move_piece(tls_get!(current_piece_x), tls_get!(current_piece_y) + 1);
 }
 
 fn cmd_drop() {
@@ -568,23 +555,20 @@ fn cmd_drop() {
     // loop condition is done at least once
     // loop runs until loop condition would return non zero exit code
     loop {
-        if !move_piece(
-            proc_var_get!(current_piece_x),
-            proc_var_get!(current_piece_y) + 1,
-        ) {
+        if !move_piece(tls_get!(current_piece_x), tls_get!(current_piece_y) + 1) {
             break;
         }
     }
 }
 
-proc_var!(old_stty_cfg, String, String::new());
+tls_init!(old_stty_cfg, String, String::new());
 
 fn cmd_exit() {
     xyprint(GAMEOVER_X, GAMEOVER_Y, "Game over!");
     xyprint(GAMEOVER_X, GAMEOVER_Y + 1, ""); // reset cursor position
     flush_screen(); // ... print final message ...
     show_cursor();
-    let stty_g = proc_var_get!(old_stty_cfg);
+    let stty_g = tls_get!(old_stty_cfg);
     run_cmd!(stty $stty_g).unwrap(); // ... and restore terminal state
     std::process::exit(0);
 }
@@ -592,7 +576,7 @@ fn cmd_exit() {
 fn main() -> CmdResult {
     #[rustfmt::skip]
     let old_cfg = run_fun!(stty -g)?; // let's save terminal state ...
-    proc_var_set!(old_stty_cfg, |cfg| *cfg = old_cfg);
+    tls_set!(old_stty_cfg, |cfg| *cfg = old_cfg);
     run_cmd!(stty raw -echo -isig -icanon min 0 time 0)?;
 
     init();
@@ -613,7 +597,7 @@ fn main() -> CmdResult {
             }
         }
         tick += 1;
-        if tick >= (600.0 * proc_var_get!(DELAY)) as i32 {
+        if tick >= (600.0 * tls_get!(DELAY)) as i32 {
             tick = 0;
             cmd_down();
         }
