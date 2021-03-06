@@ -33,7 +33,6 @@ use std::{thread, time};
 
 const VERSION: &str = "1.3.0";
 
-const ESC: char = '\x1b'; // escape key, '\033' in bash or c
 const M: i32 = 32768; // Bash RANDOM maximum + 1
 tls_init!(p, i32, 1); // number of pipes
 tls_init!(f, i32, 75); // frame rate
@@ -48,7 +47,7 @@ tls_init!(h, i32, 24);
 // 00 means going up   , then going up   -> ┃
 // 12 means going right, then going down -> ┓
 #[rustfmt::skip]
-const sets: [&str; 10] = [
+tls_init!(sets, Vec<String>, vec![
     r"┃┏ ┓┛━┓  ┗┃┛┗ ┏━",
     r"│╭ ╮╯─╮  ╰│╯╰ ╭─",
     r"│┌ ┐┘─┐  └│┘└ ┌─",
@@ -59,7 +58,7 @@ const sets: [&str; 10] = [
     r".o oo.o  o.oo o.",
     r"-\ /\|/  /-\/ \|",  // railway
     r"╿┍ ┑┚╼┒  ┕╽┙┖ ┎╾",  // knobby pipe
-];
+].iter().map(|ns| ns.to_string()).collect());
 // rearranged all pipe chars into individual elements for easier access
 tls_init!(SETS, Vec<char>, vec![]);
 
@@ -85,11 +84,15 @@ tls_init!(BOLD, bool, true);
 tls_init!(NOCOLOR, bool, false);
 tls_init!(KEEPCT, bool, false); // keep pipe color and type
 
+fn prog_name() -> String {
+    let arg0 = std::env::args().next().unwrap();
+    run_fun!(basename $arg0).unwrap()
+}
+
 // print help message in 72-char width
 fn print_help() -> CmdResult {
-    let arg0 = std::env::args().next().unwrap();
-    let prog = run_fun!(basename $arg0)?;
-    let mt = sets.len() - 1;
+    let prog = prog_name();
+    let max_type = tls_get!(sets).len() - 1;
     let cgap = " ".repeat(15 - format!("{}", tls_get!(COLORS)).chars().count());
     let colors = run_fun!(tput colors)?;
     let term = std::env::var("TERM").unwrap();
@@ -98,7 +101,7 @@ Usage: $prog [OPTION]...
 Animated pipes terminal screensaver.
 
   -p [1-]               number of pipes (D=1)
-  -t [0-$mt]              pipe type (D=0)
+  -t [0-$max_type]              pipe type (D=0)
   -t c[16 chars]        custom pipe type
   -c [0-$colors]${cgap}pipe color INDEX (TERM=$term), can be
                         hexadecimal with '#' prefix
@@ -125,24 +128,28 @@ fn parse() -> CmdResult {
     fn is_N(arg_opt: Option<String>) -> (bool, i32) {
         if let Some(arg) = arg_opt {
             if let Ok(vv) = arg.parse::<i32>() {
-                return (true, vv);
+                return (vv >= 0, vv);
             }
         }
         (false, 0)
     }
 
-    //     // test if $1 is a hexadecimal string
-    //     fn is_hex(arg: &str) -> Result<i32, std::num::ParseIntError> {
-    //         i32::from_str_radix(arg, 16)
-    //     }
+    // test if $1 is a hexadecimal string
+    fn is_hex(arg: &str) -> (bool, i32) {
+        if let Ok(vv) = i32::from_str_radix(&arg, 16) {
+            return (true, vv);
+        }
+        (false, 0)
+    }
 
     // print error message for invalid argument to standard error, this
     // - mimics getopts error message
     // - use all positional parameters as error message
     // - has a newline appended
     // $arg and $OPTARG are the option name and argument set by getopts.
-    fn pearg(msg: &str) -> ! {
-        run_cmd!(info "$msg").unwrap();
+    fn pearg(arg: &str, msg: &str) -> ! {
+        let arg0 = prog_name();
+        run_cmd!(info "$arg0: -$arg invalid argument; $msg").unwrap();
         print_help().unwrap();
         std::process::exit(1)
     }
@@ -155,27 +162,53 @@ fn parse() -> CmdResult {
                 if is_valid && vv > 0 {
                     tls_set!(p, |np| *np = vv);
                 } else {
-                    pearg("must be an integer and greater than 0");
+                    pearg(&arg, "must be an integer and greater than 0");
                 }
             }
             "-t" => {
-                let (is_valid, vv) = is_N(args.next());
-                if is_valid && vv < sets.len() as i32 {
+                let arg_opt = args.next();
+                let (is_valid, vv) = is_N(arg_opt.clone());
+                let arg_str = arg_opt.unwrap_or_default();
+                let len = tls_get!(sets).len() as i32;
+                if arg_str.chars().count() == 16 {
+                    tls_set!(V, |nv| nv.push(len));
+                    tls_set!(sets, |ns| ns.push(arg_str));
+                } else if is_valid && vv < len {
                     tls_set!(V, |nv| nv.push(vv));
                 } else {
-                    pearg("must be an integer and from 0 to {}; or a custom type");
+                    pearg(
+                        &arg,
+                        &format!("must be an integer and from 0 to {}; or a custom type", len),
+                    );
                 }
             }
             "-c" => {
-                let (is_valid, vv) = is_N(args.next());
-                if is_valid && vv < tls_get!(COLORS) {
+                let arg_opt = args.next();
+                let (is_valid, vv) = is_N(arg_opt.clone());
+                let arg_str = arg_opt.unwrap_or_default();
+                if arg_str.starts_with("#") {
+                    let (is_valid_hex, hv) = is_hex(&arg_str[1..]);
+                    if !is_valid_hex {
+                        pearg(&arg, "unrecognized hexadecimal string");
+                    }
+                    if hv >= tls_get!(COLORS) {
+                        pearg(
+                            &arg,
+                            &format!("hexadecimal must be from #0 to {:X}", tls_get!(COLORS) - 1),
+                        );
+                    }
+                    tls_set!(C, |nc| nc.push(hv));
+                } else if is_valid && vv < tls_get!(COLORS) {
                     tls_set!(C, |nc| nc.push(vv));
                 } else {
-                    pearg(&format!(
-                        "must be an integer and from 0 to {};
-                       or a hexadecimal string with # prefix",
-                        tls_get!(COLORS) - 1
-                    ));
+                    pearg(
+                        &arg,
+                        &format!(
+                            "must be an integer and from 0 to {};
+                             or a hexadecimal string with # prefix",
+                            tls_get!(COLORS) - 1
+                        ),
+                    );
                 }
             }
             "-f" => {
@@ -183,7 +216,7 @@ fn parse() -> CmdResult {
                 if is_valid && vv >= 20 && vv <= 100 {
                     tls_set!(f, |nf| *nf = vv);
                 } else {
-                    pearg("must be an integer and from 20 to 100");
+                    pearg(&arg, "must be an integer and from 20 to 100");
                 }
             }
             "-s" => {
@@ -191,7 +224,7 @@ fn parse() -> CmdResult {
                 if is_valid && vv >= 5 && vv <= 15 {
                     tls_set!(r, |nr| *nr = vv);
                 } else {
-                    pearg("must be a non-negative integer");
+                    pearg(&arg, "must be a non-negative integer");
                 }
             }
             "-r" => {
@@ -199,7 +232,7 @@ fn parse() -> CmdResult {
                 if is_valid && vv > 0 {
                     tls_set!(r, |nr| *nr = vv);
                 } else {
-                    pearg("must be a non-negative integer");
+                    pearg(&arg, "must be a non-negative integer");
                 }
             }
             "-R" => tls_set!(RNDSTART, |nr| *nr = true),
@@ -217,7 +250,10 @@ fn parse() -> CmdResult {
                 std::process::exit(0);
             }
             _ => {
-                pearg("illegal argument");
+                pearg(
+                    &arg,
+                    &format!("illegal arguments -- {}; no arguments allowed", arg),
+                );
             }
         }
     }
@@ -350,9 +386,9 @@ fn main() -> CmdResult {
     // -_CP_init_E
 
     // +_CP_init_SETS
-    for i in 0..sets.len() {
+    for i in 0..tls_get!(sets).len() {
         for j in 0..16 {
-            let cc = sets[i].chars().nth(j).unwrap();
+            let cc = tls_get!(sets)[i].chars().nth(j).unwrap();
             tls_set!(SETS, |ns| ns.push(cc));
         }
     }
@@ -436,8 +472,7 @@ fn main() -> CmdResult {
             // +_CP_print
             let ii = tls_get!(v)[i] * 16 + tls_get!(l)[i] * 4 + tls_get!(n)[i];
             eprint!(
-                "{}[{};{}H{}{}",
-                ESC,
+                "\u{1b}[{};{}H{}{}",
                 tls_get!(y)[i] + 1,
                 tls_get!(x)[i] + 1,
                 tls_get!(c)[i],
