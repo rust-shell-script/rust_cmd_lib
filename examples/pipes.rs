@@ -272,8 +272,6 @@ fn cleanup() -> CmdResult {
         echo $sgr0
     )?;
 
-    let stty_g = tls_get!(old_stty_cfg);
-    run_cmd!(stty $stty_g)?; // ... and restore terminal state
     Ok(())
 }
 
@@ -326,7 +324,7 @@ fn init_pipes() {
 
 fn init_screen() -> CmdResult {
     run_cmd!(
-        stty -echo;
+        stty -echo -isig -icanon min 0 time 0;
         tput smcup;
         tput civis;
         tput clear;
@@ -338,7 +336,6 @@ fn init_screen() -> CmdResult {
 tls_init!(SGR0, String, String::new());
 tls_init!(SGR_BOLD, String, String::new());
 tls_init!(COLORS, i32, 0);
-tls_init!(old_stty_cfg, String, String::new());
 
 fn rand() -> i32 {
     run_fun!(bash -c r"echo $RANDOM").unwrap().parse().unwrap()
@@ -396,12 +393,6 @@ fn main() -> CmdResult {
 
     init_screen()?;
     init_pipes();
-
-    // set terminal into non-blocking mode, and ignoring signals
-    #[rustfmt::skip]
-    let old_cfg = run_fun!(stty -g)?; // let's save terminal state ...
-    tls_set!(old_stty_cfg, |cfg| *cfg = old_cfg);
-    run_cmd!(stty raw -echo -isig -icanon min 0 time 0)?;
 
     loop {
         thread::sleep(time::Duration::from_millis(1000 / tls_get!(f) as u64));
@@ -486,7 +477,7 @@ fn main() -> CmdResult {
             run_cmd!(
                 tput reset;
                 tput civis;
-                stty raw -echo -isig -icanon min 0 time 0
+                stty -echo -isig -icanon min 0 time 0
             )?;
             tls_set!(t, |nt| *nt = 0);
         } else {
