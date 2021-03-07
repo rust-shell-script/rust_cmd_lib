@@ -19,7 +19,7 @@
 // thread 3 bandwidth: 304 MB/s
 // Total bandwidth: 1111 MB/s
 
-use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult, WaitResult};
+use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult};
 use std::env;
 
 const DATA_SIZE: i64 = 10 * 1024 * 1024 * 1024; // 10GB data
@@ -79,7 +79,7 @@ fn main() -> CmdResult {
     let mut total_bandwidth = 0;
     cmd_lib::set_debug(false);
     for (i, mut proc) in procs.into_iter().enumerate() {
-        let output = proc.wait_fun_result()?;
+        let output = proc.wait_result()?;
         let bandwidth = run_fun!(echo $output | awk r"/MB/ {print $10}")?;
         total_bandwidth += bandwidth.parse::<i32>().unwrap();
         run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;

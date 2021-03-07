@@ -64,14 +64,62 @@ impl GroupCmds {
         Ok(ret)
     }
 
-    pub fn spawn(mut self) -> std::io::Result<Vec<Child>> {
+    pub fn spawn(mut self) -> std::io::Result<WaitCmd> {
         assert_eq!(self.cmds.len(), 1);
         self.cmds.pop().unwrap().0.spawn()
     }
 
-    pub fn spawn_with_output(mut self) -> std::io::Result<Vec<Child>> {
+    pub fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
         assert_eq!(self.cmds.len(), 1);
         self.cmds.pop().unwrap().0.spawn_with_output()
+    }
+}
+
+pub struct WaitCmd(Vec<Child>);
+impl WaitCmd {
+    pub fn wait_result(&mut self) -> CmdResult {
+        let len = self.0.len();
+        for i in (0..len).rev() {
+            if i == len - 1 {
+                let status = self.0.pop().unwrap().wait()?;
+                if !status.success() {
+                    return Err(Cmds::to_io_error("last child status error", status));
+                }
+            } else {
+                let status = self.0.pop().unwrap().wait()?;
+                if !status.success() {
+                    return Err(Cmds::to_io_error("child status error", status));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+pub struct WaitFun(Vec<Child>);
+impl WaitFun {
+    pub fn wait_result(&mut self) -> FunResult {
+        let mut ret = String::new();
+        let len = self.0.len();
+        for i in (0..len).rev() {
+            if i == len - 1 {
+                let output = self.0.pop().unwrap().wait_with_output()?;
+                if !output.status.success() {
+                    return Err(Cmds::to_io_error("last child output error", output.status));
+                } else {
+                    ret = String::from_utf8_lossy(&output.stdout).to_string();
+                    if ret.ends_with('\n') {
+                        ret.pop();
+                    }
+                }
+            } else {
+                let status = self.0.pop().unwrap().wait()?;
+                if !status.success() {
+                    return Err(Cmds::to_io_error("child status error", status));
+                }
+            }
+        }
+        Ok(ret)
     }
 }
 
@@ -85,55 +133,6 @@ pub struct Cmds {
     full_cmd: String,
 
     current_dir: String,
-}
-
-pub trait WaitResult {
-    fn wait_fun_result(&mut self) -> FunResult;
-    fn wait_cmd_result(&mut self) -> CmdResult;
-}
-
-impl WaitResult for Vec<Child> {
-    fn wait_fun_result(&mut self) -> FunResult {
-        let mut ret = String::new();
-        let len = self.len();
-        for i in (0..len).rev() {
-            if i == len - 1 {
-                let output = self.pop().unwrap().wait_with_output()?;
-                if !output.status.success() {
-                    return Err(Cmds::to_io_error("wait error", output.status));
-                } else {
-                    ret = String::from_utf8_lossy(&output.stdout).to_string();
-                    if ret.ends_with('\n') {
-                        ret.pop();
-                    }
-                }
-            } else {
-                let status = self.pop().unwrap().wait()?;
-                if !status.success() {
-                    return Err(Cmds::to_io_error("child status error", status));
-                }
-            }
-        }
-        Ok(ret)
-    }
-
-    fn wait_cmd_result(&mut self) -> CmdResult {
-        let len = self.len();
-        for i in (0..len).rev() {
-            if i == len - 1 {
-                let status = self.pop().unwrap().wait()?;
-                if !status.success() {
-                    return Err(Cmds::to_io_error("child status error", status));
-                }
-            } else {
-                let status = self.pop().unwrap().wait()?;
-                if !status.success() {
-                    return Err(Cmds::to_io_error("child status error", status));
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 impl Cmds {
@@ -172,12 +171,13 @@ impl Cmds {
         self
     }
 
-    fn spawn_with_output(mut self) -> std::io::Result<Vec<Child>> {
+    fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
         self.pipes.last_mut().unwrap().stdout(Stdio::piped());
-        self.spawn()
+        let children = self.spawn()?;
+        Ok(WaitFun(children.0))
     }
 
-    fn spawn(mut self) -> std::io::Result<Vec<Child>> {
+    fn spawn(mut self) -> std::io::Result<WaitCmd> {
         if let Ok(debug) = std::env::var("CMD_LIB_DEBUG") {
             if debug == "1" {
                 eprintln!("Running \"{}\" ...", self.full_cmd);
@@ -194,7 +194,7 @@ impl Cmds {
             self.children.push(cmd.spawn()?);
         }
 
-        Ok(self.children)
+        Ok(WaitCmd(self.children))
     }
 
     fn run_cd_cmd(&mut self, args: Vec<String>) -> CmdResult {
@@ -228,12 +228,10 @@ impl Cmds {
             return Self::to_cmd_result(tls_get!(CMD_MAP)[cmd](args, envs));
         }
 
-        self.spawn()?.wait_cmd_result()
+        self.spawn()?.wait_result()
     }
 
     pub fn run_fun(mut self) -> FunResult {
-        self.pipes.last_mut().unwrap().stdout(Stdio::piped());
-
         // check builtin commands
         let args = self.cmd_args[0].get_args().clone();
         let envs = self.cmd_args[0].get_envs().clone();
@@ -243,14 +241,17 @@ impl Cmds {
             return tls_get!(CMD_MAP)[cmd](args, envs);
         }
 
-        self.spawn()?.wait_fun_result()
+        self.spawn_with_output()?.wait_result()
     }
 
     fn to_io_error(command: &str, status: ExitStatus) -> Error {
         if let Some(code) = status.code() {
             Error::new(ErrorKind::Other, format!("{} exit with {}", command, code))
         } else {
-            Error::new(ErrorKind::Other, "Unknown error")
+            Error::new(
+                ErrorKind::Other,
+                format!("{} {:?} -- unknown error", command, status),
+            )
         }
     }
 

@@ -32,7 +32,7 @@
 //! To get a first impression, here is an example from `examples/dd_test.rs`:
 //!
 //! ```no_run
-//! use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult, WaitResult};
+//! use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult};
 //! # const DATA_SIZE: i64 = 10 * 1024 * 1024 * 1024; // 10GB data
 //! # let mut file = String::new();
 //! # let mut block_size: i32 = 4096;
@@ -59,7 +59,7 @@
 //! let mut total_bandwidth = 0;
 //! cmd_lib::set_debug(false);
 //! for (i, mut proc) in procs.into_iter().enumerate() {
-//!     let output = proc.wait_fun_result()?;
+//!     let output = proc.wait_result()?;
 //!     let bandwidth = run_fun!(echo $output | awk r"/MB/ {print $10}")?;
 //!     total_bandwidth += bandwidth.parse::<i32>().unwrap();
 //!     run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
@@ -236,13 +236,12 @@
 //! default, stdin, stdout and stderr are inherited from the parent. To capture the output, you
 //! can use spawn_with_output!() macro instead.
 //!
-//! To get result, you can call wait_cmd_result() or wait_fun_result() in WaitResult trait
-//! respectively.
+//! To get result, you can call wait_result() to get CmdResult/FunResult.
 //!
 //! ```no_run
-//! # use cmd_lib::{spawn, spawn_with_output, WaitResult};
-//! spawn!(ping -c 10 192.168.0.1)?.wait_cmd_result()?;
-//! let output = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result();
+//! # use cmd_lib::{spawn, spawn_with_output};
+//! spawn!(ping -c 10 192.168.0.1)?.wait_result()?;
+//! let output = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?.wait_result();
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -306,9 +305,7 @@ pub type CmdResult = std::io::Result<()>;
 pub use builtins::{
     builtin_die, builtin_echo, builtin_err, builtin_info, builtin_true, builtin_warn,
 };
-pub use process::{
-    export_cmd, set_debug, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds, WaitResult,
-};
+pub use process::{export_cmd, set_debug, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds};
 
 #[macro_export]
 macro_rules! die {

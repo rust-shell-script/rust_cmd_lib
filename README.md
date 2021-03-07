@@ -34,7 +34,7 @@ Since they are rust code, you can always rewrite them in rust natively in the fu
 To get a first impression, here is an example from `examples/dd_test.rs`:
 
 ```rust
-use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult, WaitResult};
+use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult};
 
 use_builtin_cmd!(info);
 cmd_lib::set_debug(true);
@@ -55,7 +55,7 @@ for i in 0..thread_num {
 let mut total_bandwidth = 0;
 cmd_lib::set_debug(false);
 for (i, mut proc) in procs.into_iter().enumerate() {
-    let output = proc.wait_fun_result()?;
+    let output = proc.wait_result()?;
     let bandwidth = run_fun!(echo $output | awk r"/MB/ {print $10}")?;
     total_bandwidth += bandwidth.parse::<i32>().unwrap();
     run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
@@ -215,12 +215,11 @@ spawn!() macro executes the whole command as a child process, returning a handle
 default, stdin, stdout and stderr are inherited from the parent. To capture the output, you
 can use spawn_with_output!() macro instead.
 
-To get result, you can call wait_cmd_result() or wait_fun_result() in WaitResult trait
-respectively.
+To get result, you can call wait_result() to get CmdResult/FunResult.
 
 ```rust
-spawn!(ping -c 10 192.168.0.1)?.wait_cmd_result()?;
-let output = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result();
+spawn!(ping -c 10 192.168.0.1)?.wait_result()?;
+let output = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?.wait_result();
 ```
 
 
