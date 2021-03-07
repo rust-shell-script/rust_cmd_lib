@@ -148,6 +148,13 @@ fn test_pipe_fail() {
 }
 
 #[test]
+fn test_pipe_ok() {
+    assert!(run_cmd!(echo xx | wc | wc | wc | wc).is_ok());
+    assert!(run_cmd!(echo xx | true | wc | wc | wc).is_ok());
+    assert!(run_cmd!(echo xx | wc | wc | true | wc).is_ok());
+}
+
+#[test]
 fn test_redirect() {
     assert!(run_cmd!(echo xxxx > /tmp/f).is_ok());
     assert!(run_cmd!(echo yyyy >> /tmp/f).is_ok());

@@ -108,11 +108,9 @@ impl WaitResult for Vec<Child> {
                     }
                 }
             } else {
-                let status_opt = self.pop().unwrap().try_wait()?;
-                if let Some(status) = status_opt {
-                    if !status.success() {
-                        return Err(Cmds::to_io_error("child status error", status));
-                    }
+                let status = self.pop().unwrap().wait()?;
+                if !status.success() {
+                    return Err(Cmds::to_io_error("child status error", status));
                 }
             }
         }
@@ -128,11 +126,9 @@ impl WaitResult for Vec<Child> {
                     return Err(Cmds::to_io_error("child status error", status));
                 }
             } else {
-                let status_opt = self.pop().unwrap().try_wait()?;
-                if let Some(status) = status_opt {
-                    if !status.success() {
-                        return Err(Cmds::to_io_error("child status error", status));
-                    }
+                let status = self.pop().unwrap().wait()?;
+                if !status.success() {
+                    return Err(Cmds::to_io_error("child status error", status));
                 }
             }
         }
