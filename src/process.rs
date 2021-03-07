@@ -91,16 +91,7 @@ impl WaitCmd {
                     return Err(Cmds::to_io_error("last child status error", status));
                 }
             } else {
-                let status = self.0.pop().unwrap().wait()?;
-                if !status.success() {
-                    let mut pipefail = true;
-                    if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
-                        pipefail = pipefail_str != "0";
-                    }
-                    if pipefail {
-                        return Err(Cmds::to_io_error("child status error", status));
-                    }
-                }
+                Cmds::wait_child(self.0.pop().unwrap())?;
             }
         }
         Ok(())
@@ -124,16 +115,7 @@ impl WaitFun {
                     }
                 }
             } else {
-                let status = self.0.pop().unwrap().wait()?;
-                if !status.success() {
-                    let mut pipefail = true;
-                    if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
-                        pipefail = pipefail_str != "0";
-                    }
-                    if pipefail {
-                        return Err(Cmds::to_io_error("child status error", status));
-                    }
-                }
+                Cmds::wait_child(self.0.pop().unwrap())?;
             }
         }
         Ok(ret)
@@ -214,6 +196,20 @@ impl Cmds {
         Ok(WaitCmd(self.children))
     }
 
+    fn wait_child(mut child: Child) -> CmdResult {
+        let status = child.wait()?;
+        if !status.success() {
+            let mut pipefail = true;
+            if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
+                pipefail = pipefail_str != "0";
+            }
+            if pipefail {
+                return Err(Self::to_io_error("child status error", status));
+            }
+        }
+        Ok(())
+    }
+
     fn run_cd_cmd(&mut self, args: Vec<String>) -> CmdResult {
         if args.len() == 1 {
             return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
@@ -267,7 +263,7 @@ impl Cmds {
         } else {
             Error::new(
                 ErrorKind::Other,
-                format!("{} {:?} -- unknown error", command, status),
+                format!("{} -- {}", command, status),
             )
         }
     }
