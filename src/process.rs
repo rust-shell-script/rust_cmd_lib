@@ -16,9 +16,14 @@ pub fn export_cmd(cmd: &'static str, func: FnFun) {
     tls_set!(CMD_MAP, |map| map.insert(cmd, func));
 }
 
-#[doc(hidden)]
+/// set debug mode or not, false by default
 pub fn set_debug(enable: bool) {
     std::env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
+}
+
+/// set pipefail or not, true by default
+pub fn set_pipefail(enable: bool) {
+    std::env::set_var("CMD_LIB_PIPEFAIL", if enable { "1" } else { "0" });
 }
 
 #[doc(hidden)]
@@ -88,7 +93,13 @@ impl WaitCmd {
             } else {
                 let status = self.0.pop().unwrap().wait()?;
                 if !status.success() {
-                    return Err(Cmds::to_io_error("child status error", status));
+                    let mut pipefail = true;
+                    if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
+                        pipefail = pipefail_str != "0";
+                    }
+                    if pipefail {
+                        return Err(Cmds::to_io_error("child status error", status));
+                    }
                 }
             }
         }
@@ -115,7 +126,13 @@ impl WaitFun {
             } else {
                 let status = self.0.pop().unwrap().wait()?;
                 if !status.success() {
-                    return Err(Cmds::to_io_error("child status error", status));
+                    let mut pipefail = true;
+                    if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
+                        pipefail = pipefail_str != "0";
+                    }
+                    if pipefail {
+                        return Err(Cmds::to_io_error("child status error", status));
+                    }
                 }
             }
         }

@@ -5,9 +5,10 @@
 use cmd_lib::{run_cmd, run_fun, CmdResult};
 fn main() -> CmdResult {
     cmd_lib::set_debug(true); // to print commands
+    cmd_lib::set_pipefail(false); // do not fail due to pipe errors
 
     // Run an external command and process stdout
-    run_cmd!(git log --oneline | head -5 || true)?;
+    run_cmd!(git log --oneline | head -5)?;
 
     // Run an external command passing it stdin and check for an error code
     run_cmd!(echo "import this; copyright(); credits(); exit()" | python)?;
@@ -17,7 +18,7 @@ fn main() -> CmdResult {
     println!(
         "Top 10 biggest files and directories in '{}':\n{}",
         directory.display(),
-        run_fun!(du -ah . | sort -hr | head -n 10 || true).unwrap()
+        run_fun!(du -ah . | sort -hr | head -n 10).unwrap()
     );
 
     // Redirect both stdout and stderr of child process to the same file

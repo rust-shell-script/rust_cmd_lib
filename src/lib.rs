@@ -305,7 +305,9 @@ pub type CmdResult = std::io::Result<()>;
 pub use builtins::{
     builtin_die, builtin_echo, builtin_err, builtin_info, builtin_true, builtin_warn,
 };
-pub use process::{export_cmd, set_debug, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds};
+pub use process::{
+    export_cmd, set_debug, set_pipefail, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds,
+};
 
 #[macro_export]
 macro_rules! die {
