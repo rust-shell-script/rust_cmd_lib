@@ -261,15 +261,13 @@ fn parse() -> CmdResult {
 }
 
 fn cleanup() -> CmdResult {
-    // clear out standard input
-    // read -t 0.001 && cat </dev/stdin>/dev/null
     let sgr0 = tls_get!(SGR0);
     run_cmd!(
-        tput reset;  // fix for konsole, see pipeseroni/pipes.sh//43
+        tput reset;  // fix for konsole, see pipeseroni/pipes.sh#43
         tput rmcup;
         tput cnorm;
         stty echo;
-        echo $sgr0
+        echo $sgr0;
     )?;
 
     Ok(())
@@ -477,7 +475,7 @@ fn main() -> CmdResult {
             run_cmd!(
                 tput reset;
                 tput civis;
-                stty -echo -isig -icanon min 0 time 0
+                stty -echo -isig -icanon min 0 time 0;
             )?;
             tls_set!(t, |nt| *nt = 0);
         } else {

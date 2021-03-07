@@ -1,5 +1,4 @@
-extern crate cmd_lib;
-use cmd_lib::{run_cmd, run_fun, tls_get, tls_init, tls_set};
+use cmd_lib::*;
 
 #[test]
 #[rustfmt::skip]
@@ -149,4 +148,50 @@ fn test_tls_set() {
     tls_set!(V, |v| v.push("a".to_string()));
     tls_set!(V, |v| v.push("b".to_string()));
     assert_eq!(tls_get!(V)[0], "a");
+}
+
+#[test]
+fn test_pipe_fail() {
+    assert!(run_cmd!(false | wc).is_err());
+    assert!(run_cmd!(du -ah . | sort -hr | head -n 5).is_ok());
+    assert!(run_cmd!(echo xx | false | wc | wc | wc).is_err());
+}
+
+#[test]
+fn test_redirect() {
+    assert!(run_cmd!(echo xxxx > /tmp/f).is_ok());
+    assert!(run_cmd!(echo yyyy >> /tmp/f).is_ok());
+    assert!(run_cmd!(
+        ls /x 2>/tmp/lsx.log || true;
+        echo "dump file:";
+        cat /tmp/lsx.log;
+    ).is_ok());
+    assert!(run_cmd!(ls /x 2>/dev/null || true).is_ok());
+    assert!(run_cmd!(ls /x &>/tmp/f || true).is_ok());
+    assert!(run_cmd!(wc -w < /tmp/f).is_ok());
+}
+
+#[test]
+fn test_proc_env() {
+    let output = run_fun!(FOO=100 printenv | grep FOO).unwrap();
+    assert_eq!(output, "FOO=100");
+}
+
+#[test]
+fn test_export_cmd() {
+    #[export_cmd(my_cmd)]
+    fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
+        eprintln!("msg from foo(), args: {:?}", args);
+        Ok("bar".into())
+    }
+
+    #[export_cmd(my_cmd2)]
+    fn foo2(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
+        eprintln!("msg from foo2(), args: {:?}", args);
+        Ok("bar2".into())
+    }
+    use_custom_cmd!(my_cmd, my_cmd2);
+    assert!(run_cmd!(echo "from" "builtin").is_ok());
+    assert!(run_cmd!(my_cmd arg1 arg2).is_ok());
+    assert!(run_cmd!(my_cmd2).is_ok());
 }
