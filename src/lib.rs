@@ -24,7 +24,7 @@
 //! shell-script like tasks easily **without launching any shell**. For the
 //! [rust cookbook examples](https://rust-lang-nursery.github.io/rust-cookbook/os/external.html),
 //! they can usually be implemented as one line of rust macro with the help of this library, as in the
-//! [examples/rust_cookbook_external.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/rust_cookbook_external.rs).
+//! [examples/rust_cookbook.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/rust_cookbook.rs).
 //! Since they are rust code, you can always rewrite them in rust natively in the future, if necessary without spawning external commands.
 //!
 //! ## What this library looks like

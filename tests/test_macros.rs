@@ -165,7 +165,8 @@ fn test_redirect() {
         ls /x 2>/tmp/lsx.log || true;
         echo "dump file:";
         cat /tmp/lsx.log;
-    ).is_ok());
+    )
+    .is_ok());
     assert!(run_cmd!(ls /x 2>/dev/null || true).is_ok());
     assert!(run_cmd!(ls /x &>/tmp/f || true).is_ok());
     assert!(run_cmd!(wc -w < /tmp/f).is_ok());
