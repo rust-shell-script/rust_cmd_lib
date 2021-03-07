@@ -16,15 +16,6 @@ fn test_run_single_cmd_with_quote() {
 }
 
 #[test]
-fn test_run_builtin_cmds() {
-    assert!(run_cmd! {
-        cd /tmp;
-        ls | wc -l;
-    }
-    .is_ok());
-}
-
-#[test]
 fn test_cd_fails() {
     assert!(run_cmd! {
         cd /bad_dir;
@@ -153,7 +144,6 @@ fn test_tls_set() {
 #[test]
 fn test_pipe_fail() {
     assert!(run_cmd!(false | wc).is_err());
-    assert!(run_cmd!(du -ah . | sort -hr | head -n 5).is_ok());
     assert!(run_cmd!(echo xx | false | wc | wc | wc).is_err());
 }
 

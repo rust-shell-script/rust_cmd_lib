@@ -32,7 +32,7 @@
 //! To get a first impression, here is an example from `examples/dd_test.rs`:
 //!
 //! ```no_run
-//! use cmd_lib::{die, run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult};
+//! use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult, WaitResult};
 //! # const DATA_SIZE: i64 = 10 * 1024 * 1024 * 1024; // 10GB data
 //! # let mut file = String::new();
 //! # let mut block_size: i32 = 4096;
@@ -44,7 +44,7 @@
 //!     info "Dropping caches at first";
 //!     sudo bash -c "echo 3 > /proc/sys/vm/drop_caches"
 //! )?;
-//!
+
 //! run_cmd!(info "Running with thread_num: $thread_num, block_size: $block_size")?;
 //! let cnt: i32 = (DATA_SIZE / thread_num as i64 / block_size as i64) as i32;
 //! let mut procs = vec![];
@@ -55,21 +55,15 @@
 //!     )?;
 //!     procs.push(proc);
 //! }
-//!
+
 //! let mut total_bandwidth = 0;
 //! cmd_lib::set_debug(false);
-//! for proc in procs {
-//!     let pid = proc.id();
-//!     let output = proc.wait_with_output()?;
-//!     if !output.status.success() {
-//!         die!("process exit with error: {:?}", output.status);
-//!     }
-//!     let output = String::from_utf8_lossy(&output.stdout).to_string();
+//! for (i, mut proc) in procs.into_iter().enumerate() {
+//!     let output = proc.wait_fun_result()?;
 //!     let bandwidth = run_fun!(echo $output | awk r"/MB/ {print $10}")?;
 //!     total_bandwidth += bandwidth.parse::<i32>().unwrap();
-//!     run_cmd!(info "pid $pid bandwidth: $bandwidth MB/s")?;
+//!     run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
 //! }
-//!
 //! run_cmd!(info "Total bandwidth: $total_bandwidth MB/s")?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
@@ -85,10 +79,10 @@
 //! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=655360 count=655360 2>&1" ...
 //! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1310720 count=655360 2>&1" ...
 //! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1966080 count=655360 2>&1" ...
-//! pid 22161 bandwidth: 267 MB/s
-//! pid 22162 bandwidth: 266 MB/s
-//! pid 22163 bandwidth: 274 MB/s
-//! pid 22164 bandwidth: 304 MB/s
+//! thread 0 bandwidth: 267 MB/s
+//! thread 1 bandwidth: 266 MB/s
+//! thread 2 bandwidth: 274 MB/s
+//! thread 3 bandwidth: 304 MB/s
 //! Total bandwidth: 1111 MB/s
 //! ```
 //!
@@ -97,7 +91,7 @@
 //! ### Macros to run external commands
 //! - run_cmd! --> CmdResult
 //!
-//! ```
+//! ```no_run
 //! # use cmd_lib::run_cmd;
 //! let msg = "I love rust";
 //! run_cmd!(echo $msg)?;
@@ -242,10 +236,13 @@
 //! default, stdin, stdout and stderr are inherited from the parent. To capture the output, you
 //! can use spawn_with_output!() macro instead.
 //!
+//! To get result, you can call wait_cmd_result() or wait_fun_result() in WaitResult trait
+//! respectively.
+//!
 //! ```no_run
-//! # use cmd_lib::{spawn, spawn_with_output};
-//! let child1 = spawn!(ping -c 10 192.168.0.1)?; // return Result<Child>
-//! let child2 = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?; // return Result<Child>
+//! # use cmd_lib::{spawn, spawn_with_output, WaitResult};
+//! spawn!(ping -c 10 192.168.0.1)?.wait_cmd_result()?;
+//! let output = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result();
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -309,7 +306,9 @@ pub type CmdResult = std::io::Result<()>;
 pub use builtins::{
     builtin_die, builtin_echo, builtin_err, builtin_info, builtin_true, builtin_warn,
 };
-pub use process::{export_cmd, set_debug, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds};
+pub use process::{
+    export_cmd, set_debug, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds, WaitResult,
+};
 
 #[macro_export]
 macro_rules! die {

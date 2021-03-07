@@ -34,7 +34,7 @@ Since they are rust code, you can always rewrite them in rust natively in the fu
 To get a first impression, here is an example from `examples/dd_test.rs`:
 
 ```rust
-use cmd_lib::{die, run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult};
+use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult, WaitResult};
 
 use_builtin_cmd!(info);
 cmd_lib::set_debug(true);
@@ -42,7 +42,6 @@ run_cmd! (
     info "Dropping caches at first";
     sudo bash -c "echo 3 > /proc/sys/vm/drop_caches"
 )?;
-
 run_cmd!(info "Running with thread_num: $thread_num, block_size: $block_size")?;
 let cnt: i32 = (DATA_SIZE / thread_num as i64 / block_size as i64) as i32;
 let mut procs = vec![];
@@ -53,21 +52,14 @@ for i in 0..thread_num {
     )?;
     procs.push(proc);
 }
-
 let mut total_bandwidth = 0;
 cmd_lib::set_debug(false);
-for proc in procs {
-    let pid = proc.id();
-    let output = proc.wait_with_output()?;
-    if !output.status.success() {
-        die!("process exit with error: {:?}", output.status);
-    }
-    let output = String::from_utf8_lossy(&output.stdout).to_string();
+for (i, mut proc) in procs.into_iter().enumerate() {
+    let output = proc.wait_fun_result()?;
     let bandwidth = run_fun!(echo $output | awk r"/MB/ {print $10}")?;
     total_bandwidth += bandwidth.parse::<i32>().unwrap();
-    run_cmd!(info "pid $pid bandwidth: $bandwidth MB/s")?;
+    run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
 }
-
 run_cmd!(info "Total bandwidth: $total_bandwidth MB/s")?;
 ```
 
@@ -82,10 +74,10 @@ Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=0 count=65536
 Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=655360 count=655360 2>&1" ...
 Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1310720 count=655360 2>&1" ...
 Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1966080 count=655360 2>&1" ...
-pid 22161 bandwidth: 267 MB/s
-pid 22162 bandwidth: 266 MB/s
-pid 22163 bandwidth: 274 MB/s
-pid 22164 bandwidth: 304 MB/s
+thread 0 bandwidth: 267 MB/s
+thread 1 bandwidth: 266 MB/s
+thread 2 bandwidth: 274 MB/s
+thread 3 bandwidth: 304 MB/s
 Total bandwidth: 1111 MB/s
 ```
 
@@ -223,9 +215,12 @@ spawn!() macro executes the whole command as a child process, returning a handle
 default, stdin, stdout and stderr are inherited from the parent. To capture the output, you
 can use spawn_with_output!() macro instead.
 
+To get result, you can call wait_cmd_result() or wait_fun_result() in WaitResult trait
+respectively.
+
 ```rust
-let child1 = spawn!(ping -c 10 192.168.0.1)?; // return Result<Child>
-let child2 = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?; // return Result<Child>
+spawn!(ping -c 10 192.168.0.1)?.wait_cmd_result()?;
+let output = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result();
 ```
 
 

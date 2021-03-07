@@ -13,13 +13,13 @@
 // Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=655360 count=655360 2>&1" ...
 // Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1310720 count=655360 2>&1" ...
 // Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1966080 count=655360 2>&1" ...
-// pid 22161 bandwidth: 267 MB/s
-// pid 22162 bandwidth: 266 MB/s
-// pid 22163 bandwidth: 274 MB/s
-// pid 22164 bandwidth: 304 MB/s
+// thread 0 bandwidth: 267 MB/s
+// thread 1 bandwidth: 266 MB/s
+// thread 2 bandwidth: 274 MB/s
+// thread 3 bandwidth: 304 MB/s
 // Total bandwidth: 1111 MB/s
 
-use cmd_lib::{die, run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult};
+use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult, WaitResult};
 use std::env;
 
 const DATA_SIZE: i64 = 10 * 1024 * 1024 * 1024; // 10GB data
@@ -78,16 +78,11 @@ fn main() -> CmdResult {
 
     let mut total_bandwidth = 0;
     cmd_lib::set_debug(false);
-    for proc in procs {
-        let pid = proc.id();
-        let output = proc.wait_with_output()?;
-        if !output.status.success() {
-            die!("process exit with error: {:?}", output.status);
-        }
-        let output = String::from_utf8_lossy(&output.stdout).to_string();
+    for (i, mut proc) in procs.into_iter().enumerate() {
+        let output = proc.wait_fun_result()?;
         let bandwidth = run_fun!(echo $output | awk r"/MB/ {print $10}")?;
         total_bandwidth += bandwidth.parse::<i32>().unwrap();
-        run_cmd!(info "pid $pid bandwidth: $bandwidth MB/s")?;
+        run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
     }
 
     run_cmd!(info "Total bandwidth: $total_bandwidth MB/s")?;
