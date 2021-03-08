@@ -153,6 +153,7 @@ let key_word = "time";
 let awk_opts = format!(r#"/{}/ {{print $(NF-3) " " $(NF-1) " " $NF}}"#, key_word);
 run_cmd!(ping -c 10 www.google.com | awk $awk_opts)?;
 ```
+Notice here `$awk_opts` will be treated as single option passing to awk command.
 
 If you want to use dynamic parameters, you can use $[] to access vector variable:
 ```rust
@@ -242,6 +243,9 @@ let d = tls_get!(DELAY);
 You can use [std::env::var](https://doc.rust-lang.org/std/env/fn.var.html) to fetch the environment variable
 key from the current process. It will report error if the environment variable is not present, and it also
 includes other checks to avoid silent failures.
+
+To set environment variables, you can use [std::env::set_var](https://doc.rust-lang.org/std/env/fn.set_var.html).
+There are also other related APIs in the [std::env](https://doc.rust-lang.org/std/env/index.html) module.
 
 To set environment variables for the command only, you can put the assignments before the command.
 Like this:
