@@ -80,7 +80,7 @@ impl GroupCmds {
     }
 }
 
-pub struct WaitCmd(Vec<Child>);
+pub struct WaitCmd(Vec<Child>, Vec<String>);
 impl WaitCmd {
     pub fn wait_result(&mut self) -> CmdResult {
         let len = self.0.len();
@@ -88,17 +88,20 @@ impl WaitCmd {
             if i == len - 1 {
                 let status = self.0.pop().unwrap().wait()?;
                 if !status.success() {
-                    return Err(Cmds::to_io_error("last child status error", status));
+                    return Err(Cmds::to_io_error(
+                        &format!("{} exited with error", self.1[i]),
+                        status,
+                    ));
                 }
             } else {
-                Cmds::wait_child(self.0.pop().unwrap())?;
+                Cmds::wait_child(self.0.pop().unwrap(), &self.1[i])?;
             }
         }
         Ok(())
     }
 }
 
-pub struct WaitFun(Vec<Child>);
+pub struct WaitFun(Vec<Child>, Vec<String>);
 impl WaitFun {
     pub fn wait_result(&mut self) -> FunResult {
         let mut ret = String::new();
@@ -107,7 +110,10 @@ impl WaitFun {
             if i == len - 1 {
                 let output = self.0.pop().unwrap().wait_with_output()?;
                 if !output.status.success() {
-                    return Err(Cmds::to_io_error("last child output error", output.status));
+                    return Err(Cmds::to_io_error(
+                        &format!("{} exited with error", self.1[i]),
+                        output.status,
+                    ));
                 } else {
                     ret = String::from_utf8_lossy(&output.stdout).to_string();
                     if ret.ends_with('\n') {
@@ -115,7 +121,7 @@ impl WaitFun {
                     }
                 }
             } else {
-                Cmds::wait_child(self.0.pop().unwrap())?;
+                Cmds::wait_child(self.0.pop().unwrap(), &self.1[i])?;
             }
         }
         Ok(ret)
@@ -174,7 +180,7 @@ impl Cmds {
     fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
         self.pipes.last_mut().unwrap().stdout(Stdio::piped());
         let children = self.spawn()?;
-        Ok(WaitFun(children.0))
+        Ok(WaitFun(children.0, children.1))
     }
 
     fn spawn(mut self) -> std::io::Result<WaitCmd> {
@@ -194,10 +200,16 @@ impl Cmds {
             self.children.push(cmd.spawn()?);
         }
 
-        Ok(WaitCmd(self.children))
+        Ok(WaitCmd(
+            self.children,
+            self.cmd_args
+                .iter()
+                .map(|c| c.get_args().join(" "))
+                .collect(),
+        ))
     }
 
-    fn wait_child(mut child: Child) -> CmdResult {
+    fn wait_child(mut child: Child, cmd: &str) -> CmdResult {
         let status = child.wait()?;
         if !status.success() {
             let mut pipefail = true;
@@ -205,7 +217,10 @@ impl Cmds {
                 pipefail = pipefail_str != "0";
             }
             if pipefail {
-                return Err(Self::to_io_error("child status error", status));
+                return Err(Self::to_io_error(
+                    &format!("{} exited with error", cmd),
+                    status,
+                ));
             }
         }
         Ok(())
@@ -260,11 +275,14 @@ impl Cmds {
 
     fn to_io_error(command: &str, status: ExitStatus) -> Error {
         if let Some(code) = status.code() {
-            Error::new(ErrorKind::Other, format!("{} exit with {}", command, code))
+            Error::new(
+                ErrorKind::Other,
+                format!("{}; status code: {}", command, code),
+            )
         } else {
             Error::new(
                 ErrorKind::Other,
-                format!("{} -- {}", command, status),
+                format!("{}; terminated by {}", command, status),
             )
         }
     }
