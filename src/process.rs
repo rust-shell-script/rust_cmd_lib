@@ -129,18 +129,14 @@ pub struct Cmds {
     children: Vec<Child>,
 
     cmd_args: Vec<Cmd>,
-    full_cmd: String,
-
     current_dir: String,
 }
 
 impl Cmds {
     pub fn from_cmd(mut cmd: Cmd) -> Self {
-        let cmd_args: Vec<String> = cmd.get_args().to_vec();
         Self {
             pipes: vec![cmd.gen_command()],
             children: vec![],
-            full_cmd: cmd_args.join(" ").to_string(),
             cmd_args: vec![cmd],
             current_dir: String::new(),
         }
@@ -152,7 +148,6 @@ impl Cmds {
             self.pipes[last_i].stdout(Stdio::piped());
         }
 
-        let cmd_args: Vec<String> = cmd.get_args().to_vec();
         let mut pipe_cmd = cmd.gen_command();
         for (k, v) in cmd.get_envs() {
             pipe_cmd.env(k, v);
@@ -161,13 +156,19 @@ impl Cmds {
             pipe_cmd.current_dir(self.current_dir.clone());
         }
         self.pipes.push(pipe_cmd);
-
-        if !self.full_cmd.is_empty() {
-            self.full_cmd += " | ";
-        }
-        self.full_cmd += &cmd_args.join(" ");
         self.cmd_args.push(cmd);
         self
+    }
+
+    fn get_full_cmd(&self) -> String {
+        let mut ret = String::new();
+        for cmd_arg in self.cmd_args.iter() {
+            if !ret.is_empty() {
+                ret += " | ";
+            }
+            ret += &cmd_arg.get_args().join(" ");
+        }
+        ret
     }
 
     fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
@@ -179,7 +180,7 @@ impl Cmds {
     fn spawn(mut self) -> std::io::Result<WaitCmd> {
         if let Ok(debug) = std::env::var("CMD_LIB_DEBUG") {
             if debug == "1" {
-                eprintln!("Running \"{}\" ...", self.full_cmd);
+                eprintln!("Running \"{}\" ...", self.get_full_cmd());
             }
         }
 
@@ -244,7 +245,7 @@ impl Cmds {
         self.spawn()?.wait_result()
     }
 
-    pub fn run_fun(mut self) -> FunResult {
+    pub fn run_fun(self) -> FunResult {
         // check builtin commands
         let args = self.cmd_args[0].get_args().clone();
         let envs = self.cmd_args[0].get_envs().clone();
@@ -326,12 +327,12 @@ impl Cmd {
         }
     }
 
-    pub fn get_args(&mut self) -> &mut Vec<String> {
-        &mut self.args
+    pub fn get_args(&self) -> &Vec<String> {
+        &self.args
     }
 
-    pub fn get_envs(&mut self) -> &mut HashMap<String, String> {
-        &mut self.envs
+    pub fn get_envs(&self) -> &HashMap<String, String> {
+        &self.envs
     }
 
     pub fn set_redirect(mut self, fd: i32, target: FdOrFile) -> Self {
