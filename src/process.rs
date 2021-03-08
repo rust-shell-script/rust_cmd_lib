@@ -1,9 +1,10 @@
 use crate::{tls_get, tls_init, tls_set, CmdResult, FunResult};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::process::{Child, Command, ExitStatus, Stdio};
+use tempfile::tempfile;
 
 pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
@@ -80,18 +81,34 @@ impl GroupCmds {
     }
 }
 
-pub struct WaitCmd(Vec<Child>, Vec<String>);
+enum ProcHandle {
+    ProcChild(Child),
+    ProcFile(Option<File>),
+}
+
+pub struct WaitCmd(Vec<ProcHandle>, Vec<String>);
 impl WaitCmd {
     pub fn wait_result(&mut self) -> CmdResult {
         let len = self.0.len();
         for i in (0..len).rev() {
             if i == len - 1 {
-                let status = self.0.pop().unwrap().wait()?;
-                if !status.success() {
-                    return Err(Cmds::to_io_error(
-                        &format!("{} exited with error", self.1[i]),
-                        status,
-                    ));
+                match self.0.pop().unwrap() {
+                    ProcHandle::ProcChild(mut child) => {
+                        let status = child.wait()?;
+                        if !status.success() {
+                            return Err(Cmds::to_io_error(
+                                &format!("{} exited with error", self.1[i]),
+                                status,
+                            ));
+                        }
+                    }
+                    ProcHandle::ProcFile(mut ff) => {
+                        if let Some(mut f) = ff.take() {
+                            let mut s = String::new();
+                            f.read_to_string(&mut s)?;
+                            println!("{}", s);
+                        }
+                    }
                 }
             } else {
                 Cmds::wait_child(self.0.pop().unwrap(), &self.1[i])?;
@@ -101,28 +118,39 @@ impl WaitCmd {
     }
 }
 
-pub struct WaitFun(Vec<Child>, Vec<String>);
+pub struct WaitFun(Vec<ProcHandle>, Vec<String>);
 impl WaitFun {
     pub fn wait_result(&mut self) -> FunResult {
         let mut ret = String::new();
         let len = self.0.len();
         for i in (0..len).rev() {
             if i == len - 1 {
-                let output = self.0.pop().unwrap().wait_with_output()?;
-                if !output.status.success() {
-                    return Err(Cmds::to_io_error(
-                        &format!("{} exited with error", self.1[i]),
-                        output.status,
-                    ));
-                } else {
-                    ret = String::from_utf8_lossy(&output.stdout).to_string();
-                    if ret.ends_with('\n') {
-                        ret.pop();
+                match self.0.pop().unwrap() {
+                    ProcHandle::ProcChild(child) => {
+                        let output = child.wait_with_output()?;
+                        if !output.status.success() {
+                            return Err(Cmds::to_io_error(
+                                &format!("{} exited with error", self.1[i]),
+                                output.status,
+                            ));
+                        } else {
+                            ret = String::from_utf8_lossy(&output.stdout).to_string();
+                        }
+                    }
+                    ProcHandle::ProcFile(mut ff) => {
+                        if let Some(mut f) = ff.take() {
+                            let mut s = String::new();
+                            f.read_to_string(&mut s)?;
+                            ret = s;
+                        }
                     }
                 }
             } else {
                 Cmds::wait_child(self.0.pop().unwrap(), &self.1[i])?;
             }
+        }
+        if ret.ends_with('\n') {
+            ret.pop();
         }
         Ok(ret)
     }
@@ -132,7 +160,7 @@ impl WaitFun {
 #[derive(Default)]
 pub struct Cmds {
     pipes: Vec<Command>,
-    children: Vec<Child>,
+    children: Vec<ProcHandle>,
 
     cmd_args: Vec<Cmd>,
     current_dir: String,
@@ -191,13 +219,44 @@ impl Cmds {
         }
 
         // spawning all the sub-processes
-        for (i, cmd) in self.pipes.iter_mut().enumerate() {
+        for (i, mut cmd) in self.pipes.into_iter().enumerate() {
             if i != 0 {
-                if let Some(output) = self.children[i - 1].stdout.take() {
-                    cmd.stdin(output);
+                match &mut self.children[i - 1] {
+                    ProcHandle::ProcChild(child) => {
+                        if let Some(output) = child.stdout.take() {
+                            cmd.stdin(output);
+                        }
+                    }
+                    ProcHandle::ProcFile(ff) => {
+                        if let Some(f) = ff.take() {
+                            cmd.stdin(f);
+                        }
+                    }
                 }
             }
-            self.children.push(cmd.spawn()?);
+
+            // check commands defined in CMD_MAP
+            let args = self.cmd_args[i].get_args().clone();
+            let envs = self.cmd_args[i].get_envs().clone();
+            let command = &args[0].as_str();
+            let in_cmd_map = tls_get!(CMD_MAP).contains_key(command);
+            if command == &"cd" {
+                let dir = Self::run_cd_cmd(args)?;
+                self.current_dir = dir;
+                self.children.push(ProcHandle::ProcFile(None));
+            } else if in_cmd_map {
+                let output = tls_get!(CMD_MAP)[command](args, envs)?;
+                if output.is_empty() {
+                    self.children.push(ProcHandle::ProcFile(None));
+                } else {
+                    let mut file = tempfile()?;
+                    writeln!(file, "{}", output)?;
+                    self.children.push(ProcHandle::ProcFile(Some(file)));
+                }
+            } else {
+                let child = cmd.spawn()?;
+                self.children.push(ProcHandle::ProcChild(child));
+            }
         }
 
         Ok(WaitCmd(
@@ -209,24 +268,29 @@ impl Cmds {
         ))
     }
 
-    fn wait_child(mut child: Child, cmd: &str) -> CmdResult {
-        let status = child.wait()?;
-        if !status.success() {
-            let mut pipefail = true;
-            if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
-                pipefail = pipefail_str != "0";
+    fn wait_child(child_handle: ProcHandle, cmd: &str) -> CmdResult {
+        match child_handle {
+            ProcHandle::ProcChild(mut child) => {
+                let status = child.wait()?;
+                if !status.success() {
+                    let mut pipefail = true;
+                    if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
+                        pipefail = pipefail_str != "0";
+                    }
+                    if pipefail {
+                        return Err(Self::to_io_error(
+                            &format!("{} exited with error", cmd),
+                            status,
+                        ));
+                    }
+                }
             }
-            if pipefail {
-                return Err(Self::to_io_error(
-                    &format!("{} exited with error", cmd),
-                    status,
-                ));
-            }
+            _ => {}
         }
         Ok(())
     }
 
-    fn run_cd_cmd(&mut self, args: Vec<String>) -> CmdResult {
+    fn run_cd_cmd(args: Vec<String>) -> FunResult {
         if args.len() == 1 {
             return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
         } else if args.len() > 2 {
@@ -241,35 +305,14 @@ impl Cmds {
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
-        self.current_dir = dir.clone();
-        Ok(())
+        Ok(dir.clone())
     }
 
-    pub fn run_cmd(mut self) -> CmdResult {
-        // check builtin commands
-        let args = self.cmd_args[0].get_args().clone();
-        let envs = self.cmd_args[0].get_envs().clone();
-        let cmd = &args[0].as_str();
-        let is_builtin = tls_get!(CMD_MAP).contains_key(cmd);
-        if cmd == &"cd" {
-            return self.run_cd_cmd(args);
-        } else if is_builtin {
-            return Self::to_cmd_result(tls_get!(CMD_MAP)[cmd](args, envs));
-        }
-
+    pub fn run_cmd(self) -> CmdResult {
         self.spawn()?.wait_result()
     }
 
     pub fn run_fun(self) -> FunResult {
-        // check builtin commands
-        let args = self.cmd_args[0].get_args().clone();
-        let envs = self.cmd_args[0].get_envs().clone();
-        let cmd = &args[0].as_str();
-        let is_builtin = tls_get!(CMD_MAP).contains_key(cmd);
-        if is_builtin {
-            return tls_get!(CMD_MAP)[cmd](args, envs);
-        }
-
         self.spawn_with_output()?.wait_result()
     }
 
@@ -284,16 +327,6 @@ impl Cmds {
                 ErrorKind::Other,
                 format!("{}; terminated by {}", command, status),
             )
-        }
-    }
-
-    fn to_cmd_result(res: FunResult) -> CmdResult {
-        match res {
-            Ok(v) => {
-                print!("{}{}", v, if v.is_empty() { "" } else { "\n" });
-                Ok(())
-            }
-            Err(e) => Err(e),
         }
     }
 }

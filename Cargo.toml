@@ -17,3 +17,4 @@ members = ["macros"]
 
 [dependencies]
 cmd_lib_macros = { version = "0.11.6", path = "./macros" }
+tempfile = "3.0"

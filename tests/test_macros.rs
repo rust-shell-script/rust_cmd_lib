@@ -149,6 +149,7 @@ fn test_pipe_fail() {
 
 #[test]
 fn test_pipe_ok() {
+    use_builtin_cmd!(echo);
     assert!(run_cmd!(echo xx | wc | wc | wc | wc).is_ok());
     assert!(run_cmd!(echo xx | true | wc | wc | wc).is_ok());
     assert!(run_cmd!(echo xx | wc | wc | true | wc).is_ok());
