@@ -161,15 +161,6 @@ pub struct Cmds {
 }
 
 impl Cmds {
-    pub fn from_cmd(mut cmd: Cmd) -> Self {
-        Self {
-            pipes: vec![cmd.gen_command()],
-            children: vec![],
-            cmd_args: vec![cmd],
-            current_dir: String::new(),
-        }
-    }
-
     pub fn pipe(mut self, mut cmd: Cmd) -> Self {
         if !self.pipes.is_empty() {
             let last_i = self.pipes.len() - 1;
@@ -197,12 +188,6 @@ impl Cmds {
             ret += &cmd_arg.get_args().join(" ");
         }
         ret
-    }
-
-    fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
-        self.pipes.last_mut().unwrap().stdout(Stdio::piped());
-        let children = self.spawn()?;
-        Ok(WaitFun(children.0, children.1))
     }
 
     fn spawn(mut self) -> std::io::Result<WaitCmd> {
@@ -263,6 +248,12 @@ impl Cmds {
                 .map(|c| c.get_args().join(" "))
                 .collect(),
         ))
+    }
+
+    fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
+        self.pipes.last_mut().unwrap().stdout(Stdio::piped());
+        let children = self.spawn()?;
+        Ok(WaitFun(children.0, children.1))
     }
 
     fn wait_child(child_handle: ProcHandle, cmd: &str) -> CmdResult {
@@ -365,18 +356,6 @@ impl Cmd {
         self
     }
 
-    pub fn from_args<I, S>(args: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
-        Self {
-            args: args.into_iter().map(|s| s.as_ref().to_owned()).collect(),
-            envs: HashMap::new(),
-            redirects: vec![],
-        }
-    }
-
     pub fn get_args(&self) -> &Vec<String> {
         &self.args
     }
@@ -460,8 +439,9 @@ mod tests {
 
     #[test]
     fn test_run_piped_cmds() {
-        assert!(Cmds::from_cmd(Cmd::from_args(vec!["echo", "rust"]))
-            .pipe(Cmd::from_args(vec!["wc"]))
+        assert!(Cmds::default()
+            .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
+            .pipe(Cmd::default().add_args(vec!["wc".into()]))
             .run_cmd()
             .is_ok());
     }
@@ -469,15 +449,17 @@ mod tests {
     #[test]
     fn test_run_piped_funs() {
         assert_eq!(
-            Cmds::from_cmd(Cmd::from_args(vec!["echo", "rust"]))
+            Cmds::default()
+                .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
                 .run_fun()
                 .unwrap(),
             "rust"
         );
 
         assert_eq!(
-            Cmds::from_cmd(Cmd::from_args(vec!["echo", "rust"]))
-                .pipe(Cmd::from_args(vec!["wc", "-c"]))
+            Cmds::default()
+                .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
+                .pipe(Cmd::default().add_args(vec!["wc".into(), "-c".into()]))
                 .run_fun()
                 .unwrap()
                 .trim(),
@@ -488,14 +470,14 @@ mod tests {
     #[test]
     fn test_stdout_redirect() {
         let tmp_file = "/tmp/file_echo_rust";
-        let mut write_cmd = Cmd::from_args(vec!["echo", "rust"]);
+        let mut write_cmd = Cmd::default().add_args(vec!["echo".into(), "rust".into()]);
         write_cmd = write_cmd.add_redirect(Redirect::StdoutToFile(tmp_file.to_string(), false));
-        assert!(Cmds::from_cmd(write_cmd).run_cmd().is_ok());
+        assert!(Cmds::default().pipe(write_cmd).run_cmd().is_ok());
 
-        let read_cmd = Cmd::from_args(vec!["cat", tmp_file]);
-        assert_eq!(Cmds::from_cmd(read_cmd).run_fun().unwrap(), "rust");
+        let read_cmd = Cmd::default().add_args(vec!["cat".into(), tmp_file.into()]);
+        assert_eq!(Cmds::default().pipe(read_cmd).run_fun().unwrap(), "rust");
 
-        let cleanup_cmd = Cmd::from_args(vec!["rm", tmp_file]);
-        assert!(Cmds::from_cmd(cleanup_cmd).run_cmd().is_ok());
+        let cleanup_cmd = Cmd::default().add_args(vec!["rm".into(), tmp_file.into()]);
+        assert!(Cmds::default().pipe(cleanup_cmd).run_cmd().is_ok());
     }
 }
