@@ -377,6 +377,16 @@ impl Cmd {
     }
 
     pub fn setup_redirects(&self, cmd: &mut Command) {
+        fn open_file(path: &str, append: bool) -> std::fs::File {
+            OpenOptions::new()
+                .create(true)
+                .truncate(!append)
+                .write(true)
+                .append(append)
+                .open(path)
+                .unwrap()
+        }
+
         for redirect in self.redirects.iter() {
             match redirect {
                 Redirect::FileToStdin(path) => {
@@ -399,28 +409,14 @@ impl Cmd {
                     if path == "/dev/null" {
                         cmd.stdout(Stdio::null());
                     } else {
-                        let file = OpenOptions::new()
-                            .create(true)
-                            .truncate(!append)
-                            .write(true)
-                            .append(*append)
-                            .open(path)
-                            .unwrap();
-                        cmd.stdout(file);
+                        cmd.stdout(open_file(path, *append));
                     }
                 }
                 Redirect::StderrToFile(path, append) => {
                     if path == "/dev/null" {
                         cmd.stderr(Stdio::null());
                     } else {
-                        let file = OpenOptions::new()
-                            .create(true)
-                            .truncate(!append)
-                            .write(true)
-                            .append(*append)
-                            .open(path)
-                            .unwrap();
-                        cmd.stderr(file);
+                        cmd.stderr(open_file(path, *append));
                     }
                 }
             }
