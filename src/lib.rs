@@ -298,8 +298,9 @@
 //! ### Thread Safety
 //!
 //! This library tries very hard to not set global states, so parallel `cargo test` can be executed just fine.
-//! However, the process APIs are inherently not thread-safe, as a result I sometimes need to set
-//! `RUST_TEST_THREADS=1` before running tests.
+//! However, there might be some internal process related APIs which are not thread-safe. More
+//! investigation is needed.
+//!
 
 pub use cmd_lib_macros::{
     export_cmd, run_cmd, run_fun, spawn, spawn_with_output, use_builtin_cmd, use_custom_cmd,
