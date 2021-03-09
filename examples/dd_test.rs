@@ -25,7 +25,7 @@ use std::env;
 const DATA_SIZE: i64 = 10 * 1024 * 1024 * 1024; // 10GB data
 
 fn main() -> CmdResult {
-    use_builtin_cmd!(info);
+    use_builtin_cmd!(echo, info);
     let mut opts = env::args().skip(1);
     let mut file = String::new();
     let mut block_size: i32 = 4096;
