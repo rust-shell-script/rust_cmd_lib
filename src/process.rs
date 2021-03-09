@@ -1,8 +1,7 @@
 use crate::{tls_get, tls_init, tls_set, CmdResult, FunResult};
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::{Error, ErrorKind, Write};
-use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 pub type CmdArgs = Vec<String>;
@@ -330,10 +329,12 @@ impl Cmds {
 }
 
 #[doc(hidden)]
-pub enum FdOrFile {
-    Fd(i32, bool),          // fd, append?
-    File(String, bool),     // file, append?
-    OpenedFile(File, bool), // opened file, append?
+pub enum Redirect {
+    FileToStdin(String),
+    StdoutToStderr,
+    StderrToStdout,
+    StdoutToFile(String, bool),
+    StderrToFile(String, bool),
 }
 
 #[doc(hidden)]
@@ -341,7 +342,7 @@ pub enum FdOrFile {
 pub struct Cmd {
     args: Vec<String>,
     envs: HashMap<String, String>,
-    redirects: Vec<(i32, FdOrFile)>,
+    redirects: Vec<Redirect>,
 }
 
 impl Cmd {
@@ -384,8 +385,8 @@ impl Cmd {
         &self.envs
     }
 
-    pub fn set_redirect(mut self, fd: i32, target: FdOrFile) -> Self {
-        self.redirects.push((fd, target));
+    pub fn add_redirect(mut self, redirect: Redirect) -> Self {
+        self.redirects.push(redirect);
         self
     }
 
@@ -397,55 +398,59 @@ impl Cmd {
         let cmd_args: Vec<String> = self.get_args().to_vec();
         let mut cmd = Command::new(&cmd_args[0]);
         cmd.args(&cmd_args[1..]);
+        self.setup_redirects(&mut cmd);
+        cmd
+    }
 
-        for (fd_src, target) in self.redirects.iter_mut() {
-            match &target {
-                FdOrFile::Fd(fd, _append) => {
-                    let out = unsafe { Stdio::from_raw_fd(*fd) };
-                    match *fd_src {
-                        1 => cmd.stdout(out),
-                        2 => cmd.stderr(out),
-                        _ => panic!("invalid fd: {}", *fd_src),
-                    };
-                }
-                FdOrFile::File(file, append) => {
-                    if file == "/dev/null" {
-                        match *fd_src {
-                            0 => cmd.stdin(Stdio::null()),
-                            1 => cmd.stdout(Stdio::null()),
-                            2 => cmd.stderr(Stdio::null()),
-                            _ => panic!("invalid fd: {}", *fd_src),
-                        };
+    pub fn setup_redirects(&self, cmd: &mut Command) {
+        for redirect in self.redirects.iter() {
+            match redirect {
+                Redirect::FileToStdin(path) => {
+                    if path == "/dev/null" {
+                        cmd.stdin(Stdio::null());
                     } else {
-                        let f = if *fd_src == 0 {
-                            OpenOptions::new().read(true).open(file).unwrap()
-                        } else {
-                            OpenOptions::new()
-                                .create(true)
-                                .truncate(!append)
-                                .write(true)
-                                .append(*append)
-                                .open(file)
-                                .unwrap()
-                        };
-                        let fd = f.as_raw_fd();
-                        let out = unsafe { Stdio::from_raw_fd(fd) };
-                        match *fd_src {
-                            0 => cmd.stdin(out),
-                            1 => cmd.stdout(out),
-                            2 => cmd.stderr(out),
-                            _ => panic!("invalid fd: {}", *fd_src),
-                        };
-                        *target = FdOrFile::OpenedFile(f, *append);
+                        let file = OpenOptions::new().read(true).open(path).unwrap();
+                        cmd.stdin(file);
                     }
                 }
-                _ => {
-                    panic!("file is already opened");
+                Redirect::StdoutToStderr => {
+                    let file = OpenOptions::new().write(true).open("/dev/stderr").unwrap();
+                    cmd.stdout(file);
                 }
-            };
+                Redirect::StderrToStdout => {
+                    let file = OpenOptions::new().write(true).open("/dev/stdout").unwrap();
+                    cmd.stderr(file);
+                }
+                Redirect::StdoutToFile(path, append) => {
+                    if path == "/dev/null" {
+                        cmd.stdout(Stdio::null());
+                    } else {
+                        let file = OpenOptions::new()
+                            .create(true)
+                            .truncate(!append)
+                            .write(true)
+                            .append(*append)
+                            .open(path)
+                            .unwrap();
+                        cmd.stdout(file);
+                    }
+                }
+                Redirect::StderrToFile(path, append) => {
+                    if path == "/dev/null" {
+                        cmd.stderr(Stdio::null());
+                    } else {
+                        let file = OpenOptions::new()
+                            .create(true)
+                            .truncate(!append)
+                            .write(true)
+                            .append(*append)
+                            .open(path)
+                            .unwrap();
+                        cmd.stderr(file);
+                    }
+                }
+            }
         }
-
-        cmd
     }
 }
 
@@ -484,7 +489,7 @@ mod tests {
     fn test_stdout_redirect() {
         let tmp_file = "/tmp/file_echo_rust";
         let mut write_cmd = Cmd::from_args(vec!["echo", "rust"]);
-        write_cmd = write_cmd.set_redirect(1, FdOrFile::File(tmp_file.to_string(), false));
+        write_cmd = write_cmd.add_redirect(Redirect::StdoutToFile(tmp_file.to_string(), false));
         assert!(Cmds::from_cmd(write_cmd).run_cmd().is_ok());
 
         let read_cmd = Cmd::from_args(vec!["cat", tmp_file]);

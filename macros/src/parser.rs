@@ -7,7 +7,7 @@ pub enum ParseArg {
     ParsePipe,
     ParseOr,
     ParseSemicolon,
-    ParseRedirectFd(i32, TokenStream, bool), // fd1, fd2, append?
+    ParseRedirectFd(i32, i32),                 // fd1, fd2
     ParseRedirectFile(i32, TokenStream, bool), // fd1, file, append?
     ParseArgStr(TokenStream),
     ParseArgVec(TokenStream),
@@ -96,13 +96,29 @@ impl Parser {
         let mut ret = quote!(::cmd_lib::Cmd::default());
         while *i < self.args.len() {
             match self.args[*i].clone() {
-                ParseRedirectFd(fd1, fd2, append) => {
-                    ret.extend(quote!(.set_redirect(#fd1, ::cmd_lib::FdOrFile::Fd(#fd2, #append))));
+                ParseRedirectFd(fd1, fd2) => {
+                    let mut redirect = quote!(::cmd_lib::Redirect);
+                    if fd1 == 1 && fd2 == 2 {
+                        redirect.extend(quote!(::StdoutToStderr));
+                    } else if fd1 == 2 && fd2 == 1 {
+                        redirect.extend(quote!(::StderrToStdout));
+                    } else {
+                        panic!("unsupported fd numbers: {} {}", fd1, fd2);
+                    }
+                    ret.extend(quote!(.add_redirect(#redirect)));
                 }
                 ParseRedirectFile(fd1, file, append) => {
-                    ret.extend(
-                        quote!(.set_redirect(#fd1, ::cmd_lib::FdOrFile::File(#file, #append))),
-                    );
+                    let mut redirect = quote!(::cmd_lib::Redirect);
+                    if fd1 == 0 {
+                        redirect.extend(quote!(::FileToStdin(#file)));
+                    } else if fd1 == 1 {
+                        redirect.extend(quote!(::StdoutToFile(#file, #append)));
+                    } else if fd1 == 2 {
+                        redirect.extend(quote!(::StderrToFile(#file, #append)));
+                    } else {
+                        panic!("unsupported fd ({}) redirect to file {}", fd1, file);
+                    }
+                    ret.extend(quote!(.add_redirect(#redirect)));
                 }
                 ParseArgStr(opt) => {
                     ret.extend(quote!(.add_arg(#opt)));

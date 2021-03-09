@@ -310,7 +310,7 @@ pub use builtins::{
     builtin_die, builtin_echo, builtin_err, builtin_info, builtin_true, builtin_warn,
 };
 pub use process::{
-    export_cmd, set_debug, set_pipefail, Cmd, CmdArgs, CmdEnvs, Cmds, FdOrFile, GroupCmds,
+    export_cmd, set_debug, set_pipefail, Cmd, CmdArgs, CmdEnvs, Cmds, GroupCmds, Redirect,
 };
 
 #[macro_export]
