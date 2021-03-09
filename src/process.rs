@@ -87,28 +87,29 @@ enum ProcHandle {
 pub struct WaitCmd(Vec<ProcHandle>, Vec<String>);
 impl WaitCmd {
     pub fn wait_result(&mut self) -> CmdResult {
-        let len = self.0.len();
-        for i in (0..len).rev() {
-            if i == len - 1 {
-                match self.0.pop().unwrap() {
-                    ProcHandle::ProcChild(mut child) => {
-                        let status = child.wait()?;
-                        if !status.success() {
-                            return Err(Cmds::to_io_error(
-                                &format!("{} exited with error", self.1[i]),
-                                status,
-                            ));
-                        }
-                    }
-                    ProcHandle::ProcStr(mut ss) => {
-                        if let Some(s) = ss.take() {
-                            print!("{}", s);
-                        }
-                    }
+        // wait last process result
+        let (handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
+        match handle {
+            ProcHandle::ProcChild(mut child) => {
+                let status = child.wait()?;
+                if !status.success() {
+                    return Err(Cmds::to_io_error(
+                        &format!("{} exited with error", cmd),
+                        status,
+                    ));
                 }
-            } else {
-                Cmds::wait_child(self.0.pop().unwrap(), &self.1[i])?;
             }
+            ProcHandle::ProcStr(mut ss) => {
+                if let Some(s) = ss.take() {
+                    print!("{}", s);
+                }
+            }
+        }
+
+        // wait previous processes
+        while !self.0.is_empty() {
+            let (handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
+            Cmds::wait_child(handle, &cmd)?;
         }
         Ok(())
     }
@@ -118,31 +119,33 @@ pub struct WaitFun(Vec<ProcHandle>, Vec<String>);
 impl WaitFun {
     pub fn wait_result(&mut self) -> FunResult {
         let mut ret = String::new();
-        let len = self.0.len();
-        for i in (0..len).rev() {
-            if i == len - 1 {
-                match self.0.pop().unwrap() {
-                    ProcHandle::ProcChild(child) => {
-                        let output = child.wait_with_output()?;
-                        if !output.status.success() {
-                            return Err(Cmds::to_io_error(
-                                &format!("{} exited with error", self.1[i]),
-                                output.status,
-                            ));
-                        } else {
-                            ret = String::from_utf8_lossy(&output.stdout).to_string();
-                        }
-                    }
-                    ProcHandle::ProcStr(mut ss) => {
-                        if let Some(s) = ss.take() {
-                            ret = s;
-                        }
-                    }
+        // wait last process result
+        let (handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
+        match handle {
+            ProcHandle::ProcChild(child) => {
+                let output = child.wait_with_output()?;
+                if !output.status.success() {
+                    return Err(Cmds::to_io_error(
+                        &format!("{} exited with error", cmd),
+                        output.status,
+                    ));
+                } else {
+                    ret = String::from_utf8_lossy(&output.stdout).to_string();
                 }
-            } else {
-                Cmds::wait_child(self.0.pop().unwrap(), &self.1[i])?;
+            }
+            ProcHandle::ProcStr(mut ss) => {
+                if let Some(s) = ss.take() {
+                    ret = s;
+                }
             }
         }
+
+        // wait previous processes
+        while !self.0.is_empty() {
+            let (handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
+            Cmds::wait_child(handle, &cmd)?;
+        }
+
         if ret.ends_with('\n') {
             ret.pop();
         }
@@ -163,8 +166,7 @@ pub struct Cmds {
 impl Cmds {
     pub fn pipe(mut self, mut cmd: Cmd) -> Self {
         if !self.pipes.is_empty() {
-            let last_i = self.pipes.len() - 1;
-            self.pipes[last_i].stdout(Stdio::piped());
+            self.pipes.last_mut().unwrap().stdout(Stdio::piped());
         }
 
         let mut pipe_cmd = cmd.gen_command();
@@ -198,7 +200,7 @@ impl Cmds {
         }
 
         // spawning all the sub-processes
-        for (i, mut cmd) in self.pipes.into_iter().enumerate() {
+        for (i, cmd) in self.pipes.iter_mut().enumerate() {
             if i != 0 {
                 let mut stdin_setup_done = false;
                 if let ProcHandle::ProcChild(child) = &mut self.children[i - 1] {
@@ -218,8 +220,7 @@ impl Cmds {
             let command = &args[0].as_str();
             let in_cmd_map = tls_get!(CMD_MAP).contains_key(command);
             if command == &"cd" {
-                let dir = Self::run_cd_cmd(args)?;
-                self.current_dir = dir;
+                Self::run_cd_cmd(args, &mut self.current_dir)?;
                 self.children.push(ProcHandle::ProcStr(None));
             } else if in_cmd_map {
                 let output = tls_get!(CMD_MAP)[command](args, envs)?;
@@ -273,7 +274,7 @@ impl Cmds {
         Ok(())
     }
 
-    fn run_cd_cmd(args: Vec<String>) -> FunResult {
+    fn run_cd_cmd(args: Vec<String>, current_dir: &mut String) -> CmdResult {
         if args.len() == 1 {
             return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
         } else if args.len() > 2 {
@@ -288,7 +289,8 @@ impl Cmds {
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
-        Ok(dir.clone())
+        *current_dir = dir.clone();
+        Ok(())
     }
 
     pub fn run_cmd(self) -> CmdResult {
