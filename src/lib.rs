@@ -314,6 +314,18 @@ pub use process::{
     export_cmd, set_debug, set_pipefail, Cmd, CmdArgs, CmdEnvs, Cmds, GroupCmds, Redirect,
 };
 
+/// Report fatal errors and exit process conveniently
+///
+/// The arguments format is the same as in println!() macro. Note that this macro is just for
+/// convenience. If you want to exit with other code, you should probably define your own macro
+/// or functions.
+/// ```no_run
+/// # use cmd_lib::die;
+/// let file = "bad_file";
+/// die!("could not open file: {}", file);
+/// // process will exit with 1 and print message to error console:
+/// // FATAL: could not open file: bad_file
+/// ```
 #[macro_export]
 macro_rules! die {
     ($($arg:tt)*) => {{

@@ -1,3 +1,10 @@
+/// Declare a new thread local storage variable
+/// ```
+/// # use cmd_lib::*;
+/// use std::collections::HashMap;
+/// tls_init!(LEN, u32, 100);
+/// tls_init!(MAP, HashMap<String, String>, HashMap::new());
+/// ```
 #[macro_export]
 macro_rules! tls_init {
     ($vis:vis $var:ident, $t:ty, $($var_init:tt)*) => {
@@ -8,6 +15,19 @@ macro_rules! tls_init {
     };
 }
 
+/// Get the value of a thread local storage variable
+///
+/// ```
+/// # use cmd_lib::*;
+/// // from examples/tetris.rs:
+/// tls_init!(screen_buffer, String, "".to_string());
+/// eprint!("{}", tls_get!(screen_buffer));
+///
+/// tls_init!(use_color, bool, true); // true if we use color, false if not
+/// if tls_get!(use_color) {
+///     // ...
+/// }
+/// ```
 #[macro_export]
 macro_rules! tls_get {
     ($var:ident) => {
@@ -15,6 +35,19 @@ macro_rules! tls_get {
     };
 }
 
+/// Set the value of a thread local storage variable
+/// ```
+/// # use cmd_lib::*;
+/// # let changes = "";
+/// tls_init!(screen_buffer, String, "".to_string());
+/// tls_set!(screen_buffer, |s| s.push_str(changes));
+///
+/// tls_init!(use_color, bool, true); // true if we use color, false if not
+/// fn toggle_color() {
+///     tls_set!(use_color, |x| *x = !*x);
+///     // redraw_screen();
+/// }
+/// ```
 #[macro_export]
 macro_rules! tls_set {
     ($var:ident, |$v:ident| $($var_update:tt)*) => {
