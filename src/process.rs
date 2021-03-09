@@ -102,7 +102,7 @@ impl WaitCmd {
                     }
                     ProcHandle::ProcStr(mut ss) => {
                         if let Some(s) = ss.take() {
-                            println!("{}", s);
+                            print!("{}", s);
                         }
                     }
                 }
@@ -200,14 +200,15 @@ impl Cmds {
         // spawning all the sub-processes
         for (i, mut cmd) in self.pipes.into_iter().enumerate() {
             if i != 0 {
-                cmd.stdin(Stdio::piped());
-                match &mut self.children[i - 1] {
-                    ProcHandle::ProcChild(child) => {
-                        if let Some(output) = child.stdout.take() {
-                            cmd.stdin(output);
-                        }
+                let mut stdin_setup_done = false;
+                if let ProcHandle::ProcChild(child) = &mut self.children[i - 1] {
+                    if let Some(output) = child.stdout.take() {
+                        cmd.stdin(output);
+                        stdin_setup_done = true;
                     }
-                    ProcHandle::ProcStr(_) => {}
+                }
+                if !stdin_setup_done {
+                    cmd.stdin(Stdio::piped());
                 }
             }
 
@@ -225,14 +226,11 @@ impl Cmds {
                 self.children.push(ProcHandle::ProcStr(Some(output)));
             } else {
                 let mut child = cmd.spawn()?;
-                if let Some(mut input) = child.stdin.take() {
-                    if i != 0 {
-                        match &mut self.children[i - 1] {
-                            ProcHandle::ProcChild(_) => {}
-                            ProcHandle::ProcStr(ss) => {
-                                if let Some(s) = ss.take() {
-                                    input.write_all(s.as_bytes())?;
-                                }
+                if i != 0 {
+                    if let Some(mut input) = child.stdin.take() {
+                        if let ProcHandle::ProcStr(ss) = &mut self.children[i - 1] {
+                            if let Some(s) = ss.take() {
+                                input.write_all(s.as_bytes())?;
                             }
                         }
                     }
@@ -257,23 +255,20 @@ impl Cmds {
     }
 
     fn wait_child(child_handle: ProcHandle, cmd: &str) -> CmdResult {
-        match child_handle {
-            ProcHandle::ProcChild(mut child) => {
-                let status = child.wait()?;
-                if !status.success() {
-                    let mut pipefail = true;
-                    if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
-                        pipefail = pipefail_str != "0";
-                    }
-                    if pipefail {
-                        return Err(Self::to_io_error(
-                            &format!("{} exited with error", cmd),
-                            status,
-                        ));
-                    }
+        if let ProcHandle::ProcChild(mut child) = child_handle {
+            let status = child.wait()?;
+            if !status.success() {
+                let mut pipefail = true;
+                if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
+                    pipefail = pipefail_str != "0";
+                }
+                if pipefail {
+                    return Err(Self::to_io_error(
+                        &format!("{} exited with error", cmd),
+                        status,
+                    ));
                 }
             }
-            _ => {}
         }
         Ok(())
     }
