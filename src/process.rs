@@ -1,10 +1,9 @@
 use crate::{tls_get, tls_init, tls_set, CmdResult, FunResult};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Write};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::process::{Child, Command, ExitStatus, Stdio};
-use tempfile::tempfile;
 
 pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
@@ -83,7 +82,7 @@ impl GroupCmds {
 
 enum ProcHandle {
     ProcChild(Child),
-    ProcFile(Option<File>),
+    ProcStr(Option<String>),
 }
 
 pub struct WaitCmd(Vec<ProcHandle>, Vec<String>);
@@ -102,10 +101,8 @@ impl WaitCmd {
                             ));
                         }
                     }
-                    ProcHandle::ProcFile(mut ff) => {
-                        if let Some(mut f) = ff.take() {
-                            let mut s = String::new();
-                            f.read_to_string(&mut s)?;
+                    ProcHandle::ProcStr(mut ss) => {
+                        if let Some(s) = ss.take() {
                             println!("{}", s);
                         }
                     }
@@ -137,10 +134,8 @@ impl WaitFun {
                             ret = String::from_utf8_lossy(&output.stdout).to_string();
                         }
                     }
-                    ProcHandle::ProcFile(mut ff) => {
-                        if let Some(mut f) = ff.take() {
-                            let mut s = String::new();
-                            f.read_to_string(&mut s)?;
+                    ProcHandle::ProcStr(mut ss) => {
+                        if let Some(s) = ss.take() {
                             ret = s;
                         }
                     }
@@ -221,17 +216,14 @@ impl Cmds {
         // spawning all the sub-processes
         for (i, mut cmd) in self.pipes.into_iter().enumerate() {
             if i != 0 {
+                cmd.stdin(Stdio::piped());
                 match &mut self.children[i - 1] {
                     ProcHandle::ProcChild(child) => {
                         if let Some(output) = child.stdout.take() {
                             cmd.stdin(output);
                         }
                     }
-                    ProcHandle::ProcFile(ff) => {
-                        if let Some(f) = ff.take() {
-                            cmd.stdin(f);
-                        }
-                    }
+                    ProcHandle::ProcStr(_) => {}
                 }
             }
 
@@ -243,18 +235,24 @@ impl Cmds {
             if command == &"cd" {
                 let dir = Self::run_cd_cmd(args)?;
                 self.current_dir = dir;
-                self.children.push(ProcHandle::ProcFile(None));
+                self.children.push(ProcHandle::ProcStr(None));
             } else if in_cmd_map {
                 let output = tls_get!(CMD_MAP)[command](args, envs)?;
-                if output.is_empty() {
-                    self.children.push(ProcHandle::ProcFile(None));
-                } else {
-                    let mut file = tempfile()?;
-                    writeln!(file, "{}", output)?;
-                    self.children.push(ProcHandle::ProcFile(Some(file)));
-                }
+                self.children.push(ProcHandle::ProcStr(Some(output)));
             } else {
-                let child = cmd.spawn()?;
+                let mut child = cmd.spawn()?;
+                if let Some(mut input) = child.stdin.take() {
+                    if i != 0 {
+                        match &mut self.children[i - 1] {
+                            ProcHandle::ProcChild(_) => {}
+                            ProcHandle::ProcStr(ss) => {
+                                if let Some(s) = ss.take() {
+                                    input.write_all(s.as_bytes())?;
+                                }
+                            }
+                        }
+                    }
+                }
                 self.children.push(ProcHandle::ProcChild(child));
             }
         }
