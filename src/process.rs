@@ -335,7 +335,7 @@ pub struct Cmd {
 
 impl Cmd {
     pub fn add_arg(mut self, arg: String) -> Self {
-        if self.is_empty() {
+        if self.args.is_empty() {
             let v: Vec<&str> = arg.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 self.envs.insert(v[0].to_owned(), v[1].to_owned());
@@ -366,10 +366,6 @@ impl Cmd {
         self
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.args.is_empty()
-    }
-
     pub fn gen_command(&mut self) -> Command {
         let cmd_args: Vec<String> = self.get_args().to_vec();
         let mut cmd = Command::new(&cmd_args[0]);
@@ -378,7 +374,7 @@ impl Cmd {
         cmd
     }
 
-    pub fn setup_redirects(&self, cmd: &mut Command) {
+    fn setup_redirects(&self, cmd: &mut Command) {
         fn open_file(path: &str, append: bool) -> std::fs::File {
             OpenOptions::new()
                 .create(true)
