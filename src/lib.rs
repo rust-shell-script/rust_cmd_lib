@@ -181,7 +181,6 @@
 //! ### Redirection and Piping
 //! Right now piping and stdin, stdout, stderr redirection are supported. Most parts are the same as in
 //! [bash scripts](https://www.gnu.org/software/bash/manual/html_node/Redirections.html#Redirections).
-//! See examples at [examples/redirect.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/redirect.rs)
 //!
 //! ### Builtin commands
 //! #### cd
