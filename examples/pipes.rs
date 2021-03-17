@@ -47,7 +47,7 @@ tls_init!(h, i32, 24);
 // 00 means going up   , then going up   -> ┃
 // 12 means going right, then going down -> ┓
 #[rustfmt::skip]
-tls_init!(sets, Vec<String>, vec![
+tls_init!(sets, Vec<String>, [
     r"┃┏ ┓┛━┓  ┗┃┛┗ ┏━",
     r"│╭ ╮╯─╮  ╰│╯╰ ╭─",
     r"│┌ ┐┘─┐  └│┘└ ┌─",
