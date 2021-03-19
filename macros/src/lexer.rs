@@ -1,5 +1,6 @@
 use crate::parser::{ParseArg, Parser};
 use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
+use proc_macro_error::abort;
 use quote::quote;
 
 enum SepToken {
@@ -158,29 +159,30 @@ impl Lexer {
             if self.last_is_dollar_sign() {
                 if let TokenTree::Group(g) = t.clone() {
                     if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
-                        panic!(
-                            "invalid grouping: found {:?}, only Brace/Bracket is allowed",
-                            g.delimiter()
+                        abort!(
+                            g,
+                            "invalid grouping: found {:?}, only \"brace/bracket\" is allowed",
+                            format!("{:?}", g.delimiter()).to_lowercase()
                         );
                     }
                     let mut found_var = false;
                     for tt in g.stream() {
-                        if let TokenTree::Ident(var) = tt {
+                        if let TokenTree::Ident(ref var) = tt {
                             if found_var {
-                                panic!("more than one variable in grouping");
+                                abort!(tt, "more than one variable in grouping");
                             }
                             if g.delimiter() == Delimiter::Brace {
                                 self.extend_last_arg(quote!(&#var.to_string()));
                             } else {
                                 if !self.last_arg_str_empty() {
-                                    panic!("vector variable can only be used alone");
+                                    abort!(tt, "vector variable can only be used alone");
                                 }
                                 self.args.push(ParseArg::ParseArgVec(quote!(#var)));
                                 self.reset_last_marker_token();
                             }
                             found_var = true;
                         } else {
-                            panic!("invalid grouping: extra tokens");
+                            abort!(tt, "invalid grouping: extra tokens");
                         }
                     }
                     continue;
@@ -191,8 +193,8 @@ impl Lexer {
             }
 
             if let TokenTree::Group(_) = t {
-                panic!("grouping is only allowed for variable");
-            } else if let TokenTree::Literal(lit) = t {
+                abort!(t, "grouping is only allowed for variable");
+            } else if let TokenTree::Literal(ref lit) = t {
                 let s = lit.to_string();
                 if s.starts_with("\"") || s.starts_with("r") {
                     if s.starts_with("\"") {
@@ -203,7 +205,7 @@ impl Lexer {
                 } else {
                     if self.last_marker_token == MarkerToken::Ampersand {
                         if &s != "1" && &s != "2" {
-                            panic!("only &1 or &2 is allowed");
+                            abort!(t, "only &1 or &2 is allowed");
                         }
                         if let Some((fd, _)) = self.last_redirect.clone() {
                             if &s == "1" {
@@ -212,7 +214,7 @@ impl Lexer {
                                 self.add_fd_redirect_arg(fd.id(), 2);
                             }
                         } else {
-                            panic!("& is only allowed for redirect");
+                            abort!(t, "& is only allowed for redirect");
                         }
                         continue;
                     }
