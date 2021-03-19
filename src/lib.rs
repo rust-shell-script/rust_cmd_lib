@@ -316,13 +316,13 @@ pub use process::{
 /// Report fatal errors and exit process conveniently
 ///
 /// The arguments format is the same as in println!() macro. Note that this macro is just for
-/// convenience. If you want to exit with other code, you should probably define your own macro
-/// or functions.
+/// convenience. The process will exit with 1 and print "FATAL: ..." messages to error console.
+/// If you want to exit with other code, you should probably define your own macro or functions.
 /// ```no_run
 /// # use cmd_lib::die;
 /// let file = "bad_file";
 /// die!("could not open file: {}", file);
-/// // process will exit with 1 and print message to error console:
+/// // output:
 /// // FATAL: could not open file: bad_file
 /// ```
 #[macro_export]
