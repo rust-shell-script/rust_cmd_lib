@@ -1,5 +1,5 @@
-use proc_macro2::{Span, TokenStream};
-use quote::{quote, ToTokens};
+use proc_macro2::{Span, TokenStream, TokenTree};
+use quote::{quote, quote_spanned, ToTokens};
 
 /// export the function as an command to be run by `run_cmd!` or `run_fun!`
 ///
@@ -54,17 +54,21 @@ pub fn export_cmd(
 /// Here we import the previous defined `my_cmd` command, so we can run it like a normal command.
 #[proc_macro]
 pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let item: proc_macro2::TokenStream = item.into();
     let mut cmd_fns = vec![];
     for t in item {
-        if let proc_macro::TokenTree::Punct(ch) = t {
+        if let TokenTree::Punct(ref ch) = t {
             if ch.as_char() != ',' {
-                panic!("only comma is allowed");
+                return quote_spanned!(t.span() => compile_error!("only comma is allowed")).into();
             }
-        } else if let proc_macro::TokenTree::Ident(cmd) = t {
+        } else if let TokenTree::Ident(cmd) = t {
             let cmd_fn = syn::Ident::new(&format!("export_cmd_{}", cmd), Span::call_site());
             cmd_fns.push(cmd_fn);
         } else {
-            panic!("expect a list of comma separated commands");
+            return quote_spanned!(
+                t.span() => compile_error!("expect a list of comma separated commands")
+            )
+            .into();
         }
     }
 
@@ -83,18 +87,22 @@ pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
 /// ```
 /// `cd` builtin command is always enabled without importing it.
 pub fn use_builtin_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let item: proc_macro2::TokenStream = item.into();
     let mut ret = TokenStream::new();
     for t in item {
-        if let proc_macro::TokenTree::Punct(ch) = t {
+        if let TokenTree::Punct(ref ch) = t {
             if ch.as_char() != ',' {
-                panic!("only comma is allowed");
+                return quote_spanned!(t.span() => compile_error!("only comma is allowed")).into();
             }
-        } else if let proc_macro::TokenTree::Ident(cmd) = t {
+        } else if let TokenTree::Ident(cmd) = t {
             let cmd_name = cmd.to_string();
             let cmd_fn = syn::Ident::new(&format!("builtin_{}", cmd_name), Span::call_site());
             ret.extend(quote!(::cmd_lib::export_cmd(#cmd_name, ::cmd_lib::#cmd_fn);));
         } else {
-            panic!("expect a list of comma separated commands");
+            return quote_spanned!(
+                t.span() => compile_error!("expect a list of comma separated commands")
+            )
+            .into();
         }
     }
 
