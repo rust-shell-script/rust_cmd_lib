@@ -197,3 +197,12 @@ fn test_export_cmd() {
     assert!(run_cmd!(my_cmd arg1 arg2).is_ok());
     assert!(run_cmd!(my_cmd2).is_ok());
 }
+
+#[test]
+fn test_escape() {
+    let xxx = 42;
+    assert_eq!(
+        run_fun!(echo "\"a你好${xxx}世界b\"").unwrap(),
+        "\"a你好42世界b\""
+    );
+}

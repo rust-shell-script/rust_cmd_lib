@@ -299,9 +299,8 @@ impl Lexer {
 
     fn parse_vars(&mut self, t: TokenTree, src: &str) {
         let mut iter = src.chars().peekable();
-        let mut last_escape = false;
         while let Some(ch) = iter.next() {
-            if !last_escape && ch == '$' {
+            if ch == '$' {
                 let mut with_brace = false;
                 if iter.peek() == Some(&'{') {
                     with_brace = true;
@@ -331,8 +330,22 @@ impl Lexer {
                 } else {
                     self.extend_last_arg(quote!(&'$'.to_string()));
                 }
+            } else if ch == '\\' {
+                match iter.peek() {
+                    Some(&ch) => {
+                        let ec = match ch {
+                            'n' => '\n',
+                            'r' => '\r',
+                            't' => '\t',
+                            '0' => '\0',
+                            _ => ch,
+                        };
+                        self.extend_last_arg(quote!(&#ec.to_string()));
+                        iter.next();
+                    }
+                    None => {}
+                }
             } else {
-                last_escape = ch == '\\';
                 self.extend_last_arg(quote!(&#ch.to_string()));
             }
         }
