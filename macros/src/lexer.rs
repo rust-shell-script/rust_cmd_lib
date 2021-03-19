@@ -302,15 +302,11 @@ impl Lexer {
         let mut last_escape = false;
         while let Some(ch) = iter.next() {
             if !last_escape && ch == '$' {
-                let with_brace = if let Some(nc) = iter.peek() {
-                    nc == &'{'
-                } else {
-                    false
-                };
-                if with_brace {
+                let mut with_brace = false;
+                if iter.peek() == Some(&'{') {
+                    with_brace = true;
                     iter.next();
                 }
-
                 let mut var = String::new();
                 while let Some(&c) = iter.peek() {
                     if !c.is_ascii_alphanumeric() && c != '_' {
