@@ -73,13 +73,13 @@ impl Lexer {
         self.last_marker_token = MarkerToken::None;
     }
 
-    fn set_redirect(&mut self, fd: RedirectFd) {
+    fn set_redirect(&mut self, t: TokenTree, fd: RedirectFd) {
         if let Some((_, append)) = self.last_redirect {
             if append {
-                panic!("wrong redirect format: more than append");
+                abort!(t, "wrong redirect format: more than append");
             }
             if fd == RedirectFd::Stdin {
-                panic!("wrong input redirect format");
+                abort!(t, "wrong input redirect format");
             }
             self.last_redirect = Some((fd, true));
         } else {
@@ -198,7 +198,7 @@ impl Lexer {
                 let s = lit.to_string();
                 if s.starts_with("\"") || s.starts_with("r") {
                     if s.starts_with("\"") {
-                        self.parse_vars(&s[1..s.len() - 1]);
+                        self.parse_vars(t, &s[1..s.len() - 1]);
                     } else {
                         self.extend_last_arg(quote!(#lit));
                     }
@@ -226,7 +226,7 @@ impl Lexer {
                     }
                 }
             } else {
-                if let TokenTree::Punct(p) = t {
+                if let TokenTree::Punct(ref p) = t {
                     let ch = p.as_char();
                     if ch == '$' {
                         self.set_last_marker_token(MarkerToken::DollarSign);
@@ -245,18 +245,18 @@ impl Lexer {
                         continue;
                     } else if ch == '>' {
                         if let MarkerToken::Fd(fd) = self.last_marker_token {
-                            self.set_redirect(if fd == 2 {
+                            self.set_redirect(t, if fd == 2 {
                                 RedirectFd::Stderr
                             } else {
                                 RedirectFd::Stdout
                             });
                             self.reset_last_marker_token();
                         } else {
-                            self.set_redirect(RedirectFd::Stdout);
+                            self.set_redirect(t, RedirectFd::Stdout);
                         }
                         continue;
                     } else if ch == '<' {
-                        self.set_redirect(RedirectFd::Stdin);
+                        self.set_redirect(t, RedirectFd::Stdin);
                         continue;
                     } else if ch == '&' {
                         self.set_last_marker_token(MarkerToken::Ampersand);
@@ -292,7 +292,7 @@ impl Lexer {
         (start, end)
     }
 
-    fn parse_vars(&mut self, src: &str) {
+    fn parse_vars(&mut self, t: TokenTree, src: &str) {
         let input: Vec<char> = src.chars().collect();
         let len = input.len();
 
@@ -314,7 +314,7 @@ impl Lexer {
                 }
                 if with_brace {
                     if i == len || input[i] != '}' {
-                        panic!("bad substitution");
+                        abort!(t, "bad substitution");
                     }
                 } else {
                     i -= 1; // back off 1 char
