@@ -198,6 +198,8 @@ impl Lexer {
                 let s = lit.to_string();
                 if s.starts_with("\"") || s.starts_with("r") {
                     if s.starts_with("\"") {
+                        // XXX: could not use trim_matches('"') here, since it might
+                        // remove more characters than we want
                         self.parse_vars(t, &s[1..s.len() - 1]);
                     } else {
                         self.extend_last_arg(quote!(#lit));
@@ -245,11 +247,14 @@ impl Lexer {
                         continue;
                     } else if ch == '>' {
                         if let MarkerToken::Fd(fd) = self.last_marker_token {
-                            self.set_redirect(t, if fd == 2 {
-                                RedirectFd::Stderr
-                            } else {
-                                RedirectFd::Stdout
-                            });
+                            self.set_redirect(
+                                t,
+                                if fd == 2 {
+                                    RedirectFd::Stderr
+                                } else {
+                                    RedirectFd::Stdout
+                                },
+                            );
                             self.reset_last_marker_token();
                         } else {
                             self.set_redirect(t, RedirectFd::Stdout);
@@ -293,31 +298,36 @@ impl Lexer {
     }
 
     fn parse_vars(&mut self, t: TokenTree, src: &str) {
-        let input: Vec<char> = src.chars().collect();
-        let len = input.len();
-
-        let mut i = 0;
-        while i < len {
-            if input[i] == '$' && (i == 0 || input[i - 1] != '\\') {
-                i += 1;
-                let with_brace = i < len && input[i] == '{';
-                let mut var = String::new();
+        let mut iter = src.chars().peekable();
+        let mut last_escape = false;
+        while let Some(ch) = iter.next() {
+            if !last_escape && ch == '$' {
+                let with_brace = if let Some(nc) = iter.peek() {
+                    nc == &'{'
+                } else {
+                    false
+                };
                 if with_brace {
-                    i += 1;
+                    iter.next();
                 }
-                while i < len && (input[i].is_ascii_alphanumeric() || (input[i] == '_')) {
-                    if var.is_empty() && input[i].is_ascii_digit() {
+
+                let mut var = String::new();
+                while let Some(&c) = iter.peek() {
+                    if !c.is_ascii_alphanumeric() && c != '_' {
                         break;
                     }
-                    var.push(input[i]);
-                    i += 1;
+                    if var.is_empty() && c.is_ascii_digit() {
+                        break;
+                    }
+                    var.push(c);
+                    iter.next();
                 }
                 if with_brace {
-                    if i == len || input[i] != '}' {
+                    if iter.peek() != Some(&'}') {
                         abort!(t, "bad substitution");
+                    } else {
+                        iter.next();
                     }
-                } else {
-                    i -= 1; // back off 1 char
                 }
                 if !var.is_empty() {
                     let var = syn::parse_str::<Ident>(&var).unwrap();
@@ -326,10 +336,9 @@ impl Lexer {
                     self.extend_last_arg(quote!(&'$'.to_string()));
                 }
             } else {
-                let ch = input[i];
+                last_escape = ch == '\\';
                 self.extend_last_arg(quote!(&#ch.to_string()));
             }
-            i += 1;
         }
     }
 }
