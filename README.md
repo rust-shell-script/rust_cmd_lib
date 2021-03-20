@@ -8,7 +8,6 @@ easily in rust programming language. Available at [crates.io](https://crates.io/
 [![Build status](https://github.com/rust-shell-script/rust_cmd_lib/workflows/ci/badge.svg)](https://github.com/rust-shell-script/rust_cmd_lib/actions)
 [![Crates.io](https://img.shields.io/crates/v/cmd_lib.svg)](https://crates.io/crates/cmd_lib)
 
-
 ### Why you need this
 If you need to run some external commands in rust, the
 [std::process::Command](https://doc.rust-lang.org/std/process/struct.Command.html) is a good
@@ -66,6 +65,8 @@ for (i, mut proc) in procs.into_iter().enumerate() {
 }
 run_cmd!(info "Total bandwidth: $total_bandwidth MB/s")?;
 ```
+You can also check how it works with the `clap` and `rayon` crates:
+[examples/dd_test_with_crates.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/dd_test_with_crates.rs)
 
 Output will be like this:
 
