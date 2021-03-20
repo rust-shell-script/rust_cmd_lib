@@ -13,46 +13,35 @@
 // thread 0 bandwidth: 273 MB/s
 // thread 1 bandwidth: 269 MB/s
 // Total bandwidth: 1094 MB/s
-use cmd_lib::{run_cmd, run_fun, use_builtin_cmd, CmdResult};
+use clap::*;
+use cmd_lib::*;
 use rayon::prelude::*;
-use std::env;
 
 const DATA_SIZE: i64 = 10 * 1024 * 1024 * 1024; // 10GB data
 
 fn main() -> CmdResult {
     use_builtin_cmd!(echo, info);
-    let mut opts = env::args().skip(1);
-    let mut file = String::new();
-    let mut block_size: i32 = 4096;
-    let mut thread_num: i32 = 1;
-    while let Some(opt) = opts.next() {
-        match opt.as_str() {
-            "-b" => {
-                block_size = opts
-                    .next()
-                    .unwrap_or_else(|| die_with_usage("missing block"))
-                    .parse()
-                    .unwrap_or_else(|_| die_with_usage("invalid block"))
-            }
-            "-f" => {
-                file = opts
-                    .next()
-                    .unwrap_or_else(|| die_with_usage("missing file"))
-            }
-            "-t" => {
-                thread_num = opts
-                    .next()
-                    .unwrap_or_else(|| die_with_usage("missing thread number"))
-                    .parse()
-                    .unwrap_or_else(|_| die_with_usage("invalid thread number"))
-            }
-            opt => die_with_usage(format!("invalid option: {}", opt).as_str()),
+    let matches = clap_app!(dd_test_with_crates =>
+        (@arg block_size: -b +takes_value "Set block size")
+        (@arg thread_num: -t +takes_value "Set thread number")
+        (@arg file: -f +takes_value +required "Set file path")
+    )
+    .get_matches();
+    let block_size = value_t!(matches.value_of("block_size"), i32).unwrap_or_else(|e| {
+        if e.kind == ErrorKind::ArgumentNotFound {
+            4096
+        } else {
+            e.exit()
         }
-    }
-
-    if file.is_empty() {
-        die_with_usage("file name is empty");
-    }
+    });
+    let thread_num = value_t!(matches.value_of("thread_num"), i32).unwrap_or_else(|e| {
+        if e.kind == ErrorKind::ArgumentNotFound {
+            1
+        } else {
+            e.exit()
+        }
+    });
+    let file = value_t!(matches.value_of("file"), String).unwrap_or_else(|e| e.exit());
 
     run_cmd! (
         info "Dropping caches at first";
@@ -78,15 +67,4 @@ fn main() -> CmdResult {
     run_cmd!(info "Total bandwidth: $total_bandwidth MB/s")?;
 
     Ok(())
-}
-
-fn die_with_usage(msg: &str) -> ! {
-    let arg0 = env::args().next().unwrap();
-    let prog = run_fun!(basename $arg0).unwrap();
-    run_cmd! (
-        info $msg;
-        info "Usage: $prog [-b <block_size>] [-t <thread_num>] -f <file>"
-    )
-    .unwrap();
-    std::process::exit(1)
 }

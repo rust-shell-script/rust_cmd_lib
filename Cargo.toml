@@ -17,4 +17,7 @@ members = ["macros", "examples"]
 
 [dependencies]
 cmd_lib_macros = { version = "0.12.1", path = "./macros" }
+
+[dev-dependencies]
 rayon = "1.5"
+clap = "2.33"
