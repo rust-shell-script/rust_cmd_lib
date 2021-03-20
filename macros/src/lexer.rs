@@ -82,13 +82,11 @@ impl Lexer {
                 abort!(t, "wrong input redirect format");
             }
             self.last_redirect = Some((fd, true));
+        } else if self.last_marker_token == MarkerToken::Ampersand {
+            self.last_redirect = Some((RedirectFd::StdoutErr, false));
+            self.reset_last_marker_token();
         } else {
-            if self.last_marker_token == MarkerToken::Ampersand {
-                self.last_redirect = Some((RedirectFd::StdoutErr, false));
-                self.reset_last_marker_token();
-            } else {
-                self.last_redirect = Some((fd, false));
-            }
+            self.last_redirect = Some((fd, false));
         }
     }
 
@@ -110,12 +108,10 @@ impl Lexer {
                     .push(ParseArg::ParseRedirectFile(1, quote!(#last_arg_str), true));
             }
             self.last_redirect = None;
-        } else {
-            if !self.last_arg_str_empty() {
-                let last_arg_str = self.last_arg_str.clone();
-                let last_arg = ParseArg::ParseArgStr(quote!(#last_arg_str));
-                self.args.push(last_arg);
-            }
+        } else if !self.last_arg_str_empty() {
+            let last_arg_str = self.last_arg_str.clone();
+            let last_arg = ParseArg::ParseArgStr(quote!(#last_arg_str));
+            self.args.push(last_arg);
         }
         match token {
             SepToken::Space => {}
@@ -196,8 +192,8 @@ impl Lexer {
                 abort!(t, "grouping is only allowed for variable");
             } else if let TokenTree::Literal(ref lit) = t {
                 let s = lit.to_string();
-                if s.starts_with("\"") || s.starts_with("r") {
-                    if s.starts_with("\"") {
+                if s.starts_with('\"') || s.starts_with('r') {
+                    if s.starts_with('\"') {
                         // XXX: could not use trim_matches('"') here, since it might
                         // remove more characters than we want
                         self.parse_vars(t, &s[1..s.len() - 1]);
@@ -331,19 +327,16 @@ impl Lexer {
                     self.extend_last_arg(quote!(&'$'.to_string()));
                 }
             } else if ch == '\\' {
-                match iter.peek() {
-                    Some(&ch) => {
-                        let ec = match ch {
-                            'n' => '\n',
-                            'r' => '\r',
-                            't' => '\t',
-                            '0' => '\0',
-                            _ => ch,
-                        };
-                        self.extend_last_arg(quote!(&#ec.to_string()));
-                        iter.next();
-                    }
-                    None => {}
+                if let Some(&ch) = iter.peek() {
+                    let ec = match ch {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        '0' => '\0',
+                        _ => ch,
+                    };
+                    self.extend_last_arg(quote!(&#ec.to_string()));
+                    iter.next();
                 }
             } else {
                 self.extend_last_arg(quote!(&#ch.to_string()));
