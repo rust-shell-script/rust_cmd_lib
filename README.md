@@ -5,6 +5,11 @@
 Common rust command-line macros and utilities, to write shell-script like tasks
 easily in rust programming language. Available at [crates.io](https://crates.io/crates/cmd_lib).
 
+[![Build status](https://github.com/rust-shell-script/rust_cmd_lib/workflows/ci/badge.svg)](https://github.com/rust-shell-script/rust_cmd_lib/actions)
+[![Crates.io](https://img.shields.io/crates/v/cmd_lib.svg)](https://crates.io/crates/cmd_lib)
+[![Packaging status](https://repology.org/badge/tiny-repos/cmd_lib.svg)](https://repology.org/project/cmd_lib/badges)
+
+
 ### Why you need this
 If you need to run some external commands in rust, the
 [std::process::Command](https://doc.rust-lang.org/std/process/struct.Command.html) is a good
