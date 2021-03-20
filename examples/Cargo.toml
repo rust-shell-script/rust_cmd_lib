@@ -1,0 +1,29 @@
+[package]
+name = "examples"
+version = "0.0.0"
+publish = false
+edition = "2018"
+
+[dev-dependencies]
+cmd_lib = { path = ".." }
+rayon = "1.5"
+
+[[example]]
+name = "dd_test"
+path = "dd_test.rs"
+
+[[example]]
+name = "pipes"
+path = "pipes.rs"
+
+[[example]]
+name = "tetris"
+path = "tetris.rs"
+
+[[example]]
+name = "rust_cookbook"
+path = "rust_cookbook.rs"
+
+[[example]]
+name = "dd_test_with_crates"
+path = "dd_test_with_crates.rs"
