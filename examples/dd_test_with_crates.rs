@@ -61,10 +61,9 @@ fn main() -> CmdResult {
     )?;
     let cnt: i32 = (DATA_SIZE / thread_num as i64 / block_size as i64) as i32;
     let total_bandwidth: i32 = (0..thread_num)
-        .map(|i| (i, i * cnt))
-        .collect::<Vec<(i32, i32)>>()
-        .par_iter()
-        .map(|(i, off)| {
+        .into_par_iter()
+        .map(|i| {
+            let off = cnt * i;
             let bandwidth = run_fun!(
                 sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
                 | awk r"/MB/ {print $10}"
