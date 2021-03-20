@@ -7,8 +7,7 @@ pub fn builtin_true(_args: CmdArgs, _envs: CmdEnvs) -> FunResult {
 
 #[doc(hidden)]
 pub fn builtin_echo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
-    let msg = format!("{}", args[1..].join(" "));
-    Ok(msg)
+    Ok(args[1..].join(" "))
 }
 
 #[doc(hidden)]

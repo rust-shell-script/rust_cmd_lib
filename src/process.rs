@@ -93,9 +93,9 @@ impl WaitCmd {
             ProcHandle::ProcChild(mut child) => {
                 let status = child.wait()?;
                 if !status.success() {
-                    return Err(Cmds::to_io_error(
-                        &format!("{} exited with error", cmd),
+                    return Err(Cmds::status_to_io_error(
                         status,
+                        &format!("{} exited with error", cmd),
                     ));
                 }
             }
@@ -125,9 +125,9 @@ impl WaitFun {
             ProcHandle::ProcChild(child) => {
                 let output = child.wait_with_output()?;
                 if !output.status.success() {
-                    return Err(Cmds::to_io_error(
-                        &format!("{} exited with error", cmd),
+                    return Err(Cmds::status_to_io_error(
                         output.status,
+                        &format!("{} exited with error", cmd),
                     ));
                 } else {
                     ret = String::from_utf8_lossy(&output.stdout).to_string();
@@ -264,9 +264,9 @@ impl Cmds {
                     pipefail = pipefail_str != "0";
                 }
                 if pipefail {
-                    return Err(Self::to_io_error(
-                        &format!("{} exited with error", cmd),
+                    return Err(Self::status_to_io_error(
                         status,
+                        &format!("{} exited with error", cmd),
                     ));
                 }
             }
@@ -301,7 +301,7 @@ impl Cmds {
         self.spawn_with_output()?.wait_result()
     }
 
-    fn to_io_error(command: &str, status: ExitStatus) -> Error {
+    fn status_to_io_error(status: ExitStatus, command: &str) -> Error {
         if let Some(code) = status.code() {
             Error::new(
                 ErrorKind::Other,
