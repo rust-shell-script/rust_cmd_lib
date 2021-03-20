@@ -60,7 +60,7 @@ fn main() -> CmdResult {
             .unwrap()
             .parse::<i32>()
             .unwrap();
-            eprintln!("thread {} bandwidth: {} MB/s", i, bandwidth);
+            run_cmd!(info "thread $i bandwidth: $bandwidth MB/s").unwrap();
             bandwidth
         })
         .sum();

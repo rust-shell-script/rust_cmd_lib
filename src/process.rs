@@ -1,18 +1,26 @@
-use crate::{tls_get, tls_init, tls_set, CmdResult, FunResult};
+use crate::{CmdResult, FunResult};
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{Error, ErrorKind, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::Mutex;
 
 pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
 type FnFun = fn(CmdArgs, CmdEnvs) -> FunResult;
 
-tls_init!(CMD_MAP, HashMap<&'static str, FnFun>, HashMap::new());
+lazy_static! {
+    static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
+        // needs explicit type, or it won't compile
+        let m: HashMap<&'static str, FnFun> = HashMap::new();
+        Mutex::new(m)
+    };
+}
 
 #[doc(hidden)]
 pub fn export_cmd(cmd: &'static str, func: FnFun) {
-    tls_set!(CMD_MAP, |map| map.insert(cmd, func));
+    CMD_MAP.lock().unwrap().insert(cmd, func);
 }
 
 /// set debug mode or not, false by default
@@ -218,12 +226,12 @@ impl Cmds {
             let args = self.cmd_args[i].get_args().clone();
             let envs = self.cmd_args[i].get_envs().clone();
             let command = &args[0].as_str();
-            let in_cmd_map = tls_get!(CMD_MAP).contains_key(command);
+            let in_cmd_map = CMD_MAP.lock().unwrap().contains_key(command);
             if command == &"cd" {
                 Self::run_cd_cmd(args, &mut self.current_dir)?;
                 self.children.push(ProcHandle::ProcStr(None));
             } else if in_cmd_map {
-                let output = tls_get!(CMD_MAP)[command](args, envs)?;
+                let output = CMD_MAP.lock().unwrap()[command](args, envs)?;
                 self.children.push(ProcHandle::ProcStr(Some(output)));
             } else {
                 let mut child = cmd.spawn()?;
