@@ -8,6 +8,7 @@ edition = "2018"
 cmd_lib = { path = ".." }
 rayon = "1.5"
 structopt = "0.3"
+byte-unit = "4.0"
 
 [[example]]
 name = "dd_test"
