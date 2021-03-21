@@ -32,63 +32,53 @@
 //!
 //! ## What this library looks like
 //!
-//! To get a first impression, here is an example from `examples/dd_test.rs`:
+//! To get a first impression, here is an example from
+//! [examples/dd_test.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/dd_test.rs):
 //!
 //! ```no_run
-//! use cmd_lib::{run_cmd, run_fun, spawn_with_output, use_builtin_cmd, CmdResult};
-//! # const DATA_SIZE: i64 = 10 * 1024 * 1024 * 1024; // 10GB data
+//! # use byte_unit::Byte;
+//! # use cmd_lib::*;
+//! # use rayon::prelude::*;
+//! # use std::time::Instant;
+//! # const DATA_SIZE: u64 = 10 * 1024 * 1024 * 1024; // 10GB data
 //! # let mut file = String::new();
-//! # let mut block_size: i32 = 4096;
-//! # let mut thread_num: i32 = 1;
-//!
-//! use_builtin_cmd!(info);
-//! cmd_lib::set_debug(true);
+//! # let mut block_size: u64 = 4096;
+//! # let mut thread_num: u64 = 1;
 //! run_cmd! (
 //!     info "Dropping caches at first";
-//!     sudo bash -c "echo 3 > /proc/sys/vm/drop_caches"
+//!     sudo bash -c "echo 3 > /proc/sys/vm/drop_caches";
+//!     info "Running with thread_num: $thread_num, block_size: $block_size";
 //! )?;
-
-//! run_cmd!(info "Running with thread_num: $thread_num, block_size: $block_size")?;
-//! let cnt: i32 = (DATA_SIZE / thread_num as i64 / block_size as i64) as i32;
-//! let mut procs = vec![];
-//! for i in 0..thread_num {
+//! let cnt = DATA_SIZE / thread_num / block_size;
+//! let now = Instant::now();
+//! (0..thread_num).into_par_iter().for_each(|i| {
 //!     let off = cnt * i;
-//!     let proc = spawn_with_output!(
+//!     let bandwidth = run_fun!(
 //!         sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
-//!     )?;
-//!     procs.push(proc);
-//! }
-
-//! let mut total_bandwidth = 0;
-//! cmd_lib::set_debug(false);
-//! for (i, mut proc) in procs.into_iter().enumerate() {
-//!     let output = proc.wait_result()?;
-//!     let bandwidth = run_fun!(echo $output | awk r"/MB/ {print $10}")?;
-//!     total_bandwidth += bandwidth.parse::<i32>().unwrap();
-//!     run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
-//! }
-//! run_cmd!(info "Total bandwidth: $total_bandwidth MB/s")?;
+//!         | awk r"/copied/{print $10 $11}" | cut -d / -f1
+//!     )
+//!     .unwrap();
+//!     run_cmd!(info "thread $i bandwidth: ${bandwidth}/s").unwrap();
+//! });
+//! let total_bandwidth =
+//!     Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128).get_appropriate_unit(true);
+//! run_cmd!(info "Total bandwidth: ${total_bandwidth}/s")?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
-//! You can also check how it works with the `structopt` and `rayon` crates:
-//! [examples/dd_test_with_crates.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/dd_test_with_crates.rs)
 //!
 //! Output will be like this:
 //!
 //! ```console
 //! ➜  rust_cmd_lib git:(master) ✗ cargo run --example dd_test -- -b 4096 -f /dev/nvme0n1 -t 4
+//!     Finished dev [unoptimized + debuginfo] target(s) in 1.56s
+//!      Running `target/debug/examples/dd_test -b 4096 -f /dev/nvme0n1 -t 4`
 //! Dropping caches at first
-//! Running "sudo bash -c echo 3 > /proc/sys/vm/drop_caches" ...
 //! Running with thread_num: 4, block_size: 4096
-//! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=0 count=655360 2>&1" ...
-//! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=655360 count=655360 2>&1" ...
-//! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1310720 count=655360 2>&1" ...
-//! Running "sudo bash -c dd if=/dev/nvme0n1 of=/dev/null bs=4096 skip=1966080 count=655360 2>&1" ...
-//! thread 0 bandwidth: 267 MB/s
-//! thread 1 bandwidth: 266 MB/s
-//! thread 2 bandwidth: 274 MB/s
-//! thread 3 bandwidth: 304 MB/s
-//! Total bandwidth: 1111 MB/s
+//! thread 1 bandwidth: 286MB/s
+//! thread 3 bandwidth: 269MB/s
+//! thread 2 bandwidth: 267MB/s
+//! thread 0 bandwidth: 265MB/s
+//! Total bandwidth: 1.01 GiB/s
 //! ```
 //!
 //! ## What this library provides

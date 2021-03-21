@@ -25,7 +25,3 @@ path = "tetris.rs"
 [[example]]
 name = "rust_cookbook"
 path = "rust_cookbook.rs"
-
-[[example]]
-name = "dd_test_with_crates"
-path = "dd_test_with_crates.rs"
