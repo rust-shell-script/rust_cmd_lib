@@ -37,6 +37,7 @@ pub fn set_pipefail(enable: bool) {
 #[derive(Default)]
 pub struct GroupCmds {
     cmds: Vec<(Cmds, Option<Cmds>)>, // (cmd, orCmd) pairs
+    current_dir: String,
 }
 
 impl GroupCmds {
@@ -45,11 +46,11 @@ impl GroupCmds {
         self
     }
 
-    fn run_cmd_with_current_dir(self, current_dir: &mut String) -> CmdResult {
-        for cmd in self.cmds.into_iter() {
-            if let Err(err) = cmd.0.run_cmd(current_dir) {
-                if let Some(or_cmds) = cmd.1 {
-                    or_cmds.run_cmd(current_dir)?;
+    pub fn run_cmd(&mut self) -> CmdResult {
+        for cmd in self.cmds.iter_mut() {
+            if let Err(err) = cmd.0.run_cmd(&mut self.current_dir) {
+                if let Some(or_cmds) = &mut cmd.1 {
+                    or_cmds.run_cmd(&mut self.current_dir)?;
                 } else {
                     return Err(err);
                 }
@@ -58,20 +59,14 @@ impl GroupCmds {
         Ok(())
     }
 
-    pub fn run_cmd(self) -> CmdResult {
-        let mut current_dir = String::new();
-        self.run_cmd_with_current_dir(&mut current_dir)
-    }
-
-    pub fn run_fun(mut self) -> FunResult {
-        let last_cmd = self.cmds.pop().unwrap();
-        let mut current_dir = String::new();
-        self.run_cmd_with_current_dir(&mut current_dir)?;
+    pub fn run_fun(&mut self) -> FunResult {
+        let mut last_cmd = self.cmds.pop().unwrap();
+        self.run_cmd()?;
         // run last function command
-        let ret = last_cmd.0.run_fun(&mut current_dir);
+        let ret = last_cmd.0.run_fun(&mut self.current_dir);
         if let Err(e) = ret {
-            if let Some(or_cmds) = last_cmd.1 {
-                or_cmds.run_fun(&mut current_dir)
+            if let Some(or_cmds) = &mut last_cmd.1 {
+                or_cmds.run_fun(&mut self.current_dir)
             } else {
                 Err(e)
             }
@@ -82,14 +77,14 @@ impl GroupCmds {
 
     pub fn spawn(mut self) -> std::io::Result<WaitCmd> {
         assert_eq!(self.cmds.len(), 1);
-        let mut dir = String::new();
-        self.cmds.pop().unwrap().0.spawn(&mut dir)
+        let mut cmds = self.cmds.pop().unwrap().0;
+        cmds.spawn(&mut self.current_dir)
     }
 
     pub fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
         assert_eq!(self.cmds.len(), 1);
-        let mut dir = String::new();
-        self.cmds.pop().unwrap().0.spawn_with_output(&mut dir)
+        let mut cmds = self.cmds.pop().unwrap().0;
+        cmds.spawn_with_output(&mut self.current_dir)
     }
 }
 
@@ -122,8 +117,8 @@ impl WaitCmd {
 
         // wait previous processes
         while !self.0.is_empty() {
-            let (handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
-            Cmds::wait_child(handle, &cmd)?;
+            let (mut handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
+            Cmds::wait_child(&mut handle, &cmd)?;
         }
         Ok(())
     }
@@ -156,8 +151,8 @@ impl WaitFun {
 
         // wait previous processes
         while !self.0.is_empty() {
-            let (handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
-            Cmds::wait_child(handle, &cmd)?;
+            let (mut handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
+            Cmds::wait_child(&mut handle, &cmd)?;
         }
 
         if ret.ends_with('\n') {
@@ -201,7 +196,7 @@ impl Cmds {
         ret
     }
 
-    fn spawn(mut self, current_dir: &mut String) -> std::io::Result<WaitCmd> {
+    fn spawn(&mut self, current_dir: &mut String) -> std::io::Result<WaitCmd> {
         if let Ok(debug) = std::env::var("CMD_LIB_DEBUG") {
             if debug == "1" {
                 eprintln!("Running \"{}\" ...", self.get_full_cmd());
@@ -239,7 +234,7 @@ impl Cmds {
             let command = &args[0].as_str();
             let in_cmd_map = CMD_MAP.lock().unwrap().contains_key(command);
             if command == &"cd" {
-                Self::run_cd_cmd(args, &mut self.current_dir)?;
+                Self::run_cd_cmd(&args, &mut self.current_dir)?;
                 *current_dir = self.current_dir.clone();
                 children.push(ProcHandle::ProcStr(None));
             } else if in_cmd_map {
@@ -269,14 +264,14 @@ impl Cmds {
         ))
     }
 
-    fn spawn_with_output(mut self, current_dir: &mut String) -> std::io::Result<WaitFun> {
+    fn spawn_with_output(&mut self, current_dir: &mut String) -> std::io::Result<WaitFun> {
         self.pipes.last_mut().unwrap().stdout(Stdio::piped());
         let children = self.spawn(current_dir)?;
         Ok(WaitFun(children.0, children.1))
     }
 
-    fn wait_child(child_handle: ProcHandle, cmd: &str) -> CmdResult {
-        if let ProcHandle::ProcChild(mut child) = child_handle {
+    fn wait_child(child_handle: &mut ProcHandle, cmd: &str) -> CmdResult {
+        if let ProcHandle::ProcChild(child) = child_handle {
             let status = child.wait()?;
             if !status.success() {
                 let mut pipefail = true;
@@ -294,7 +289,7 @@ impl Cmds {
         Ok(())
     }
 
-    fn run_cd_cmd(args: Vec<String>, current_dir: &mut String) -> CmdResult {
+    fn run_cd_cmd(args: &[String], current_dir: &mut String) -> CmdResult {
         if args.len() == 1 {
             return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
         } else if args.len() > 2 {
@@ -303,7 +298,7 @@ impl Cmds {
         }
 
         let dir = &args[1];
-        if !std::path::Path::new(&dir).exists() {
+        if !std::path::Path::new(&dir).is_dir() {
             let err_msg = format!("cd: {}: No such file or directory", dir);
             eprintln!("{}", err_msg);
             return Err(Error::new(ErrorKind::Other, err_msg));
@@ -313,12 +308,16 @@ impl Cmds {
         Ok(())
     }
 
-    pub fn run_cmd(self, current_dir: &mut String) -> CmdResult {
-        self.spawn(current_dir)?.wait_result()
+    pub fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
+        let mut handle = self.spawn(current_dir)?;
+        self.pipes.clear(); // to avoid wait deadlock
+        handle.wait_result()
     }
 
-    pub fn run_fun(self, current_dir: &mut String) -> FunResult {
-        self.spawn_with_output(current_dir)?.wait_result()
+    pub fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
+        let mut handle = self.spawn_with_output(current_dir)?;
+        self.pipes.clear(); // to avoid wait deadlock
+        handle.wait_result()
     }
 
     fn status_to_io_error(status: ExitStatus, command: &str) -> Error {

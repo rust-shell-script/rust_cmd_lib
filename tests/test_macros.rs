@@ -156,6 +156,10 @@ fn test_pipe_ok() {
     assert!(run_cmd!(echo xx | wc | wc | wc | wc).is_ok());
     assert!(run_cmd!(echo xx | true | wc | wc | wc).is_ok());
     assert!(run_cmd!(echo xx | wc | wc | true | wc).is_ok());
+
+    set_pipefail(false);
+    assert!(run_cmd!(du -ah . | sort -hr | head -n 10).is_ok());
+    set_pipefail(true);
 }
 
 #[test]
