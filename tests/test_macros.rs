@@ -206,3 +206,16 @@ fn test_escape() {
         "\"a你好42世界b\""
     );
 }
+
+#[test]
+fn test_current_dir() {
+    assert_eq!(
+        run_fun!(
+            ls /;
+            cd /tmp;
+            pwd;
+        )
+        .unwrap(),
+        "/tmp"
+    );
+}

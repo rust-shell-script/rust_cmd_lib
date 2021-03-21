@@ -46,10 +46,11 @@ impl GroupCmds {
     }
 
     pub fn run_cmd(self) -> CmdResult {
+        let mut current_dir = String::new();
         for cmd in self.cmds.into_iter() {
-            if let Err(err) = cmd.0.run_cmd() {
+            if let Err(err) = cmd.0.run_cmd(&mut current_dir) {
                 if let Some(or_cmds) = cmd.1 {
-                    or_cmds.run_cmd()?;
+                    or_cmds.run_cmd(&mut current_dir)?;
                 } else {
                     return Err(err);
                 }
@@ -58,32 +59,42 @@ impl GroupCmds {
         Ok(())
     }
 
-    pub fn run_fun(self) -> FunResult {
-        let mut ret = String::new();
+    pub fn run_fun(mut self) -> FunResult {
+        let last_cmd = self.cmds.pop().unwrap();
+        let mut current_dir = String::new();
         for cmd in self.cmds.into_iter() {
-            let ret0 = cmd.0.run_fun();
-            match ret0 {
-                Err(e) => {
-                    if let Some(or_cmds) = cmd.1 {
-                        ret = or_cmds.run_fun()?;
-                    } else {
-                        return Err(e);
-                    }
+            if let Err(err) = cmd.0.run_cmd(&mut current_dir) {
+                if let Some(or_cmds) = cmd.1 {
+                    or_cmds.run_cmd(&mut current_dir)?;
+                } else {
+                    return Err(err);
                 }
-                Ok(r) => ret = r,
-            };
+            }
         }
-        Ok(ret)
+
+        // run last function command
+        let ret = last_cmd.0.run_fun(&mut current_dir);
+        if let Err(e) = ret {
+            if let Some(or_cmds) = last_cmd.1 {
+                or_cmds.run_fun(&mut current_dir)
+            } else {
+                Err(e)
+            }
+        } else {
+            ret
+        }
     }
 
     pub fn spawn(mut self) -> std::io::Result<WaitCmd> {
         assert_eq!(self.cmds.len(), 1);
-        self.cmds.pop().unwrap().0.spawn()
+        let mut dir = String::new();
+        self.cmds.pop().unwrap().0.spawn(&mut dir)
     }
 
     pub fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
         assert_eq!(self.cmds.len(), 1);
-        self.cmds.pop().unwrap().0.spawn_with_output()
+        let mut dir = String::new();
+        self.cmds.pop().unwrap().0.spawn_with_output(&mut dir)
     }
 }
 
@@ -181,9 +192,6 @@ impl Cmds {
         for (k, v) in cmd.get_envs() {
             pipe_cmd.env(k, v);
         }
-        if !self.current_dir.is_empty() {
-            pipe_cmd.current_dir(self.current_dir.clone());
-        }
         self.pipes.push(pipe_cmd);
         self.cmd_args.push(cmd);
         self
@@ -200,7 +208,7 @@ impl Cmds {
         ret
     }
 
-    fn spawn(mut self) -> std::io::Result<WaitCmd> {
+    fn spawn(mut self, current_dir: &mut String) -> std::io::Result<WaitCmd> {
         if let Ok(debug) = std::env::var("CMD_LIB_DEBUG") {
             if debug == "1" {
                 eprintln!("Running \"{}\" ...", self.get_full_cmd());
@@ -222,6 +230,15 @@ impl Cmds {
                 }
             }
 
+            // inherit outside current_dir setting
+            if self.current_dir.is_empty() {
+                self.current_dir = current_dir.clone();
+            }
+            // update current_dir for current process
+            if !self.current_dir.is_empty() {
+                cmd.current_dir(self.current_dir.clone());
+            }
+
             // check commands defined in CMD_MAP
             let args = self.cmd_args[i].get_args().clone();
             let envs = self.cmd_args[i].get_envs().clone();
@@ -229,6 +246,7 @@ impl Cmds {
             let in_cmd_map = CMD_MAP.lock().unwrap().contains_key(command);
             if command == &"cd" {
                 Self::run_cd_cmd(args, &mut self.current_dir)?;
+                *current_dir = self.current_dir.clone();
                 self.children.push(ProcHandle::ProcStr(None));
             } else if in_cmd_map {
                 let output = CMD_MAP.lock().unwrap()[command](args, envs)?;
@@ -257,9 +275,9 @@ impl Cmds {
         ))
     }
 
-    fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
+    fn spawn_with_output(mut self, current_dir: &mut String) -> std::io::Result<WaitFun> {
         self.pipes.last_mut().unwrap().stdout(Stdio::piped());
-        let children = self.spawn()?;
+        let children = self.spawn(current_dir)?;
         Ok(WaitFun(children.0, children.1))
     }
 
@@ -301,12 +319,12 @@ impl Cmds {
         Ok(())
     }
 
-    pub fn run_cmd(self) -> CmdResult {
-        self.spawn()?.wait_result()
+    pub fn run_cmd(self, current_dir: &mut String) -> CmdResult {
+        self.spawn(current_dir)?.wait_result()
     }
 
-    pub fn run_fun(self) -> FunResult {
-        self.spawn_with_output()?.wait_result()
+    pub fn run_fun(self, current_dir: &mut String) -> FunResult {
+        self.spawn_with_output(current_dir)?.wait_result()
     }
 
     fn status_to_io_error(status: ExitStatus, command: &str) -> Error {
@@ -436,19 +454,21 @@ mod tests {
 
     #[test]
     fn test_run_piped_cmds() {
+        let mut current_dir = String::new();
         assert!(Cmds::default()
             .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
             .pipe(Cmd::default().add_args(vec!["wc".into()]))
-            .run_cmd()
+            .run_cmd(&mut current_dir)
             .is_ok());
     }
 
     #[test]
     fn test_run_piped_funs() {
+        let mut current_dir = String::new();
         assert_eq!(
             Cmds::default()
                 .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
-                .run_fun()
+                .run_fun(&mut current_dir)
                 .unwrap(),
             "rust"
         );
@@ -457,7 +477,7 @@ mod tests {
             Cmds::default()
                 .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
                 .pipe(Cmd::default().add_args(vec!["wc".into(), "-c".into()]))
-                .run_fun()
+                .run_fun(&mut current_dir)
                 .unwrap()
                 .trim(),
             "5"
@@ -466,15 +486,28 @@ mod tests {
 
     #[test]
     fn test_stdout_redirect() {
+        let mut current_dir = String::new();
         let tmp_file = "/tmp/file_echo_rust";
         let mut write_cmd = Cmd::default().add_args(vec!["echo".into(), "rust".into()]);
         write_cmd = write_cmd.add_redirect(Redirect::StdoutToFile(tmp_file.to_string(), false));
-        assert!(Cmds::default().pipe(write_cmd).run_cmd().is_ok());
+        assert!(Cmds::default()
+            .pipe(write_cmd)
+            .run_cmd(&mut current_dir)
+            .is_ok());
 
         let read_cmd = Cmd::default().add_args(vec!["cat".into(), tmp_file.into()]);
-        assert_eq!(Cmds::default().pipe(read_cmd).run_fun().unwrap(), "rust");
+        assert_eq!(
+            Cmds::default()
+                .pipe(read_cmd)
+                .run_fun(&mut current_dir)
+                .unwrap(),
+            "rust"
+        );
 
         let cleanup_cmd = Cmd::default().add_args(vec!["rm".into(), tmp_file.into()]);
-        assert!(Cmds::default().pipe(cleanup_cmd).run_cmd().is_ok());
+        assert!(Cmds::default()
+            .pipe(cleanup_cmd)
+            .run_cmd(&mut current_dir)
+            .is_ok());
     }
 }
