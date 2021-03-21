@@ -24,11 +24,15 @@ pub fn export_cmd(cmd: &'static str, func: FnFun) {
 }
 
 /// set debug mode or not, false by default
+///
+/// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect
 pub fn set_debug(enable: bool) {
     std::env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 
 /// set pipefail or not, true by default
+///
+/// Setting environment variable CMD_LIB_PIPEFAIL=0|1 has the same effect
 pub fn set_pipefail(enable: bool) {
     std::env::set_var("CMD_LIB_PIPEFAIL", if enable { "1" } else { "0" });
 }
@@ -191,16 +195,14 @@ impl Cmds {
             if !ret.is_empty() {
                 ret += " | ";
             }
-            ret += &cmd_arg.get_args().join(" ");
+            ret += &format!("{:?}", cmd_arg.get_args());
         }
         ret
     }
 
     fn spawn(&mut self, current_dir: &mut String) -> std::io::Result<WaitCmd> {
-        if let Ok(debug) = std::env::var("CMD_LIB_DEBUG") {
-            if debug == "1" {
-                eprintln!("Running \"{}\" ...", self.get_full_cmd());
-            }
+        if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
+            eprintln!("Running {} ...", self.get_full_cmd());
         }
 
         let mut children: Vec<ProcHandle> = Vec::new();
@@ -273,17 +275,11 @@ impl Cmds {
     fn wait_child(child_handle: &mut ProcHandle, cmd: &str) -> CmdResult {
         if let ProcHandle::ProcChild(child) = child_handle {
             let status = child.wait()?;
-            if !status.success() {
-                let mut pipefail = true;
-                if let Ok(pipefail_str) = std::env::var("CMD_LIB_PIPEFAIL") {
-                    pipefail = pipefail_str != "0";
-                }
-                if pipefail {
-                    return Err(Self::status_to_io_error(
-                        status,
-                        &format!("{} exited with error", cmd),
-                    ));
-                }
+            if !status.success() && std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into()) {
+                return Err(Self::status_to_io_error(
+                    status,
+                    &format!("{} exited with error", cmd),
+                ));
             }
         }
         Ok(())

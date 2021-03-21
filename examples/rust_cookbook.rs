@@ -4,7 +4,6 @@
 //
 use cmd_lib::{run_cmd, run_fun, CmdResult};
 fn main() -> CmdResult {
-    cmd_lib::set_debug(true); // to print commands
     cmd_lib::set_pipefail(false); // do not fail due to pipe errors
 
     // Run an external command and process stdout
