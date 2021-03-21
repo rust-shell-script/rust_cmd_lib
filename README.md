@@ -65,7 +65,7 @@ for (i, mut proc) in procs.into_iter().enumerate() {
 }
 run_cmd!(info "Total bandwidth: $total_bandwidth MB/s")?;
 ```
-You can also check how it works with the `clap` and `rayon` crates:
+You can also check how it works with the `structopt` and `rayon` crates:
 [examples/dd_test_with_crates.rs](https://github.com/rust-shell-script/rust_cmd_lib/blob/master/examples/dd_test_with_crates.rs)
 
 Output will be like this:

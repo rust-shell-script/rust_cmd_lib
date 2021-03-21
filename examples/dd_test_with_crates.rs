@@ -13,35 +13,30 @@
 // thread 0 bandwidth: 273 MB/s
 // thread 1 bandwidth: 269 MB/s
 // Total bandwidth: 1094 MB/s
-use clap::*;
 use cmd_lib::*;
 use rayon::prelude::*;
+use structopt::StructOpt;
 
 const DATA_SIZE: i64 = 10 * 1024 * 1024 * 1024; // 10GB data
 
+#[derive(StructOpt)]
+#[structopt(name = "dd_test_with_crates", about = "Get disk read bandwidth.")]
+struct Opt {
+    #[structopt(short, default_value = "4096")]
+    block_size: i32,
+    #[structopt(short, default_value = "2")]
+    thread_num: i32,
+    #[structopt(short)]
+    file: String,
+}
+
 fn main() -> CmdResult {
     use_builtin_cmd!(echo, info);
-    let matches = clap_app!(dd_test_with_crates =>
-        (@arg block_size: -b +takes_value "Set block size")
-        (@arg thread_num: -t +takes_value "Set thread number")
-        (@arg file: -f +takes_value +required "Set file path")
-    )
-    .get_matches();
-    let block_size = value_t!(matches.value_of("block_size"), i32).unwrap_or_else(|e| {
-        if e.kind == ErrorKind::ArgumentNotFound {
-            4096
-        } else {
-            e.exit()
-        }
-    });
-    let thread_num = value_t!(matches.value_of("thread_num"), i32).unwrap_or_else(|e| {
-        if e.kind == ErrorKind::ArgumentNotFound {
-            1
-        } else {
-            e.exit()
-        }
-    });
-    let file = value_t!(matches.value_of("file"), String).unwrap_or_else(|e| e.exit());
+    let Opt {
+        block_size,
+        thread_num,
+        file,
+    } = Opt::from_args();
 
     run_cmd! (
         info "Dropping caches at first";
