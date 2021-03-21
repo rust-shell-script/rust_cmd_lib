@@ -171,8 +171,6 @@ impl WaitFun {
 #[derive(Default)]
 pub struct Cmds {
     pipes: Vec<Command>,
-    children: Vec<ProcHandle>,
-
     cmd_args: Vec<Cmd>,
     current_dir: String,
 }
@@ -210,11 +208,12 @@ impl Cmds {
             }
         }
 
+        let mut children: Vec<ProcHandle> = Vec::new();
         // spawning all the sub-processes
         for (i, cmd) in self.pipes.iter_mut().enumerate() {
             if i != 0 {
                 let mut stdin_setup_done = false;
-                if let ProcHandle::ProcChild(child) = &mut self.children[i - 1] {
+                if let ProcHandle::ProcChild(child) = &mut children[i - 1] {
                     if let Some(output) = child.stdout.take() {
                         cmd.stdin(output);
                         stdin_setup_done = true;
@@ -242,27 +241,27 @@ impl Cmds {
             if command == &"cd" {
                 Self::run_cd_cmd(args, &mut self.current_dir)?;
                 *current_dir = self.current_dir.clone();
-                self.children.push(ProcHandle::ProcStr(None));
+                children.push(ProcHandle::ProcStr(None));
             } else if in_cmd_map {
                 let output = CMD_MAP.lock().unwrap()[command](args, envs)?;
-                self.children.push(ProcHandle::ProcStr(Some(output)));
+                children.push(ProcHandle::ProcStr(Some(output)));
             } else {
                 let mut child = cmd.spawn()?;
                 if i != 0 {
                     if let Some(mut input) = child.stdin.take() {
-                        if let ProcHandle::ProcStr(ss) = &mut self.children[i - 1] {
+                        if let ProcHandle::ProcStr(ss) = &mut children[i - 1] {
                             if let Some(s) = ss.take() {
                                 input.write_all(s.as_bytes())?;
                             }
                         }
                     }
                 }
-                self.children.push(ProcHandle::ProcChild(child));
+                children.push(ProcHandle::ProcChild(child));
             }
         }
 
         Ok(WaitCmd(
-            self.children,
+            children,
             self.cmd_args
                 .iter()
                 .map(|c| c.get_args().join(" "))
