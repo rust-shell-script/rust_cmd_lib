@@ -45,12 +45,11 @@ impl GroupCmds {
         self
     }
 
-    pub fn run_cmd(self) -> CmdResult {
-        let mut current_dir = String::new();
+    fn run_cmd_with_current_dir(self, current_dir: &mut String) -> CmdResult {
         for cmd in self.cmds.into_iter() {
-            if let Err(err) = cmd.0.run_cmd(&mut current_dir) {
+            if let Err(err) = cmd.0.run_cmd(current_dir) {
                 if let Some(or_cmds) = cmd.1 {
-                    or_cmds.run_cmd(&mut current_dir)?;
+                    or_cmds.run_cmd(current_dir)?;
                 } else {
                     return Err(err);
                 }
@@ -59,19 +58,15 @@ impl GroupCmds {
         Ok(())
     }
 
+    pub fn run_cmd(self) -> CmdResult {
+        let mut current_dir = String::new();
+        self.run_cmd_with_current_dir(&mut current_dir)
+    }
+
     pub fn run_fun(mut self) -> FunResult {
         let last_cmd = self.cmds.pop().unwrap();
         let mut current_dir = String::new();
-        for cmd in self.cmds.into_iter() {
-            if let Err(err) = cmd.0.run_cmd(&mut current_dir) {
-                if let Some(or_cmds) = cmd.1 {
-                    or_cmds.run_cmd(&mut current_dir)?;
-                } else {
-                    return Err(err);
-                }
-            }
-        }
-
+        self.run_cmd_with_current_dir(&mut current_dir)?;
         // run last function command
         let ret = last_cmd.0.run_fun(&mut current_dir);
         if let Err(e) = ret {
