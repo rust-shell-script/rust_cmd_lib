@@ -1,6 +1,7 @@
 use crate::{CmdResult, FunResult};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::OpenOptions;
 use std::io::{Error, ErrorKind, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
@@ -196,6 +197,19 @@ impl Cmds {
                 ret += " | ";
             }
             ret += &format!("{:?}", cmd_arg.get_args());
+            let mut extra = String::new();
+            if !cmd_arg.get_envs().is_empty() {
+                extra += &format!("envs: {:?}", cmd_arg.get_envs());
+            }
+            if !cmd_arg.get_redirects().is_empty() {
+                if !extra.is_empty() {
+                    extra += ", ";
+                }
+                extra += &format!("redirects: {:?}", cmd_arg.get_redirects());
+            }
+            if !extra.is_empty() {
+                ret += &format!(" ({})", extra);
+            }
         }
         ret
     }
@@ -304,13 +318,13 @@ impl Cmds {
         Ok(())
     }
 
-    pub fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
+    fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
         let mut handle = self.spawn(current_dir)?;
         self.pipes.clear(); // to avoid wait deadlock
         handle.wait_result()
     }
 
-    pub fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
+    fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
         let mut handle = self.spawn_with_output(current_dir)?;
         self.pipes.clear(); // to avoid wait deadlock
         handle.wait_result()
@@ -338,6 +352,29 @@ pub enum Redirect {
     StderrToStdout,
     StdoutToFile(String, bool),
     StderrToFile(String, bool),
+}
+impl fmt::Debug for Redirect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Redirect::FileToStdin(path) => f.write_str(&format!("< {}", path)),
+            Redirect::StdoutToStderr => f.write_str(">&2"),
+            Redirect::StderrToStdout => f.write_str("2>&1"),
+            Redirect::StdoutToFile(path, append) => {
+                if *append {
+                    f.write_str(&format!("1>> {}", path))
+                } else {
+                    f.write_str(&format!("1> {}", path))
+                }
+            }
+            Redirect::StderrToFile(path, append) => {
+                if *append {
+                    f.write_str(&format!("2>> {}", path))
+                } else {
+                    f.write_str(&format!("2> {}", path))
+                }
+            }
+        }
+    }
 }
 
 #[doc(hidden)]
@@ -368,11 +405,11 @@ impl Cmd {
         self
     }
 
-    pub fn get_args(&self) -> &Vec<String> {
+    fn get_args(&self) -> &Vec<String> {
         &self.args
     }
 
-    pub fn get_envs(&self) -> &HashMap<String, String> {
+    fn get_envs(&self) -> &HashMap<String, String> {
         &self.envs
     }
 
@@ -381,7 +418,11 @@ impl Cmd {
         self
     }
 
-    pub fn gen_command(&mut self) -> Command {
+    fn get_redirects(&self) -> &Vec<Redirect> {
+        &self.redirects
+    }
+
+    fn gen_command(&mut self) -> Command {
         let cmd_args: Vec<String> = self.get_args().to_vec();
         let mut cmd = Command::new(&cmd_args[0]);
         cmd.args(&cmd_args[1..]);
