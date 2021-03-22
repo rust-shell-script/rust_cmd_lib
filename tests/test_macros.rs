@@ -231,5 +231,8 @@ fn test_current_dir() {
 /// run_cmd!(ls / /x &> > /tmp/f).unwrap();
 /// run_cmd!(ls / /x > > /tmp/f).unwrap();
 /// run_cmd!(ls / /x >> > /tmp/f).unwrap();
+/// run_cmd!(ls &< dirlist || true).unwrap();
+/// run_cmd!(ls & < dirlist || true).unwrap();
+/// run_cmd!(ls & dirlist || true).unwrap();
 /// ```
 fn test_redirect_fail() {}

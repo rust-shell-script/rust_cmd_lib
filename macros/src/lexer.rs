@@ -87,6 +87,9 @@ impl Lexer {
             self.last_redirect = Some((last_fd.clone(), true));
             self.last_marker_token = MarkerToken::RedirectFd(last_fd);
         } else if self.last_marker_token == MarkerToken::Ampersand {
+            if fd == RedirectFd::Stdin {
+                abort!(t, "wrong input redirect format");
+            }
             self.last_redirect = Some((RedirectFd::StdoutErr, false));
             self.last_marker_token = MarkerToken::RedirectFd(RedirectFd::StdoutErr);
         } else {
@@ -150,7 +153,9 @@ impl Lexer {
             let (_start, _end) = Self::span_location(&t.span());
             if end != 0 && end < _start {
                 // new argument with spacing
-                if !self.last_arg_str_empty() {
+                if self.last_marker_token == MarkerToken::Ampersand {
+                    abort!(t, "invalid token after &, only &1, &2 or &> is supported");
+                } else if !self.last_arg_str_empty() {
                     self.add_arg_with_token(SepToken::Space);
                 } else if let MarkerToken::RedirectFd(ref _fd) = self.last_marker_token {
                     self.last_marker_token = MarkerToken::None;
