@@ -1,5 +1,5 @@
 use crate::parser::{ParseArg, Parser};
-use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
 use proc_macro_error::abort;
 use quote::quote;
 
@@ -205,13 +205,7 @@ impl Lexer {
             } else if let TokenTree::Literal(ref lit) = t {
                 let s = lit.to_string();
                 if s.starts_with('\"') || s.starts_with('r') {
-                    if s.starts_with('\"') {
-                        // XXX: could not use trim_matches('"') here, since it might
-                        // remove more characters than we want
-                        self.parse_vars(t, &s[1..s.len() - 1]);
-                    } else {
-                        self.extend_last_arg(quote!(#lit));
-                    }
+                    self.extend_last_arg(Self::parse_str_lit(lit));
                 } else {
                     if self.last_marker_token == MarkerToken::Ampersand {
                         if &s != "1" && &s != "2" {
@@ -301,8 +295,15 @@ impl Lexer {
         (start, end)
     }
 
-    fn parse_vars(&mut self, t: TokenTree, src: &str) {
-        let mut iter = src.chars().peekable();
+    pub fn parse_str_lit(lit: &Literal) -> TokenStream {
+        let s = lit.to_string();
+        if !s.starts_with('\"') {
+            return quote!(#lit);
+        }
+        let mut iter = s[1..s.len() - 1] // To trim outside ""
+            .chars()
+            .peekable();
+        let mut output = quote!("");
         while let Some(ch) = iter.next() {
             if ch == '$' {
                 let mut with_brace = false;
@@ -323,16 +324,16 @@ impl Lexer {
                 }
                 if with_brace {
                     if iter.peek() != Some(&'}') {
-                        abort!(t, "bad substitution");
+                        abort!(lit.span(), "bad substitution");
                     } else {
                         iter.next();
                     }
                 }
                 if !var.is_empty() {
                     let var = syn::parse_str::<Ident>(&var).unwrap();
-                    self.extend_last_arg(quote!(&#var.to_string()));
+                    output.extend(quote!(+ &#var.to_string()));
                 } else {
-                    self.extend_last_arg(quote!(&'$'.to_string()));
+                    output.extend(quote!(+ &'$'.to_string()));
                 }
             } else if ch == '\\' {
                 if let Some(&ch) = iter.peek() {
@@ -343,12 +344,13 @@ impl Lexer {
                         '0' => '\0',
                         _ => ch,
                     };
-                    self.extend_last_arg(quote!(&#ec.to_string()));
+                    output.extend(quote!(+ &#ec.to_string()));
                     iter.next();
                 }
             } else {
-                self.extend_last_arg(quote!(&#ch.to_string()));
+                output.extend(quote!(+ &#ch.to_string()));
             }
         }
+        output
     }
 }
