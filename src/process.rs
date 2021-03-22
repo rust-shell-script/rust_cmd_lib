@@ -441,6 +441,8 @@ impl Cmd {
                 .unwrap()
         }
 
+        let mut stdout_file = "/dev/stdout";
+        let mut stderr_file = "/dev/stderr";
         for redirect in self.redirects.iter() {
             match redirect {
                 Redirect::FileToStdin(path) => {
@@ -452,18 +454,17 @@ impl Cmd {
                     }
                 }
                 Redirect::StdoutToStderr => {
-                    let file = OpenOptions::new().write(true).open("/dev/stderr").unwrap();
-                    cmd.stdout(file);
+                    cmd.stdout(open_file(stderr_file, true));
                 }
                 Redirect::StderrToStdout => {
-                    let file = OpenOptions::new().write(true).open("/dev/stdout").unwrap();
-                    cmd.stderr(file);
+                    cmd.stderr(open_file(stdout_file, true));
                 }
                 Redirect::StdoutToFile(path, append) => {
                     if path == "/dev/null" {
                         cmd.stdout(Stdio::null());
                     } else {
                         cmd.stdout(open_file(path, *append));
+                        stdout_file = path;
                     }
                 }
                 Redirect::StderrToFile(path, append) => {
@@ -471,6 +472,7 @@ impl Cmd {
                         cmd.stderr(Stdio::null());
                     } else {
                         cmd.stderr(open_file(path, *append));
+                        stderr_file = path;
                     }
                 }
             }

@@ -170,6 +170,7 @@ fn test_redirect() {
         ls /x 2>/tmp/lsx.log || true;
         echo "dump file:";
         cat /tmp/lsx.log;
+        rm /tmp/lsx.log;
     )
     .is_ok());
     assert!(run_cmd!(ls /x 2>/dev/null || true).is_ok());
@@ -223,3 +224,12 @@ fn test_current_dir() {
         "/tmp"
     );
 }
+
+#[test]
+/// ```compile_fail
+/// run_cmd!(ls / /x &>>> /tmp/f).unwrap();
+/// run_cmd!(ls / /x &> > /tmp/f).unwrap();
+/// run_cmd!(ls / /x > > /tmp/f).unwrap();
+/// run_cmd!(ls / /x >> > /tmp/f).unwrap();
+/// ```
+fn test_redirect_fail() {}

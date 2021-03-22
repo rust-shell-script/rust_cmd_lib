@@ -10,16 +10,16 @@ enum SepToken {
     Pipe,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Debug)]
 enum MarkerToken {
     Pipe,
     DollarSign,
     Ampersand,
-    Fd(i32),
+    RedirectFd(RedirectFd),
     None,
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 enum RedirectFd {
     Stdin,
     Stdout,
@@ -74,19 +74,24 @@ impl Lexer {
     }
 
     fn set_redirect(&mut self, t: TokenTree, fd: RedirectFd) {
-        if let Some((_, append)) = self.last_redirect {
+        if let Some((last_fd, append)) = self.last_redirect.clone() {
             if append {
                 abort!(t, "wrong redirect format: more than append");
             }
             if fd == RedirectFd::Stdin {
                 abort!(t, "wrong input redirect format");
             }
-            self.last_redirect = Some((fd, true));
+            if self.last_marker_token == MarkerToken::None {
+                abort!(t, "redirection parse error");
+            }
+            self.last_redirect = Some((last_fd.clone(), true));
+            self.last_marker_token = MarkerToken::RedirectFd(last_fd);
         } else if self.last_marker_token == MarkerToken::Ampersand {
             self.last_redirect = Some((RedirectFd::StdoutErr, false));
-            self.reset_last_marker_token();
+            self.last_marker_token = MarkerToken::RedirectFd(RedirectFd::StdoutErr);
         } else {
-            self.last_redirect = Some((fd, false));
+            self.last_redirect = Some((fd.clone(), false));
+            self.last_marker_token = MarkerToken::RedirectFd(fd);
         }
     }
 
@@ -147,6 +152,8 @@ impl Lexer {
                 // new argument with spacing
                 if !self.last_arg_str_empty() {
                     self.add_arg_with_token(SepToken::Space);
+                } else if let MarkerToken::RedirectFd(ref _fd) = self.last_marker_token {
+                    self.last_marker_token = MarkerToken::None;
                 }
             }
             end = _end;
@@ -218,9 +225,9 @@ impl Lexer {
                     }
                     self.extend_last_arg(quote!(&#lit.to_string()));
                     if &s == "1" {
-                        self.last_marker_token = MarkerToken::Fd(1);
+                        self.last_marker_token = MarkerToken::RedirectFd(RedirectFd::Stdout);
                     } else if &s == "2" {
-                        self.last_marker_token = MarkerToken::Fd(2);
+                        self.last_marker_token = MarkerToken::RedirectFd(RedirectFd::Stderr);
                     }
                 }
             } else {
@@ -242,15 +249,11 @@ impl Lexer {
                         }
                         continue;
                     } else if ch == '>' {
-                        if let MarkerToken::Fd(fd) = self.last_marker_token {
-                            self.set_redirect(
-                                t,
-                                if fd == 2 {
-                                    RedirectFd::Stderr
-                                } else {
-                                    RedirectFd::Stdout
-                                },
-                            );
+                        let last_marker_token = self.last_marker_token.clone();
+                        if last_marker_token == MarkerToken::Ampersand {
+                            self.set_redirect(t, RedirectFd::StdoutErr);
+                        } else if let MarkerToken::RedirectFd(fd) = last_marker_token {
+                            self.set_redirect(t, fd);
                             self.reset_last_marker_token();
                         } else {
                             self.set_redirect(t, RedirectFd::Stdout);
