@@ -83,7 +83,7 @@ impl GroupCmds {
     pub fn spawn(mut self) -> std::io::Result<WaitCmd> {
         assert_eq!(self.cmds.len(), 1);
         let mut cmds = self.cmds.pop().unwrap().0;
-        cmds.spawn(&mut self.current_dir)
+        cmds.spawn(&mut self.current_dir, false)
     }
 
     pub fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
@@ -166,10 +166,6 @@ pub struct Cmds {
 
 impl Cmds {
     pub fn pipe(mut self, mut cmd: Cmd) -> Self {
-        if !self.pipes.is_empty() {
-            self.pipes.last_mut().unwrap().stdout(Stdio::piped());
-        }
-
         let mut pipe_cmd = cmd.gen_command();
         for (k, v) in cmd.get_envs() {
             pipe_cmd.env(k, v);
@@ -203,11 +199,12 @@ impl Cmds {
         ret
     }
 
-    fn spawn(&mut self, current_dir: &mut String) -> std::io::Result<WaitCmd> {
+    fn spawn(&mut self, current_dir: &mut String, for_fun: bool) -> std::io::Result<WaitCmd> {
         if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
             eprintln!("Running {} ...", self.get_full_cmd());
         }
 
+        let len = self.pipes.len();
         let mut children: Vec<ProcHandle> = Vec::new();
         // spawning all the sub-processes
         for (i, cmd) in self.pipes.iter_mut().enumerate() {
@@ -246,6 +243,9 @@ impl Cmds {
                 let output = CMD_MAP.lock().unwrap()[command](args, envs)?;
                 children.push(ProcHandle::ProcStr(Some(output)));
             } else {
+                if i == len - 1 && !for_fun && !self.cmd_args[i].get_stdout_redirect() {
+                    cmd.stdout(Stdio::inherit());
+                }
                 let mut child = cmd.spawn()?;
                 if i != 0 {
                     if let Some(mut input) = child.stdin.take() {
@@ -270,8 +270,7 @@ impl Cmds {
     }
 
     fn spawn_with_output(&mut self, current_dir: &mut String) -> std::io::Result<WaitFun> {
-        self.pipes.last_mut().unwrap().stdout(Stdio::piped());
-        let children = self.spawn(current_dir)?;
+        let children = self.spawn(current_dir, true)?;
         Ok(WaitFun(children.0, children.1))
     }
 
@@ -311,7 +310,7 @@ impl Cmds {
     }
 
     fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
-        let mut handle = self.spawn(current_dir)?;
+        let mut handle = self.spawn(current_dir, false)?;
         self.pipes.clear(); // to avoid wait deadlock
         handle.wait_result()
     }
@@ -375,6 +374,7 @@ pub struct Cmd {
     args: Vec<String>,
     envs: HashMap<String, String>,
     redirects: Vec<Redirect>,
+    stdout_redirect: bool,
 }
 
 impl Cmd {
@@ -410,6 +410,10 @@ impl Cmd {
         self
     }
 
+    fn get_stdout_redirect(&self) -> bool {
+        self.stdout_redirect
+    }
+
     fn get_redirects(&self) -> &Vec<Redirect> {
         &self.redirects
     }
@@ -418,11 +422,12 @@ impl Cmd {
         let cmd_args: Vec<String> = self.get_args().to_vec();
         let mut cmd = Command::new(&cmd_args[0]);
         cmd.args(&cmd_args[1..]);
+        cmd.stdout(Stdio::piped());
         self.setup_redirects(&mut cmd);
         cmd
     }
 
-    fn setup_redirects(&self, cmd: &mut Command) {
+    fn setup_redirects(&mut self, cmd: &mut Command) {
         fn open_file(path: &str, append: bool) -> std::fs::File {
             OpenOptions::new()
                 .create(true)
@@ -447,6 +452,7 @@ impl Cmd {
                 }
                 Redirect::StdoutToStderr => {
                     cmd.stdout(open_file(stderr_file, true));
+                    self.stdout_redirect = true;
                 }
                 Redirect::StderrToStdout => {
                     cmd.stderr(open_file(stdout_file, true));
@@ -458,6 +464,7 @@ impl Cmd {
                         cmd.stdout(open_file(path, *append));
                         stdout_file = path;
                     }
+                    self.stdout_redirect = true;
                 }
                 Redirect::StderrToFile(path, append) => {
                     if path == "/dev/null" {

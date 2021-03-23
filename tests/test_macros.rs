@@ -194,6 +194,7 @@ fn test_redirect() {
     assert!(run_cmd!(wc -w < /tmp/f).is_ok());
     assert!(run_cmd!(ls 1>&1).is_ok());
     assert!(run_cmd!(ls 2>&2).is_ok());
+    assert_eq!(run_fun!(ls &>/tmp/echo_test.log).unwrap(), "");
 }
 
 #[test]

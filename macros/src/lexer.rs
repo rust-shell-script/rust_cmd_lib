@@ -218,7 +218,7 @@ impl Lexer {
         if let Some(TokenTree::Punct(p)) = Self::peek(span, iter) {
             if p.as_char() == '>' {
                 iter.next();
-                self.set_redirect(span, RedirectFd::Stdout(Self::check_append(span, iter)));
+                self.set_redirect(span, RedirectFd::StdoutErr(Self::check_append(span, iter)));
             } else {
                 abort!(p.span(), "invalid punctuation");
             }
