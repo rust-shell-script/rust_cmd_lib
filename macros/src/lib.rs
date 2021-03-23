@@ -225,7 +225,7 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 /// ```
 /// format should be string literals, and variable interpolation is supported.
 pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let mut iter = TokenStream::from(input).into_iter().peekable();
+    let mut iter = TokenStream::from(input).into_iter();
     let mut output = quote!(String::new());
     let mut valid = false;
     if let Some(ref tt) = iter.next() {
@@ -239,6 +239,13 @@ pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
         if !valid {
             abort!(tt, "invalid format: expect string literal");
+        }
+        if let Some(tt) = iter.next() {
+            abort!(
+                tt,
+                "expect string literal only, found extra {}",
+                tt.to_string()
+            );
         }
     }
     quote!(eprintln!("{}", #output)).into()
