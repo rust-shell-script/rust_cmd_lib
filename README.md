@@ -52,11 +52,11 @@ let now = Instant::now();
         | awk r"/copied/{print $10 $11}" | cut -d / -f1
     )
     .unwrap();
-    run_cmd!(info "thread $i bandwidth: ${bandwidth}/s").unwrap();
+    cmd_info!("thread $i bandwidth: ${bandwidth}/s");
 });
 let total_bandwidth =
     Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128).get_appropriate_unit(true);
-run_cmd!(info "Total bandwidth: ${total_bandwidth}/s")?;
+cmd_info!("Total bandwidth: ${total_bandwidth}/s");
 ```
 
 Output will be like this:

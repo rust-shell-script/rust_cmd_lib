@@ -58,11 +58,11 @@
 //!         | awk r"/copied/{print $10 $11}" | cut -d / -f1
 //!     )
 //!     .unwrap();
-//!     run_cmd!(info "thread $i bandwidth: ${bandwidth}/s").unwrap();
+//!     cmd_info!("thread $i bandwidth: ${bandwidth}/s");
 //! });
 //! let total_bandwidth =
 //!     Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128).get_appropriate_unit(true);
-//! run_cmd!(info "Total bandwidth: ${total_bandwidth}/s")?;
+//! cmd_info!("Total bandwidth: ${total_bandwidth}/s");
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -297,7 +297,8 @@
 //!
 
 pub use cmd_lib_macros::{
-    export_cmd, run_cmd, run_fun, spawn, spawn_with_output, use_builtin_cmd, use_custom_cmd,
+    cmd_info, export_cmd, run_cmd, run_fun, spawn, spawn_with_output, use_builtin_cmd,
+    use_custom_cmd,
 };
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;

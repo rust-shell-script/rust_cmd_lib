@@ -212,5 +212,37 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     .into()
 }
 
+#[proc_macro]
+#[proc_macro_error]
+/// Print info messages
+///
+/// e.g:
+/// ```
+/// use cmd_lib::cmd_info;
+/// let name = "rust";
+/// cmd_info!("hello, $name");
+///
+/// ```
+/// format should be string literals, and variable interpolation is supported.
+pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let mut iter = TokenStream::from(input).into_iter().peekable();
+    let mut output = quote!(String::new());
+    let mut valid = false;
+    if let Some(ref tt) = iter.next() {
+        if let TokenTree::Literal(lit) = tt {
+            let s = lit.to_string();
+            if s.starts_with('\"') || s.starts_with('r') {
+                let str_lit = lexer::Lexer::parse_str_lit(&lit);
+                output.extend(quote!(+ #str_lit));
+                valid = true;
+            }
+        }
+        if !valid {
+            abort!(tt, "invalid format: expect string literal");
+        }
+    }
+    quote!(eprintln!("{}", #output)).into()
+}
+
 mod lexer;
 mod parser;
