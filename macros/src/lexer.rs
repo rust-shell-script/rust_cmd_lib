@@ -170,17 +170,15 @@ impl Lexer {
 
                         // expect new command
                         match iter.peek() {
-                            Some(TokenTree::Ident(_)) => {}
-                            Some(other) => {
-                                abort!(
-                                    other.span(),
-                                    "expect new command after '|', found {}",
-                                    other.to_string()
-                                );
+                            Some(TokenTree::Punct(np)) => {
+                                if np.as_char() == '|' {
+                                    abort!(np.span(), "expect new command after '|'");
+                                }
                             }
                             None => {
                                 abort!(punct.span(), "expect new command after '|'");
                             }
+                            _ => {}
                         }
                         self.add_arg_with_token(if is_pipe {
                             SepToken::Pipe

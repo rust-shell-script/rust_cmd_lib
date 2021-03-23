@@ -148,6 +148,10 @@ fn test_pipe_fail() {
 }
 
 #[test]
+/// ```compile_fail
+/// run_cmd!(ls | |).unwrap();
+/// run_cmd!(ls | ||).unwrap();
+/// ```
 fn test_pipe_ok() {
     use_builtin_cmd!(echo);
     assert!(run_cmd!(echo "xx").is_ok());
@@ -160,6 +164,9 @@ fn test_pipe_ok() {
     set_pipefail(false);
     assert!(run_cmd!(du -ah . | sort -hr | head -n 10).is_ok());
     set_pipefail(true);
+
+    let wc_cmd = "wc";
+    assert!(run_cmd!(ls | $wc_cmd).is_ok());
 }
 
 #[test]
