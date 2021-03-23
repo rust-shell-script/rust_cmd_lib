@@ -225,7 +225,37 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 /// ```
 /// format should be string literals, and variable interpolation is supported.
 pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let mut iter = TokenStream::from(input).into_iter();
+    let msg = parse_msg(input.into());
+    quote!(eprintln!("{}", #msg)).into()
+}
+
+#[proc_macro]
+#[proc_macro_error]
+/// Report fatal errors and exit process conveniently
+///
+/// e.g:
+/// ```no_run
+/// # use cmd_lib::cmd_die;
+/// let file = "bad_file";
+/// cmd_die!("could not open file: $file");
+/// // output:
+/// // FATAL: could not open file: bad_file
+/// ```
+/// format should be string literals, and variable interpolation is supported.
+/// Note that this macro is just for convenience. The process will exit with 1 and print
+/// "FATAL: ..." messages to error console. If you want to exit with other code, you
+/// should probably define your own macro or functions.
+pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let msg = parse_msg(input.into());
+    quote!(
+        eprintln!("FATAL: {}", #msg);
+        std::process::exit(1);
+    )
+    .into()
+}
+
+fn parse_msg(input: TokenStream) -> TokenStream {
+    let mut iter = input.into_iter();
     let mut output = quote!(String::new());
     let mut valid = false;
     if let Some(ref tt) = iter.next() {
@@ -248,7 +278,7 @@ pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             );
         }
     }
-    quote!(eprintln!("{}", #output)).into()
+    output
 }
 
 mod lexer;

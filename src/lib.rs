@@ -297,7 +297,7 @@
 //!
 
 pub use cmd_lib_macros::{
-    cmd_info, export_cmd, run_cmd, run_fun, spawn, spawn_with_output, use_builtin_cmd,
+    cmd_die, cmd_info, export_cmd, run_cmd, run_fun, spawn, spawn_with_output, use_builtin_cmd,
     use_custom_cmd,
 };
 pub type FunResult = std::io::Result<String>;
@@ -308,26 +308,6 @@ pub use builtins::{
 pub use process::{
     export_cmd, set_debug, set_pipefail, Cmd, CmdArgs, CmdEnvs, Cmds, GroupCmds, Redirect,
 };
-
-/// Report fatal errors and exit process conveniently
-///
-/// The arguments format is the same as in println!() macro. Note that this macro is just for
-/// convenience. The process will exit with 1 and print "FATAL: ..." messages to error console.
-/// If you want to exit with other code, you should probably define your own macro or functions.
-/// ```no_run
-/// # use cmd_lib::die;
-/// let file = "bad_file";
-/// die!("could not open file: {}", file);
-/// // output:
-/// // FATAL: could not open file: bad_file
-/// ```
-#[macro_export]
-macro_rules! die {
-    ($($arg:tt)*) => {{
-        eprintln!("FATAL: {}", format!($($arg)*));
-        std::process::exit(1);
-    }};
-}
 
 mod builtins;
 mod process;
