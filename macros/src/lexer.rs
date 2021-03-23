@@ -117,6 +117,7 @@ impl Lexer {
 
     pub fn scan(mut self, input: TokenStream) -> Parser {
         let mut iter = input.into_iter().peekable();
+        let mut allow_or_token = true;
         while let Some(item) = iter.next() {
             let span = item.span();
             match item {
@@ -159,6 +160,7 @@ impl Lexer {
                     let ch = punct.as_char();
                     if ch == ';' {
                         self.add_arg_with_token(SepToken::SemiColon);
+                        allow_or_token = true;
                     } else if ch == '|' {
                         let mut is_pipe = true;
                         if let Some(TokenTree::Punct(p)) = Self::peek(span, &mut iter) {
@@ -183,6 +185,10 @@ impl Lexer {
                         self.add_arg_with_token(if is_pipe {
                             SepToken::Pipe
                         } else {
+                            if !allow_or_token {
+                                abort!(span, "only one || is allowed");
+                            }
+                            allow_or_token = false;
                             SepToken::Or
                         });
                     } else if ch == '<' {

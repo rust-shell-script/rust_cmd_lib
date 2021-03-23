@@ -25,12 +25,17 @@ fn test_cd_fails() {
 }
 
 #[test]
+/// ```compile_fail
+/// run_cmd!(ls || true || true).unwrap();
+/// run_cmd!(ls || true | wc).unwrap();
+/// ```
 fn test_or_cmd() {
     assert!(run_cmd! {
         ls /nofile || true;
         echo "continue";
     }
     .is_ok());
+    assert!(run_cmd!(false || ls | wc).is_ok());
 }
 
 #[test]
