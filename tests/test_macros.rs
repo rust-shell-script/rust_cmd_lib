@@ -188,6 +188,8 @@ fn test_redirect() {
     assert!(run_cmd!(ls /x 2>/dev/null || true).is_ok());
     assert!(run_cmd!(ls /x &>/tmp/f || true).is_ok());
     assert!(run_cmd!(wc -w < /tmp/f).is_ok());
+    assert!(run_cmd!(ls 1>&1).is_ok());
+    assert!(run_cmd!(ls 2>&2).is_ok());
 }
 
 #[test]

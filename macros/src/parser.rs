@@ -97,6 +97,10 @@ impl Parser {
         while *i < self.args.len() {
             match self.args[*i].clone() {
                 ParseRedirectFd(fd1, fd2) => {
+                    if fd1 == fd2 {
+                        *i += 1;
+                        continue;
+                    }
                     let mut redirect = quote!(::cmd_lib::Redirect);
                     if fd1 == 1 && fd2 == 2 {
                         redirect.extend(quote!(::StdoutToStderr));

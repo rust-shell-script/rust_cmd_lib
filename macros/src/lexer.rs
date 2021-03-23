@@ -77,9 +77,13 @@ impl Lexer {
         self.last_arg_str = TokenStream::new();
     }
 
-    fn add_fd_redirect_arg(&mut self, old_fd: i32, new_fd: i32) {
-        self.args.push(ParseArg::ParseRedirectFd(old_fd, new_fd));
-        self.last_redirect = None;
+    fn add_fd_redirect_arg(&mut self, span: Span, new_fd: i32) {
+        if let Some(fd) = self.last_redirect.clone() {
+            self.args.push(ParseArg::ParseRedirectFd(fd.get_id(), new_fd));
+            self.last_redirect = None;
+        } else {
+            abort!(span, "invalid token");
+        }
     }
 
     fn extend_last_arg(&mut self, stream: TokenStream) {
@@ -215,12 +219,13 @@ impl Lexer {
                                 abort!(lit.span(), "invalid literal string after &");
                             }
                             if &s == "1" {
-                                self.add_fd_redirect_arg(2, 1);
+                                self.add_fd_redirect_arg(span, 1);
                             } else if &s == "2" {
-                                self.add_fd_redirect_arg(1, 2);
+                                self.add_fd_redirect_arg(span, 2);
                             } else {
                                 abort!(lit.span(), "Only &1 or &2 is supported");
                             }
+                            iter.next();
                         } else {
                             abort!(span, "invalid token after '&'");
                         }
