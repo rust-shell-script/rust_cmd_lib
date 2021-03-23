@@ -78,11 +78,13 @@ impl Lexer {
 
     fn add_fd_redirect_arg(&mut self, span: Span, new_fd: i32) {
         if let Some(fd) = self.last_redirect.clone() {
-            self.args.push(ParseArg::ParseRedirectFd(fd.get_id(), new_fd));
-            self.last_redirect = None;
-        } else {
-            abort!(span, "invalid token");
+            if !fd.get_append() {
+                self.args.push(ParseArg::ParseRedirectFd(fd.get_id(), new_fd));
+                self.last_redirect = None;
+                return;
+            }
         }
+        abort!(span, "invalid token");
     }
 
     fn extend_last_arg(&mut self, stream: TokenStream) {

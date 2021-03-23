@@ -177,6 +177,8 @@ fn test_pipe_ok() {
 #[test]
 /// ```compile_fail
 /// run_cmd!(ls > >&1).unwrap();
+/// run_cmd!(ls >>&1).unwrap();
+/// run_cmd!(ls >>&2).unwrap();
 /// ```
 fn test_redirect() {
     assert!(run_cmd!(echo xxxx > /tmp/f).is_ok());
