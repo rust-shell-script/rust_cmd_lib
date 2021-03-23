@@ -2,6 +2,7 @@ use crate::parser::{ParseArg, Parser};
 use proc_macro2::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
 use proc_macro_error::abort;
 use quote::quote;
+use std::iter::Peekable;
 
 enum SepToken {
     Space,
@@ -11,112 +12,58 @@ enum SepToken {
 }
 
 #[derive(PartialEq, Clone, Debug)]
-enum MarkerToken {
-    Pipe,
-    DollarSign,
-    Ampersand,
-    RedirectFd(RedirectFd),
-    None,
-}
-
-#[derive(PartialEq, Clone, Debug)]
 enum RedirectFd {
     Stdin,
-    Stdout,
-    Stderr,
-    StdoutErr,
+    Stdout(bool),    // append?
+    Stderr(bool),    // append?
+    StdoutErr(bool), // append?
 }
 impl RedirectFd {
-    fn id(&self) -> i32 {
+    fn get_id(&self) -> i32 {
         match self {
             Self::Stdin => 0,
-            Self::Stdout => 1,
-            Self::Stderr | Self::StdoutErr => 2,
+            Self::Stdout(_) => 1,
+            Self::Stderr(_) | Self::StdoutErr(_) => 2,
         }
+    }
+
+    fn get_append(&self) -> bool {
+        self == &Self::Stdout(true) || self == &Self::Stderr(true) || self == &Self::StdoutErr(true)
     }
 }
 
+#[derive(Default)]
 pub struct Lexer {
-    input: TokenStream,
     args: Vec<ParseArg>,
-
-    last_marker_token: MarkerToken,
     last_arg_str: TokenStream,
-    last_redirect: Option<(RedirectFd, bool)>,
+    last_redirect: Option<RedirectFd>,
 }
 
 impl Lexer {
-    pub fn from(input: TokenStream) -> Self {
-        Self {
-            input,
-            args: vec![],
-            last_marker_token: MarkerToken::None,
-            last_arg_str: TokenStream::new(),
-            last_redirect: None,
-        }
-    }
-
-    fn last_is_pipe(&self) -> bool {
-        self.last_marker_token == MarkerToken::Pipe
-    }
-
-    fn last_is_dollar_sign(&self) -> bool {
-        self.last_marker_token == MarkerToken::DollarSign
-    }
-
-    fn set_last_marker_token(&mut self, value: MarkerToken) {
-        self.last_marker_token = value;
-    }
-
-    fn reset_last_marker_token(&mut self) {
-        self.last_arg_str = TokenStream::new();
-        self.last_marker_token = MarkerToken::None;
-    }
-
-    fn set_redirect(&mut self, t: TokenTree, fd: RedirectFd) {
-        if let Some((last_fd, append)) = self.last_redirect.clone() {
-            if append {
-                abort!(t, "wrong redirect format: more than append");
-            }
-            if fd == RedirectFd::Stdin {
-                abort!(t, "wrong input redirect format");
-            }
-            if self.last_marker_token == MarkerToken::None {
-                abort!(t, "redirection parse error");
-            }
-            self.last_redirect = Some((last_fd.clone(), true));
-            self.last_marker_token = MarkerToken::RedirectFd(last_fd);
-        } else if self.last_marker_token == MarkerToken::Ampersand {
-            if fd == RedirectFd::Stdin {
-                abort!(t, "wrong input redirect format");
-            }
-            self.last_redirect = Some((RedirectFd::StdoutErr, false));
-            self.last_marker_token = MarkerToken::RedirectFd(RedirectFd::StdoutErr);
+    fn set_redirect(&mut self, span: Span, fd: RedirectFd) {
+        if self.last_redirect.is_some() {
+            abort!(span, "wrong input redirect format");
         } else {
-            self.last_redirect = Some((fd.clone(), false));
-            self.last_marker_token = MarkerToken::RedirectFd(fd);
+            self.last_redirect = Some(fd);
         }
-    }
-
-    fn last_arg_str_empty(&self) -> bool {
-        self.last_arg_str.is_empty()
     }
 
     fn add_arg_with_token(&mut self, token: SepToken) {
-        if let Some((fd, append)) = self.last_redirect.clone() {
+        if let Some(fd) = self.last_redirect.clone() {
             let last_arg_str = self.last_arg_str.clone();
-            let fd_id = fd.id();
+            let fd_id = fd.get_id();
+            let fd_append = fd.get_append();
             self.args.push(ParseArg::ParseRedirectFile(
                 fd_id,
                 quote!(#last_arg_str),
-                append,
+                fd_append,
             ));
-            if fd == RedirectFd::StdoutErr {
+            if let RedirectFd::StdoutErr(_) = fd {
                 self.args
                     .push(ParseArg::ParseRedirectFile(1, quote!(#last_arg_str), true));
             }
             self.last_redirect = None;
-        } else if !self.last_arg_str_empty() {
+        } else if !self.last_arg_str.is_empty() {
             let last_arg_str = self.last_arg_str.clone();
             let last_arg = ParseArg::ParseArgStr(quote!(#last_arg_str));
             self.args.push(last_arg);
@@ -124,150 +71,199 @@ impl Lexer {
         match token {
             SepToken::Space => {}
             SepToken::SemiColon => self.args.push(ParseArg::ParseSemicolon),
-            SepToken::Or => {
-                self.args.pop();
-                self.args.push(ParseArg::ParseOr);
-            }
+            SepToken::Or => self.args.push(ParseArg::ParseOr),
             SepToken::Pipe => self.args.push(ParseArg::ParsePipe),
         }
-        self.reset_last_marker_token();
+        self.last_arg_str = TokenStream::new();
     }
 
     fn add_fd_redirect_arg(&mut self, old_fd: i32, new_fd: i32) {
         self.args.push(ParseArg::ParseRedirectFd(old_fd, new_fd));
         self.last_redirect = None;
-        self.reset_last_marker_token();
     }
 
     fn extend_last_arg(&mut self, stream: TokenStream) {
-        if self.last_arg_str_empty() {
+        if self.last_arg_str.is_empty() {
             self.last_arg_str = quote!(String::new());
         }
         self.last_arg_str.extend(quote!(+ #stream));
-        self.last_marker_token = MarkerToken::None;
     }
 
-    pub fn scan(mut self) -> Parser {
-        let mut end = 0;
-        for t in self.input.clone() {
-            let (_start, _end) = Self::span_location(&t.span());
-            if end != 0 && end < _start {
-                // new argument with spacing
-                if self.last_marker_token == MarkerToken::Ampersand {
-                    abort!(t, "invalid token after &, only &1, &2 or &> is supported");
-                } else if !self.last_arg_str_empty() {
-                    self.add_arg_with_token(SepToken::Space);
-                } else if let MarkerToken::RedirectFd(ref _fd) = self.last_marker_token {
-                    self.last_marker_token = MarkerToken::None;
-                }
-            }
-            end = _end;
-
-            let src = t.to_string();
-            if self.last_is_dollar_sign() {
-                if let TokenTree::Group(g) = t.clone() {
-                    if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
-                        abort!(
-                            g,
-                            "invalid grouping: found {:?}, only \"brace/bracket\" is allowed",
-                            format!("{:?}", g.delimiter()).to_lowercase()
-                        );
-                    }
-                    let mut found_var = false;
-                    for tt in g.stream() {
-                        if let TokenTree::Ident(ref var) = tt {
-                            if found_var {
-                                abort!(tt, "more than one variable in grouping");
-                            }
-                            if g.delimiter() == Delimiter::Brace {
-                                self.extend_last_arg(quote!(&#var.to_string()));
-                            } else {
-                                if !self.last_arg_str_empty() {
-                                    abort!(tt, "vector variable can only be used alone");
-                                }
-                                self.args.push(ParseArg::ParseArgVec(quote!(#var)));
-                                self.reset_last_marker_token();
-                            }
-                            found_var = true;
-                        } else {
-                            abort!(tt, "invalid grouping: extra tokens");
-                        }
-                    }
-                    continue;
-                } else if let TokenTree::Ident(var) = t {
-                    self.extend_last_arg(quote!(&#var.to_string()));
-                    continue;
-                }
-            }
-
-            if let TokenTree::Group(_) = t {
-                abort!(t, "grouping is only allowed for variable");
-            } else if let TokenTree::Literal(ref lit) = t {
-                let s = lit.to_string();
-                if s.starts_with('\"') || s.starts_with('r') {
-                    self.extend_last_arg(Self::parse_str_lit(lit));
+    fn peek(cur: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Option<&TokenTree> {
+        match iter.peek() {
+            None => None,
+            Some(item) => {
+                let (_, cur_end) = Self::span_location(&cur);
+                let (new_start, _) = Self::span_location(&item.span());
+                if new_start > cur_end {
+                    None
                 } else {
-                    if self.last_marker_token == MarkerToken::Ampersand {
-                        if &s != "1" && &s != "2" {
-                            abort!(t, "only &1 or &2 is allowed");
+                    iter.peek()
+                }
+            }
+        }
+    }
+
+    fn check_append(cur: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>) -> bool {
+        let mut append = false;
+        if let Some(TokenTree::Punct(p)) = Self::peek(cur, iter) {
+            if p.as_char() == '>' {
+                append = true;
+                iter.next();
+            }
+        }
+        append
+    }
+
+    pub fn scan(mut self, input: TokenStream) -> Parser {
+        let mut iter = input.into_iter().peekable();
+        while let Some(item) = iter.next() {
+            let span = item.span();
+            match item {
+                TokenTree::Group(_) => {
+                    abort!(item.span(), "grouping is only allowed for variables");
+                }
+                TokenTree::Literal(lit) => {
+                    let s = lit.to_string();
+                    if s.starts_with('\"') || s.starts_with('r') {
+                        // string literal
+                        self.extend_last_arg(Self::parse_str_lit(&lit));
+                    } else {
+                        let mut is_redirect = false;
+                        if s == "1" || s == "2" {
+                            if let Some(TokenTree::Punct(p)) = Self::peek(span, &mut iter) {
+                                if p.as_char() == '>' {
+                                    iter.next();
+                                    self.set_redirect(
+                                        span,
+                                        if s == "1" {
+                                            RedirectFd::Stdout(Self::check_append(span, &mut iter))
+                                        } else {
+                                            RedirectFd::Stderr(Self::check_append(span, &mut iter))
+                                        },
+                                    );
+                                    is_redirect = true;
+                                }
+                            }
                         }
-                        if let Some((fd, _)) = self.last_redirect.clone() {
+                        if !is_redirect {
+                            self.extend_last_arg(quote!(&#lit.to_string()));
+                        }
+                    }
+                }
+                TokenTree::Ident(ident) => {
+                    let s = ident.to_string();
+                    self.extend_last_arg(quote!(&#s));
+                }
+                TokenTree::Punct(punct) => {
+                    let ch = punct.as_char();
+                    if ch == ';' {
+                        self.add_arg_with_token(SepToken::SemiColon);
+                    } else if ch == '|' {
+                        let mut is_pipe = true;
+                        if let Some(TokenTree::Punct(p)) = Self::peek(span, &mut iter) {
+                            if p.as_char() == '|' {
+                                is_pipe = false;
+                                iter.next();
+                            }
+                        }
+
+                        // expect new command
+                        match iter.peek() {
+                            Some(TokenTree::Ident(_)) => {}
+                            Some(other) => {
+                                abort!(
+                                    other.span(),
+                                    "expect new command after '|', found {}",
+                                    other.to_string()
+                                );
+                            }
+                            None => {
+                                abort!(punct.span(), "expect new command after '|'");
+                            }
+                        }
+                        self.add_arg_with_token(if is_pipe {
+                            SepToken::Pipe
+                        } else {
+                            SepToken::Or
+                        });
+                    } else if ch == '<' {
+                        self.set_redirect(span, RedirectFd::Stdin);
+                    } else if ch == '>' {
+                        self.set_redirect(
+                            span,
+                            RedirectFd::Stdout(Self::check_append(span, &mut iter)),
+                        );
+                    } else if ch == '&' {
+                        if let Some(TokenTree::Punct(p)) = Self::peek(span, &mut iter) {
+                            if p.as_char() == '>' {
+                                iter.next();
+                                self.set_redirect(
+                                    span,
+                                    RedirectFd::Stdout(Self::check_append(span, &mut iter)),
+                                );
+                            } else {
+                                abort!(p.span(), "invalid punctuation");
+                            }
+                        } else if let Some(TokenTree::Literal(lit)) = Self::peek(span, &mut iter) {
+                            let s = lit.to_string();
+                            if s.starts_with('\"') || s.starts_with('r') {
+                                abort!(lit.span(), "invalid literal string after &");
+                            }
                             if &s == "1" {
-                                self.add_fd_redirect_arg(fd.id(), 1);
+                                self.add_fd_redirect_arg(2, 1);
                             } else if &s == "2" {
-                                self.add_fd_redirect_arg(fd.id(), 2);
+                                self.add_fd_redirect_arg(1, 2);
+                            } else {
+                                abort!(lit.span(), "Only &1 or &2 is supported");
                             }
                         } else {
-                            abort!(t, "& is only allowed for redirect");
+                            abort!(span, "invalid token after '&'");
                         }
-                        continue;
-                    }
-                    self.extend_last_arg(quote!(&#lit.to_string()));
-                    if &s == "1" {
-                        self.last_marker_token = MarkerToken::RedirectFd(RedirectFd::Stdout);
-                    } else if &s == "2" {
-                        self.last_marker_token = MarkerToken::RedirectFd(RedirectFd::Stderr);
+                    } else if ch == '$' {
+                        if let Some(TokenTree::Ident(var)) = Self::peek(span, &mut iter) {
+                            self.extend_last_arg(quote!(&#var.to_string()));
+                        } else if let Some(TokenTree::Group(g)) = Self::peek(span, &mut iter) {
+                            if g.delimiter() != Delimiter::Brace
+                                && g.delimiter() != Delimiter::Bracket
+                            {
+                                abort!(
+                                    g,
+                                    "invalid grouping: found {:?}, only \"brace/bracket\" is allowed",
+                                    format!("{:?}", g.delimiter()).to_lowercase()
+                                );
+                            }
+                            let mut found_var = false;
+                            for tt in g.stream() {
+                                if let TokenTree::Ident(ref var) = tt {
+                                    if found_var {
+                                        abort!(tt, "more than one variable in grouping");
+                                    }
+                                    if g.delimiter() == Delimiter::Brace {
+                                        self.extend_last_arg(quote!(&#var.to_string()));
+                                    } else {
+                                        if !self.last_arg_str.is_empty() {
+                                            abort!(tt, "vector variable can only be used alone");
+                                        }
+                                        self.args.push(ParseArg::ParseArgVec(quote!(#var)));
+                                    }
+                                    found_var = true;
+                                } else {
+                                    abort!(tt, "invalid grouping: extra tokens");
+                                }
+                            }
+                        } else {
+                            abort!(span, "invalid token after $");
+                        }
+                        iter.next();
+                    } else {
+                        self.extend_last_arg(quote!(&#ch.to_string()));
                     }
                 }
-            } else {
-                if let TokenTree::Punct(ref p) = t {
-                    let ch = p.as_char();
-                    if ch == '$' {
-                        self.set_last_marker_token(MarkerToken::DollarSign);
-                        continue;
-                    } else if ch == ';' {
-                        self.add_arg_with_token(SepToken::SemiColon);
-                        continue;
-                    } else if ch == '|' {
-                        if self.last_is_pipe() {
-                            self.add_arg_with_token(SepToken::Or);
-                            self.set_last_marker_token(MarkerToken::None);
-                        } else {
-                            self.add_arg_with_token(SepToken::Pipe);
-                            self.set_last_marker_token(MarkerToken::Pipe);
-                        }
-                        continue;
-                    } else if ch == '>' {
-                        let last_marker_token = self.last_marker_token.clone();
-                        if last_marker_token == MarkerToken::Ampersand {
-                            self.set_redirect(t, RedirectFd::StdoutErr);
-                        } else if let MarkerToken::RedirectFd(fd) = last_marker_token {
-                            self.set_redirect(t, fd);
-                            self.reset_last_marker_token();
-                        } else {
-                            self.set_redirect(t, RedirectFd::Stdout);
-                        }
-                        continue;
-                    } else if ch == '<' {
-                        self.set_redirect(t, RedirectFd::Stdin);
-                        continue;
-                    } else if ch == '&' {
-                        self.set_last_marker_token(MarkerToken::Ampersand);
-                        continue;
-                    }
-                }
+            }
 
-                self.extend_last_arg(quote!(&#src.to_string()));
+            if Self::peek(span, &mut iter).is_none() && !self.last_arg_str.is_empty() {
+                self.add_arg_with_token(SepToken::Space);
             }
         }
         self.add_arg_with_token(SepToken::Space);
