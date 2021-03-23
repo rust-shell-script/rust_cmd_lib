@@ -42,10 +42,9 @@ pub struct Lexer {
 impl Lexer {
     fn set_redirect(&mut self, span: Span, fd: RedirectFd) {
         if self.last_redirect.is_some() {
-            abort!(span, "wrong input redirect format");
-        } else {
-            self.last_redirect = Some(fd);
+            abort!(span, "wrong redirection format");
         }
+        self.last_redirect = Some(fd);
     }
 
     fn add_arg_with_token(&mut self, token: SepToken) {
@@ -93,6 +92,7 @@ impl Lexer {
         self.last_arg_str.extend(quote!(+ #stream));
     }
 
+    // peek next token which has no spaces between
     fn peek(cur: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Option<&TokenTree> {
         match iter.peek() {
             None => None,
