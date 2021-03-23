@@ -163,8 +163,7 @@ fn test_pipe_ok() {
     assert_eq!(run_fun!(echo "xx").unwrap(), "xx");
     assert!(run_cmd!(echo xx | wc).is_ok());
     assert!(run_cmd!(echo xx | wc | wc | wc | wc).is_ok());
-    assert!(run_cmd!(echo xx | true | wc | wc | wc).is_ok());
-    assert!(run_cmd!(echo xx | wc | wc | true | wc).is_ok());
+    assert!(run_cmd!(seq 1 10000000 | head -1).is_err());
 
     set_pipefail(false);
     assert!(run_cmd!(du -ah . | sort -hr | head -n 10).is_ok());
