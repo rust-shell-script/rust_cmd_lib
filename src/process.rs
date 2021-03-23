@@ -9,7 +9,13 @@ use std::sync::Mutex;
 
 pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
-type FnFun = fn(CmdArgs, CmdEnvs) -> FunResult;
+#[derive(Default)]
+pub struct CmdStdio {
+    pub inbuf: String,
+    pub outbuf: String,
+    pub errbuf: String,
+}
+type FnFun = fn(CmdArgs, CmdEnvs, &mut CmdStdio) -> CmdResult;
 
 lazy_static! {
     static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
@@ -240,8 +246,9 @@ impl Cmds {
                 *current_dir = self.current_dir.clone();
                 children.push(ProcHandle::ProcStr(None));
             } else if in_cmd_map {
-                let output = CMD_MAP.lock().unwrap()[command](args, envs)?;
-                children.push(ProcHandle::ProcStr(Some(output)));
+                let mut io = CmdStdio::default();
+                CMD_MAP.lock().unwrap()[command](args, envs, &mut io)?;
+                children.push(ProcHandle::ProcStr(Some(io.outbuf)));
             } else {
                 if i == len - 1 && !for_fun && !self.cmd_args[i].get_stdout_redirect() {
                     cmd.stdout(Stdio::inherit());

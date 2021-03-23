@@ -212,11 +212,13 @@
 //! Declare your function with `export_cmd` attribute, and import it with `use_custom_cmd` macro:
 //!
 //! ```
-//! # use cmd_lib::{export_cmd, use_custom_cmd, run_cmd, run_fun, CmdArgs, CmdEnvs, FunResult};
+//! # use cmd_lib::*;
 //! #[export_cmd(my_cmd)]
-//! fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
-//!     println!("msg from foo(), args: {:?}", args);
-//!     Ok("bar".into())
+//! fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
+//!     let msg = format!("msg from foo(), args: {:?}", args);
+//!     io.errbuf.push_str(&msg);
+//!     io.outbuf.push_str("bar");
+//!     Ok(())
 //! }
 //!
 //! use_custom_cmd!(my_cmd);
@@ -306,7 +308,7 @@ pub use builtins::{
     builtin_die, builtin_echo, builtin_err, builtin_info, builtin_true, builtin_warn,
 };
 pub use process::{
-    export_cmd, set_debug, set_pipefail, Cmd, CmdArgs, CmdEnvs, Cmds, GroupCmds, Redirect,
+    export_cmd, set_debug, set_pipefail, Cmd, CmdArgs, CmdEnvs, CmdStdio, Cmds, GroupCmds, Redirect,
 };
 
 mod builtins;

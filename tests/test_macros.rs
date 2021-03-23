@@ -206,15 +206,19 @@ fn test_proc_env() {
 #[test]
 fn test_export_cmd() {
     #[export_cmd(my_cmd)]
-    fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
-        eprintln!("msg from foo(), args: {:?}", args);
-        Ok("bar".into())
+    fn foo(args: CmdArgs, _envs: CmdEnvs, stdio: &mut CmdStdio) -> CmdResult {
+        let msg = format!("msg from foo(), args: {:?}", args);
+        stdio.errbuf.push_str(&msg);
+        stdio.outbuf.push_str("bar");
+        Ok(())
     }
 
     #[export_cmd(my_cmd2)]
-    fn foo2(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
-        eprintln!("msg from foo2(), args: {:?}", args);
-        Ok("bar2".into())
+    fn foo2(args: CmdArgs, _envs: CmdEnvs, stdio: &mut CmdStdio) -> CmdResult {
+        let msg = format!("msg from foo2(), args: {:?}", args);
+        stdio.errbuf.push_str(&msg);
+        stdio.outbuf.push_str("bar2");
+        Ok(())
     }
     use_custom_cmd!(my_cmd, my_cmd2);
     assert!(run_cmd!(echo "from" "builtin").is_ok());
