@@ -119,13 +119,7 @@ impl WaitCmd {
                 }
             }
         }
-
-        // wait previous processes
-        while !self.0.is_empty() {
-            let (mut handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
-            Cmds::wait_child(&mut handle, &cmd)?;
-        }
-        Ok(())
+        Cmds::wait_children(&mut self.0, &mut self.1)
     }
 }
 
@@ -154,12 +148,7 @@ impl WaitFun {
             }
         }
 
-        // wait previous processes
-        while !self.0.is_empty() {
-            let (mut handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
-            Cmds::wait_child(&mut handle, &cmd)?;
-        }
-
+        Cmds::wait_children(&mut self.0, &mut self.1)?;
         if ret.ends_with('\n') {
             ret.pop();
         }
@@ -286,14 +275,17 @@ impl Cmds {
         Ok(WaitFun(children.0, children.1))
     }
 
-    fn wait_child(child_handle: &mut ProcHandle, cmd: &str) -> CmdResult {
-        if let ProcHandle::ProcChild(child) = child_handle {
-            let status = child.wait()?;
-            if !status.success() && std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into()) {
-                return Err(Self::status_to_io_error(
-                    status,
-                    &format!("{} exited with error", cmd),
-                ));
+    fn wait_children(children: &mut Vec<ProcHandle>, cmds: &mut Vec<String>) -> CmdResult {
+        while !children.is_empty() {
+            let (child_handle, cmd) = (children.pop().unwrap(), cmds.pop().unwrap());
+            if let ProcHandle::ProcChild(mut child) = child_handle {
+                let status = child.wait()?;
+                if !status.success() && std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into()) {
+                    return Err(Self::status_to_io_error(
+                        status,
+                        &format!("{} exited with error", cmd),
+                    ));
+                }
             }
         }
         Ok(())

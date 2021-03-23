@@ -150,7 +150,8 @@ impl Lexer {
         iter: &mut Peekable<impl Iterator<Item = TokenTree>>,
     ) {
         let s = lit.to_string();
-        if s.starts_with('\"') || s.starts_with('r') { // string literal
+        if s.starts_with('\"') || s.starts_with('r') {
+            // string literal
             self.extend_last_arg(Self::parse_str_lit(&lit));
         } else {
             let mut is_redirect = false;
