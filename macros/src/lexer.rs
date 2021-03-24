@@ -66,10 +66,7 @@ impl Lexer {
                     } else if ch == '<' {
                         self.set_redirect(span, RedirectFd::Stdin);
                     } else if ch == '>' {
-                        self.set_redirect(
-                            span,
-                            RedirectFd::Stdout(Self::check_append(span, &mut iter)),
-                        );
+                        self.scan_redirect_out(span, &mut iter, 1);
                     } else if ch == '&' {
                         self.scan_ampersand(span, &mut iter);
                     } else if ch == '$' {
@@ -156,17 +153,11 @@ impl Lexer {
         } else {
             let mut is_redirect = false;
             if s == "1" || s == "2" {
-                if let Some(TokenTree::Punct(p)) = Self::peek(span, iter) {
+                if let Some(TokenTree::Punct(ref p)) = Self::peek(span, iter) {
+                    let span = p.span();
                     if p.as_char() == '>' {
                         iter.next();
-                        self.set_redirect(
-                            span,
-                            if s == "1" {
-                                RedirectFd::Stdout(Self::check_append(span, iter))
-                            } else {
-                                RedirectFd::Stderr(Self::check_append(span, iter))
-                            },
-                        );
+                        self.scan_redirect_out(span, iter, s.parse().unwrap());
                         is_redirect = true;
                     }
                 }
@@ -214,6 +205,36 @@ impl Lexer {
         });
     }
 
+    fn scan_redirect_out(&mut self, span: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>, fd: i32) {
+        self.set_redirect(span, if fd == 1 {
+            RedirectFd::Stdout(Self::check_append(span, iter))
+        } else {
+            RedirectFd::Stderr(Self::check_append(span, iter))
+        });
+        if let Some(TokenTree::Punct(p)) = Self::peek(span, iter) {
+            let span = p.span();
+            if p.as_char() == '&' {
+                iter.next();
+                if let Some(TokenTree::Literal(lit)) = Self::peek(span, iter) {
+                    let s = lit.to_string();
+                    if s.starts_with('\"') || s.starts_with('r') {
+                        abort!(lit.span(), "invalid literal string after &");
+                    }
+                    if &s == "1" {
+                        self.add_fd_redirect_arg(span, 1);
+                    } else if &s == "2" {
+                        self.add_fd_redirect_arg(span, 2);
+                    } else {
+                        abort!(lit.span(), "Only &1 or &2 is supported");
+                    }
+                    iter.next();
+                } else {
+                    abort!(span, "expect &1 or &2");
+                }
+            }
+        }
+    }
+
     fn scan_ampersand(&mut self, span: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>) {
         if let Some(TokenTree::Punct(p)) = Self::peek(span, iter) {
             if p.as_char() == '>' {
@@ -222,19 +243,6 @@ impl Lexer {
             } else {
                 abort!(p.span(), "invalid punctuation");
             }
-        } else if let Some(TokenTree::Literal(lit)) = Self::peek(span, iter) {
-            let s = lit.to_string();
-            if s.starts_with('\"') || s.starts_with('r') {
-                abort!(lit.span(), "invalid literal string after &");
-            }
-            if &s == "1" {
-                self.add_fd_redirect_arg(span, 1);
-            } else if &s == "2" {
-                self.add_fd_redirect_arg(span, 2);
-            } else {
-                abort!(lit.span(), "Only &1 or &2 is supported");
-            }
-            iter.next();
         } else {
             abort!(span, "invalid token after '&'");
         }
