@@ -333,8 +333,33 @@ impl Lexer {
             .chars()
             .peekable();
         let mut output = quote!("");
+        let mut last_part = String::new();
+        fn extend_last_part(last_part: &mut String, ch: char) {
+            if last_part.is_empty() {
+                last_part.push('"'); // start new string literal
+            }
+            last_part.push(ch);
+        }
+        fn parse_last_part(last_part: &mut String, output: &mut TokenStream) {
+            if !last_part.is_empty() {
+                last_part.push('"'); // seal it
+                let l = syn::parse_str::<Literal>(&last_part).unwrap();
+                output.extend(quote!(+ #l));
+                last_part.clear();
+            }
+        }
+
         while let Some(ch) = iter.next() {
             if ch == '$' {
+                if let Some(&pc) = iter.peek() {
+                    if pc == '$' {
+                        extend_last_part(&mut last_part, pc);
+                        iter.next();
+                        continue;
+                    }
+                }
+
+                parse_last_part(&mut last_part, &mut output);
                 let mut with_brace = false;
                 if iter.peek() == Some(&'{') {
                     with_brace = true;
@@ -364,22 +389,11 @@ impl Lexer {
                 } else {
                     output.extend(quote!(+ &'$'.to_string()));
                 }
-            } else if ch == '\\' {
-                if let Some(&ch) = iter.peek() {
-                    let ec = match ch {
-                        'n' => '\n',
-                        'r' => '\r',
-                        't' => '\t',
-                        '0' => '\0',
-                        _ => ch,
-                    };
-                    output.extend(quote!(+ &#ec.to_string()));
-                    iter.next();
-                }
             } else {
-                output.extend(quote!(+ &#ch.to_string()));
+                extend_last_part(&mut last_part, ch);
             }
         }
+        parse_last_part(&mut last_part, &mut output);
         output
     }
 }

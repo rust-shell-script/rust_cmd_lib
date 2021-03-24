@@ -105,7 +105,8 @@ fn test_vars_in_str0() {
 
 #[test]
 fn test_vars_in_str1() {
-    assert_eq!(run_fun!(echo "$$").unwrap(), "$$");
+    assert_eq!(run_fun!(echo "$$").unwrap(), "$");
+    assert_eq!(run_fun!(echo "$$a").unwrap(), "$a");
 }
 
 #[test]
