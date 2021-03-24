@@ -205,20 +205,19 @@ fn test_proc_env() {
 
 #[test]
 fn test_export_cmd() {
+    use std::io::Write;
     #[export_cmd(my_cmd)]
-    fn foo(args: CmdArgs, _envs: CmdEnvs, stdio: &mut CmdStdio) -> CmdResult {
+    fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
         let msg = format!("msg from foo(), args: {:?}", args);
-        stdio.errbuf.push_str(&msg);
-        stdio.outbuf.push_str("bar");
-        Ok(())
+        writeln!(io.errbuf, "{}", msg)?;
+        writeln!(io.outbuf, "bar")
     }
 
     #[export_cmd(my_cmd2)]
-    fn foo2(args: CmdArgs, _envs: CmdEnvs, stdio: &mut CmdStdio) -> CmdResult {
+    fn foo2(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
         let msg = format!("msg from foo2(), args: {:?}", args);
-        stdio.errbuf.push_str(&msg);
-        stdio.outbuf.push_str("bar2");
-        Ok(())
+        writeln!(io.errbuf, "{}", msg)?;
+        writeln!(io.outbuf, "bar2")
     }
     use_custom_cmd!(my_cmd, my_cmd2);
     assert!(run_cmd!(echo "from" "builtin").is_ok());

@@ -12,9 +12,9 @@ pub type CmdEnvs = HashMap<String, String>;
 /// IO struct for builtin or custom commands
 #[derive(Default)]
 pub struct CmdStdio {
-    pub inbuf: String,
-    pub outbuf: String,
-    pub errbuf: String,
+    pub inbuf: Vec<u8>,
+    pub outbuf: Vec<u8>,
+    pub errbuf: Vec<u8>,
 }
 type FnFun = fn(CmdArgs, CmdEnvs, &mut CmdStdio) -> CmdResult;
 
@@ -250,15 +250,17 @@ impl Cmds {
                 let mut io = CmdStdio::default();
                 CMD_MAP.lock().unwrap()[command](args, envs, &mut io)?;
                 if let Some((path, append)) = self.cmd_args[i].get_stderr_redirect() {
-                    Cmd::open_file(path, *append).write_all(&io.errbuf.into_bytes())?;
+                    Cmd::open_file(path, *append).write_all(&io.errbuf)?;
                 } else {
-                    eprint!("{}", io.errbuf);
+                    std::io::stderr().write_all(&io.errbuf)?;
                 }
                 if let Some((path, append)) = self.cmd_args[i].get_stdout_redirect() {
-                    Cmd::open_file(path, *append).write_all(&io.outbuf.into_bytes())?;
+                    Cmd::open_file(path, *append).write_all(&io.outbuf)?;
                     children.push(ProcHandle::ProcStr(None));
                 } else {
-                    children.push(ProcHandle::ProcStr(Some(io.outbuf)));
+                    children.push(ProcHandle::ProcStr(Some(
+                        String::from_utf8_lossy(&io.outbuf).to_string(),
+                    )));
                 }
             } else {
                 if i == len - 1 && !for_fun && self.cmd_args[i].get_stdout_redirect().is_none() {

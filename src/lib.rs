@@ -213,12 +213,12 @@
 //!
 //! ```
 //! # use cmd_lib::*;
+//! # use std::io::Write;
 //! #[export_cmd(my_cmd)]
 //! fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
 //!     let msg = format!("msg from foo(), args: {:?}", args);
-//!     io.errbuf.push_str(&msg);
-//!     io.outbuf.push_str("bar");
-//!     Ok(())
+//!     writeln!(io.errbuf, "{}", msg)?;
+//!     writeln!(io.outbuf, "bar")
 //! }
 //!
 //! use_custom_cmd!(my_cmd);
