@@ -248,9 +248,14 @@ impl Cmds {
             } else if in_cmd_map {
                 let mut io = CmdStdio::default();
                 CMD_MAP.lock().unwrap()[command](args, envs, &mut io)?;
-                children.push(ProcHandle::ProcStr(Some(io.outbuf)));
+                if let Some((path, append)) = self.cmd_args[i].get_stdout_redirect() {
+                    Cmd::open_file(path, *append).write_all(&io.outbuf.into_bytes())?;
+                    children.push(ProcHandle::ProcStr(None));
+                } else {
+                    children.push(ProcHandle::ProcStr(Some(io.outbuf)));
+                }
             } else {
-                if i == len - 1 && !for_fun && !self.cmd_args[i].get_stdout_redirect() {
+                if i == len - 1 && !for_fun && self.cmd_args[i].get_stdout_redirect().is_none() {
                     cmd.stdout(Stdio::inherit());
                 }
                 let mut child = cmd.spawn()?;
@@ -381,7 +386,7 @@ pub struct Cmd {
     args: Vec<String>,
     envs: HashMap<String, String>,
     redirects: Vec<Redirect>,
-    stdout_redirect: bool,
+    stdout_redirect: Option<(String, bool)>,
 }
 
 impl Cmd {
@@ -417,8 +422,8 @@ impl Cmd {
         self
     }
 
-    fn get_stdout_redirect(&self) -> bool {
-        self.stdout_redirect
+    fn get_stdout_redirect(&self) -> &Option<(String, bool)> {
+        &self.stdout_redirect
     }
 
     fn get_redirects(&self) -> &Vec<Redirect> {
@@ -434,17 +439,17 @@ impl Cmd {
         cmd
     }
 
-    fn setup_redirects(&mut self, cmd: &mut Command) {
-        fn open_file(path: &str, append: bool) -> std::fs::File {
-            OpenOptions::new()
-                .create(true)
-                .truncate(!append)
-                .write(true)
-                .append(append)
-                .open(path)
-                .unwrap()
-        }
+    fn open_file(path: &str, append: bool) -> std::fs::File {
+        OpenOptions::new()
+            .create(true)
+            .truncate(!append)
+            .write(true)
+            .append(append)
+            .open(path)
+            .unwrap()
+    }
 
+    fn setup_redirects(&mut self, cmd: &mut Command) {
         let mut stdout_file = "/dev/stdout";
         let mut stderr_file = "/dev/stderr";
         for redirect in self.redirects.iter() {
@@ -458,26 +463,26 @@ impl Cmd {
                     }
                 }
                 Redirect::StdoutToStderr => {
-                    cmd.stdout(open_file(stderr_file, true));
-                    self.stdout_redirect = true;
+                    cmd.stdout(Self::open_file(stderr_file, true));
+                    self.stdout_redirect = Some(("/dev/stderr".into(), false));
                 }
                 Redirect::StderrToStdout => {
-                    cmd.stderr(open_file(stdout_file, true));
+                    cmd.stderr(Self::open_file(stdout_file, true));
                 }
                 Redirect::StdoutToFile(path, append) => {
                     if path == "/dev/null" {
                         cmd.stdout(Stdio::null());
                     } else {
-                        cmd.stdout(open_file(path, *append));
+                        cmd.stdout(Self::open_file(path, *append));
                         stdout_file = path;
                     }
-                    self.stdout_redirect = true;
+                    self.stdout_redirect = Some((path.into(), *append));
                 }
                 Redirect::StderrToFile(path, append) => {
                     if path == "/dev/null" {
                         cmd.stderr(Stdio::null());
                     } else {
-                        cmd.stderr(open_file(path, *append));
+                        cmd.stderr(Self::open_file(path, *append));
                         stderr_file = path;
                     }
                 }

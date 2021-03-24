@@ -259,3 +259,13 @@ fn test_current_dir() {
 /// run_cmd!(ls & dirlist || true).unwrap();
 /// ```
 fn test_redirect_fail() {}
+
+#[test]
+fn test_buitin_stdout_redirect() {
+    use_builtin_cmd!(echo);
+    let f = "/tmp/builtin";
+    let msg = run_fun!(echo xx &> $f).unwrap();
+    assert_eq!(msg, "");
+    assert_eq!("xx", run_fun!(cat $f).unwrap());
+    run_cmd!(rm -f $f).unwrap();
+}
