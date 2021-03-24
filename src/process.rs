@@ -248,7 +248,8 @@ impl Cmds {
                 children.push(ProcHandle::ProcBuf(None));
             } else if in_cmd_map {
                 let mut io = CmdStdio::default();
-                CMD_MAP.lock().unwrap()[command](args, envs, &mut io)?;
+                let internal_cmd = CMD_MAP.lock().unwrap()[command];
+                internal_cmd(args, envs, &mut io)?;
                 if let Some((path, append)) = self.cmd_args[i].get_stderr_redirect() {
                     Cmd::open_file(path, *append).write_all(&io.errbuf)?;
                 } else {
