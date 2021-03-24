@@ -101,8 +101,8 @@ impl GroupCmds {
 }
 
 enum ProcHandle {
-    ProcChild(Child),
-    ProcStr(Option<String>),
+    ProcChild(Child),         // for normal commands
+    ProcBuf(Option<Vec<u8>>), // for builtin/custom commands
 }
 
 pub struct WaitCmd(Vec<ProcHandle>, Vec<String>);
@@ -120,9 +120,9 @@ impl WaitCmd {
                     ));
                 }
             }
-            ProcHandle::ProcStr(mut ss) => {
+            ProcHandle::ProcBuf(mut ss) => {
                 if let Some(s) = ss.take() {
-                    print!("{}", s);
+                    std::io::stdout().write_all(&s)?;
                 }
             }
         }
@@ -148,9 +148,9 @@ impl WaitFun {
                     ret = String::from_utf8_lossy(&output.stdout).to_string();
                 }
             }
-            ProcHandle::ProcStr(mut ss) => {
+            ProcHandle::ProcBuf(mut ss) => {
                 if let Some(s) = ss.take() {
-                    ret = s;
+                    ret = String::from_utf8_lossy(&s).to_string();
                 }
             }
         }
@@ -245,7 +245,7 @@ impl Cmds {
             if command == &"cd" {
                 Self::run_cd_cmd(&args, &mut self.current_dir)?;
                 *current_dir = self.current_dir.clone();
-                children.push(ProcHandle::ProcStr(None));
+                children.push(ProcHandle::ProcBuf(None));
             } else if in_cmd_map {
                 let mut io = CmdStdio::default();
                 CMD_MAP.lock().unwrap()[command](args, envs, &mut io)?;
@@ -256,11 +256,9 @@ impl Cmds {
                 }
                 if let Some((path, append)) = self.cmd_args[i].get_stdout_redirect() {
                     Cmd::open_file(path, *append).write_all(&io.outbuf)?;
-                    children.push(ProcHandle::ProcStr(None));
+                    children.push(ProcHandle::ProcBuf(None));
                 } else {
-                    children.push(ProcHandle::ProcStr(Some(
-                        String::from_utf8_lossy(&io.outbuf).to_string(),
-                    )));
+                    children.push(ProcHandle::ProcBuf(Some(io.outbuf)));
                 }
             } else {
                 if i == len - 1 && !for_fun && self.cmd_args[i].get_stdout_redirect().is_none() {
@@ -269,9 +267,9 @@ impl Cmds {
                 let mut child = cmd.spawn()?;
                 if i != 0 {
                     if let Some(mut input) = child.stdin.take() {
-                        if let ProcHandle::ProcStr(ss) = &mut children[i - 1] {
+                        if let ProcHandle::ProcBuf(ss) = &mut children[i - 1] {
                             if let Some(s) = ss.take() {
-                                input.write_all(s.as_bytes())?;
+                                input.write_all(&s)?;
                             }
                         }
                     }
