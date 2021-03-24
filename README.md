@@ -204,13 +204,13 @@ run_cmd!(my_cmd)?;
 println!("get result: {}", run_fun!(my_cmd)?);
 ```
 
-#### Low-level process spawning macro
+#### Low-level process spawning macros
 
-spawn!() macro executes the whole command as a child process, returning a handle to it. By
+`spawn!()` macro executes the whole command as a child process, returning a handle to it. By
 default, stdin, stdout and stderr are inherited from the parent. To capture the output, you
-can use spawn_with_output!() macro instead.
+can use `spawn_with_output!()` macro instead.
 
-To get result, you can call wait_result() to get CmdResult/FunResult.
+To get result, you can call `wait_result()` to get CmdResult/FunResult.
 
 ```rust
 spawn!(ping -c 10 192.168.0.1)?.wait_result()?;

@@ -227,13 +227,13 @@
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
-//! ### Low-level process spawning macro
+//! ### Low-level process spawning macros
 //!
-//! spawn!() macro executes the whole command as a child process, returning a handle to it. By
+//! `spawn!()` macro executes the whole command as a child process, returning a handle to it. By
 //! default, stdin, stdout and stderr are inherited from the parent. To capture the output, you
-//! can use spawn_with_output!() macro instead.
+//! can use `spawn_with_output!()` macro instead.
 //!
-//! To get result, you can call wait_result() to get CmdResult/FunResult.
+//! To get result, you can call `wait_result()` to get CmdResult/FunResult.
 //!
 //! ```no_run
 //! # use cmd_lib::{spawn, spawn_with_output};

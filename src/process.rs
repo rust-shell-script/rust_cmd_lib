@@ -9,6 +9,7 @@ use std::sync::Mutex;
 
 pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
+/// IO struct for builtin or custom commands
 #[derive(Default)]
 pub struct CmdStdio {
     pub inbuf: String,

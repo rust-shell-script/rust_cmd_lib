@@ -7,9 +7,11 @@ use quote::{quote, ToTokens};
 /// ```
 /// # use cmd_lib::*;
 /// #[export_cmd(my_cmd)]
-/// fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
-///     println!("msg from foo(), args: {:?}", args);
-///     Ok("bar".into())
+/// fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
+///     let msg = format!("msg from foo(), args: {:?}\n", args);
+///     io.errbuf.push_str(&msg);
+///     io.outbuf.push_str("bar");
+///     Ok(())
 /// }
 ///
 /// use_custom_cmd!(my_cmd);
@@ -43,9 +45,11 @@ pub fn export_cmd(
 /// ```
 /// # use cmd_lib::*;
 /// #[export_cmd(my_cmd)]
-/// fn foo(args: CmdArgs, _envs: CmdEnvs) -> FunResult {
-///     println!("msg from foo(), args: {:?}", args);
-///     Ok("bar".into())
+/// fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
+///     let msg = format!("msg from foo(), args: {:?}\n", args);
+///     io.errbuf.push_str(&msg);
+///     io.outbuf.push_str("bar");
+///     Ok(())
 /// }
 ///
 /// use_custom_cmd!(my_cmd);
