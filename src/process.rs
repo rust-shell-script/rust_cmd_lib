@@ -248,6 +248,11 @@ impl Cmds {
             } else if in_cmd_map {
                 let mut io = CmdStdio::default();
                 CMD_MAP.lock().unwrap()[command](args, envs, &mut io)?;
+                if let Some((path, append)) = self.cmd_args[i].get_stderr_redirect() {
+                    Cmd::open_file(path, *append).write_all(&io.errbuf.into_bytes())?;
+                } else {
+                    eprint!("{}", io.errbuf);
+                }
                 if let Some((path, append)) = self.cmd_args[i].get_stdout_redirect() {
                     Cmd::open_file(path, *append).write_all(&io.outbuf.into_bytes())?;
                     children.push(ProcHandle::ProcStr(None));
@@ -387,6 +392,7 @@ pub struct Cmd {
     envs: HashMap<String, String>,
     redirects: Vec<Redirect>,
     stdout_redirect: Option<(String, bool)>,
+    stderr_redirect: Option<(String, bool)>,
 }
 
 impl Cmd {
@@ -426,6 +432,10 @@ impl Cmd {
         &self.stdout_redirect
     }
 
+    fn get_stderr_redirect(&self) -> &Option<(String, bool)> {
+        &self.stderr_redirect
+    }
+
     fn get_redirects(&self) -> &Vec<Redirect> {
         &self.redirects
     }
@@ -452,39 +462,52 @@ impl Cmd {
     fn setup_redirects(&mut self, cmd: &mut Command) {
         let mut stdout_file = "/dev/stdout";
         let mut stderr_file = "/dev/stderr";
+        let in_cmd_map = CMD_MAP.lock().unwrap().contains_key(self.args[0].as_str());
         for redirect in self.redirects.iter() {
             match redirect {
                 Redirect::FileToStdin(path) => {
-                    if path == "/dev/null" {
-                        cmd.stdin(Stdio::null());
-                    } else {
-                        let file = OpenOptions::new().read(true).open(path).unwrap();
-                        cmd.stdin(file);
+                    if !in_cmd_map {
+                        if path == "/dev/null" {
+                            cmd.stdin(Stdio::null());
+                        } else {
+                            let file = OpenOptions::new().read(true).open(path).unwrap();
+                            cmd.stdin(file);
+                        }
                     }
                 }
                 Redirect::StdoutToStderr => {
-                    cmd.stdout(Self::open_file(stderr_file, true));
+                    if !in_cmd_map {
+                        cmd.stdout(Self::open_file(stderr_file, true));
+                    }
                     self.stdout_redirect = Some(("/dev/stderr".into(), false));
                 }
                 Redirect::StderrToStdout => {
-                    cmd.stderr(Self::open_file(stdout_file, true));
+                    if !in_cmd_map {
+                        cmd.stderr(Self::open_file(stdout_file, true));
+                    }
+                    self.stderr_redirect = Some(("/dev/stdout".into(), false));
                 }
                 Redirect::StdoutToFile(path, append) => {
-                    if path == "/dev/null" {
-                        cmd.stdout(Stdio::null());
-                    } else {
-                        cmd.stdout(Self::open_file(path, *append));
-                        stdout_file = path;
+                    if !in_cmd_map {
+                        if path == "/dev/null" {
+                            cmd.stdout(Stdio::null());
+                        } else {
+                            cmd.stdout(Self::open_file(path, *append));
+                            stdout_file = path;
+                        }
                     }
                     self.stdout_redirect = Some((path.into(), *append));
                 }
                 Redirect::StderrToFile(path, append) => {
-                    if path == "/dev/null" {
-                        cmd.stderr(Stdio::null());
-                    } else {
-                        cmd.stderr(Self::open_file(path, *append));
-                        stderr_file = path;
+                    if !in_cmd_map {
+                        if path == "/dev/null" {
+                            cmd.stderr(Stdio::null());
+                        } else {
+                            cmd.stderr(Self::open_file(path, *append));
+                            stderr_file = path;
+                        }
                     }
+                    self.stderr_redirect = Some((path.into(), *append));
                 }
             }
         }
