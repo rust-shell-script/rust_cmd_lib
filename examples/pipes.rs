@@ -90,13 +90,14 @@ fn prog_name() -> String {
 }
 
 // print help message in 72-char width
-fn print_help() -> CmdResult {
+fn print_help() {
     let prog = prog_name();
     let max_type = tls_get!(sets).len() - 1;
     let cgap = " ".repeat(15 - format!("{}", tls_get!(COLORS)).chars().count());
-    let colors = run_fun!(tput colors)?;
+    let colors = run_fun!(tput colors).unwrap();
     let term = std::env::var("TERM").unwrap();
-    run_cmd!(info "
+    #[rustfmt::skip]
+    cmd_info!("
 Usage: $prog [OPTION]...
 Animated pipes terminal screensaver.
 
@@ -117,8 +118,7 @@ Animated pipes terminal screensaver.
   -v                    print version number
 
 Note: -t and -c can be used more than once.
-")?;
-    Ok(())
+");
 }
 
 // parse command-line options
@@ -149,8 +149,8 @@ fn parse() -> CmdResult {
     // $arg and $OPTARG are the option name and argument set by getopts.
     fn pearg(arg: &str, msg: &str) -> ! {
         let arg0 = prog_name();
-        run_cmd!(info "$arg0: -$arg invalid argument; $msg").unwrap();
-        print_help().unwrap();
+        cmd_info!("$arg0: -$arg invalid argument; $msg");
+        print_help();
         std::process::exit(1)
     }
 
@@ -240,7 +240,7 @@ fn parse() -> CmdResult {
             "-C" => tls_set!(NOCOLOR, |nc| *nc = true),
             "-K" => tls_set!(KEEPCT, |nk| *nk = true),
             "-h" => {
-                print_help()?;
+                print_help();
                 std::process::exit(0);
             }
             "-v" => {
