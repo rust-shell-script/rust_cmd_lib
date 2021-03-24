@@ -38,19 +38,20 @@ pub struct Lexer {
     last_arg_str: TokenStream,
     last_redirect: Option<RedirectFd>,
 }
-
 impl Lexer {
     pub fn scan(mut self, input: TokenStream) -> Parser {
-        let mut iter = input.into_iter().peekable();
+        let mut iter = TokenStreamPeekable {
+            peekable: input.into_iter().peekable(),
+            span: None,
+        };
         let mut allow_or_token = true;
         while let Some(item) = iter.next() {
-            let span = item.span();
             match item {
                 TokenTree::Group(_) => {
                     abort!(item.span(), "grouping is only allowed for variables");
                 }
                 TokenTree::Literal(lit) => {
-                    self.scan_literal(lit, span, &mut iter);
+                    self.scan_literal(lit, &mut iter);
                 }
                 TokenTree::Ident(ident) => {
                     let s = ident.to_string();
@@ -62,22 +63,22 @@ impl Lexer {
                         self.add_arg_with_token(SepToken::SemiColon);
                         allow_or_token = true;
                     } else if ch == '|' {
-                        self.scan_pipe_or(&mut allow_or_token, span, &mut iter);
+                        self.scan_pipe_or(&mut allow_or_token, &mut iter);
                     } else if ch == '<' {
-                        self.set_redirect(span, RedirectFd::Stdin);
+                        self.set_redirect(iter.span(), RedirectFd::Stdin);
                     } else if ch == '>' {
-                        self.scan_redirect_out(span, &mut iter, 1);
+                        self.scan_redirect_out(&mut iter, 1);
                     } else if ch == '&' {
-                        self.scan_ampersand(span, &mut iter);
+                        self.scan_ampersand(&mut iter);
                     } else if ch == '$' {
-                        self.scan_dollar(span, &mut iter);
+                        self.scan_dollar(&mut iter);
                     } else {
                         self.extend_last_arg(quote!(&#ch.to_string()));
                     }
                 }
             }
 
-            if Self::peek(span, &mut iter).is_none() && !self.last_arg_str.is_empty() {
+            if iter.peek_no_gap().is_none() && !self.last_arg_str.is_empty() {
                 self.add_arg_with_token(SepToken::Space);
             }
         }
@@ -143,8 +144,7 @@ impl Lexer {
     fn scan_literal(
         &mut self,
         lit: Literal,
-        span: Span,
-        iter: &mut Peekable<impl Iterator<Item = TokenTree>>,
+        iter: &mut TokenStreamPeekable<impl Iterator<Item = TokenTree>>,
     ) {
         let s = lit.to_string();
         if s.starts_with('\"') || s.starts_with('r') {
@@ -153,11 +153,10 @@ impl Lexer {
         } else {
             let mut is_redirect = false;
             if s == "1" || s == "2" {
-                if let Some(TokenTree::Punct(ref p)) = Self::peek(span, iter) {
-                    let span = p.span();
+                if let Some(TokenTree::Punct(ref p)) = iter.peek_no_gap() {
                     if p.as_char() == '>' {
                         iter.next();
-                        self.scan_redirect_out(span, iter, s.parse().unwrap());
+                        self.scan_redirect_out(iter, s.parse().unwrap());
                         is_redirect = true;
                     }
                 }
@@ -171,11 +170,10 @@ impl Lexer {
     fn scan_pipe_or(
         &mut self,
         allow_or_token: &mut bool,
-        span: Span,
-        iter: &mut Peekable<impl Iterator<Item = TokenTree>>,
+        iter: &mut TokenStreamPeekable<impl Iterator<Item = TokenTree>>,
     ) {
         let mut is_pipe = true;
-        if let Some(TokenTree::Punct(p)) = Self::peek(span, iter) {
+        if let Some(TokenTree::Punct(p)) = iter.peek_no_gap() {
             if p.as_char() == '|' {
                 is_pipe = false;
                 iter.next();
@@ -190,7 +188,7 @@ impl Lexer {
                 }
             }
             None => {
-                abort!(span, "expect new command after '|'");
+                abort!(iter.span(), "expect new command after '|'");
             }
             _ => {}
         }
@@ -198,60 +196,67 @@ impl Lexer {
             SepToken::Pipe
         } else {
             if !*allow_or_token {
-                abort!(span, "only one || is allowed");
+                abort!(iter.span(), "only one || is allowed");
             }
             *allow_or_token = false;
             SepToken::Or
         });
     }
 
-    fn scan_redirect_out(&mut self, span: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>, fd: i32) {
-        self.set_redirect(span, if fd == 1 {
-            RedirectFd::Stdout(Self::check_append(span, iter))
-        } else {
-            RedirectFd::Stderr(Self::check_append(span, iter))
-        });
-        if let Some(TokenTree::Punct(p)) = Self::peek(span, iter) {
-            let span = p.span();
+    fn scan_redirect_out(
+        &mut self,
+        iter: &mut TokenStreamPeekable<impl Iterator<Item = TokenTree>>,
+        fd: i32,
+    ) {
+        self.set_redirect(
+            iter.span(),
+            if fd == 1 {
+                RedirectFd::Stdout(Self::check_append(iter))
+            } else {
+                RedirectFd::Stderr(Self::check_append(iter))
+            },
+        );
+        if let Some(TokenTree::Punct(p)) = iter.peek_no_gap() {
             if p.as_char() == '&' {
                 iter.next();
-                if let Some(TokenTree::Literal(lit)) = Self::peek(span, iter) {
+                if let Some(TokenTree::Literal(lit)) = iter.peek_no_gap() {
                     let s = lit.to_string();
                     if s.starts_with('\"') || s.starts_with('r') {
                         abort!(lit.span(), "invalid literal string after &");
                     }
                     if &s == "1" {
-                        self.add_fd_redirect_arg(span, 1);
+                        self.add_fd_redirect_arg(lit.span(), 1);
                     } else if &s == "2" {
-                        self.add_fd_redirect_arg(span, 2);
+                        self.add_fd_redirect_arg(lit.span(), 2);
                     } else {
                         abort!(lit.span(), "Only &1 or &2 is supported");
                     }
                     iter.next();
                 } else {
-                    abort!(span, "expect &1 or &2");
+                    abort!(iter.span(), "expect &1 or &2");
                 }
             }
         }
     }
 
-    fn scan_ampersand(&mut self, span: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>) {
-        if let Some(TokenTree::Punct(p)) = Self::peek(span, iter) {
+    fn scan_ampersand(&mut self, iter: &mut TokenStreamPeekable<impl Iterator<Item = TokenTree>>) {
+        if let Some(TokenTree::Punct(p)) = iter.peek_no_gap() {
+            let span = p.span();
             if p.as_char() == '>' {
                 iter.next();
-                self.set_redirect(span, RedirectFd::StdoutErr(Self::check_append(span, iter)));
+                self.set_redirect(span, RedirectFd::StdoutErr(Self::check_append(iter)));
             } else {
-                abort!(p.span(), "invalid punctuation");
+                abort!(span, "invalid punctuation");
             }
         } else {
-            abort!(span, "invalid token after '&'");
+            abort!(iter.span(), "invalid token after '&'");
         }
     }
 
-    fn scan_dollar(&mut self, span: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>) {
-        if let Some(TokenTree::Ident(var)) = Self::peek(span, iter) {
+    fn scan_dollar(&mut self, iter: &mut TokenStreamPeekable<impl Iterator<Item = TokenTree>>) {
+        if let Some(TokenTree::Ident(var)) = iter.peek_no_gap() {
             self.extend_last_arg(quote!(&#var.to_string()));
-        } else if let Some(TokenTree::Group(g)) = Self::peek(span, iter) {
+        } else if let Some(TokenTree::Group(g)) = iter.peek_no_gap() {
             if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
                 abort!(
                     g,
@@ -279,57 +284,20 @@ impl Lexer {
                 }
             }
         } else {
-            abort!(span, "invalid token after $");
+            abort!(iter.span(), "invalid token after $");
         }
         iter.next();
     }
 
-    fn check_append(cur: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>) -> bool {
+    fn check_append(iter: &mut TokenStreamPeekable<impl Iterator<Item = TokenTree>>) -> bool {
         let mut append = false;
-        if let Some(TokenTree::Punct(p)) = Self::peek(cur, iter) {
+        if let Some(TokenTree::Punct(p)) = iter.peek_no_gap() {
             if p.as_char() == '>' {
                 append = true;
                 iter.next();
             }
         }
         append
-    }
-
-    // peek next token which has no spaces between
-    fn peek(cur: Span, iter: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Option<&TokenTree> {
-        match iter.peek() {
-            None => None,
-            Some(item) => {
-                let (_, cur_end) = Self::span_location(&cur);
-                let (new_start, _) = Self::span_location(&item.span());
-                if new_start > cur_end {
-                    None
-                } else {
-                    Some(item)
-                }
-            }
-        }
-    }
-
-    // helper function to get (start, end) of Span
-    fn span_location(span: &Span) -> (usize, usize) {
-        let s = format!("{:?}", span);
-        let mut start = 0;
-        let mut end = 0;
-        let mut parse_second = false;
-        for c in s.chars().skip(6) {
-            if c == '.' {
-                parse_second = true;
-            } else if c.is_ascii_digit() {
-                let digit = c.to_digit(10).unwrap() as usize;
-                if !parse_second {
-                    start = start * 10 + digit;
-                } else {
-                    end = end * 10 + digit;
-                }
-            }
-        }
-        (start, end)
     }
 
     pub fn parse_str_lit(lit: &Literal) -> TokenStream {
@@ -403,5 +371,70 @@ impl Lexer {
         }
         parse_last_part(&mut last_part, &mut output);
         output
+    }
+}
+
+struct TokenStreamPeekable<I: Iterator<Item = TokenTree>> {
+    peekable: Peekable<I>,
+    span: Option<Span>,
+}
+
+impl<I: Iterator<Item = TokenTree>> Iterator for TokenStreamPeekable<I> {
+    type Item = I::Item;
+    fn next(&mut self) -> Option<TokenTree> {
+        if let Some(tt) = self.peekable.next() {
+            self.span = Some(tt.span());
+            Some(tt)
+        } else {
+            self.span = None;
+            None
+        }
+    }
+}
+
+impl<I: Iterator<Item = TokenTree>> TokenStreamPeekable<I> {
+    fn peek(&mut self) -> Option<&TokenTree> {
+        self.peekable.peek()
+    }
+
+    // peek next token which has no spaces between
+    fn peek_no_gap(&mut self) -> Option<&TokenTree> {
+        match self.peekable.peek() {
+            None => None,
+            Some(item) => {
+                let (_, cur_end) = Self::span_location(&self.span.unwrap());
+                let (new_start, _) = Self::span_location(&item.span());
+                if new_start > cur_end {
+                    None
+                } else {
+                    Some(item)
+                }
+            }
+        }
+    }
+
+    fn span(&self) -> Span {
+        self.span.unwrap()
+    }
+
+    // helper function to get (start, end) of Span
+    fn span_location(span: &Span) -> (usize, usize) {
+        let s = format!("{:?}", span);
+        let mut start = 0;
+        let mut end = 0;
+        let mut parse_second = false;
+        for c in s.chars().skip(6) {
+            if c == '.' {
+                parse_second = true;
+            } else if c.is_ascii_digit() {
+                let digit = c.to_digit(10).unwrap() as usize;
+                if !parse_second {
+                    start = start * 10 + digit;
+                } else {
+                    end = end * 10 + digit;
+                }
+            }
+        }
+        (start, end)
     }
 }
