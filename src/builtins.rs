@@ -1,6 +1,5 @@
 use crate::{CmdArgs, CmdEnvs, CmdResult, CmdStdio};
-use std::fs::OpenOptions;
-use std::io::{Read, Write};
+use std::io::Write;
 
 #[doc(hidden)]
 pub fn builtin_true(_args: CmdArgs, _envs: CmdEnvs, _io: &mut CmdStdio) -> CmdResult {
@@ -45,10 +44,6 @@ pub fn builtin_cat(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResul
         return Ok(());
     }
 
-    OpenOptions::new()
-        .read(true)
-        .open(&args[1])
-        .unwrap()
-        .read_to_end(&mut io.outbuf)?;
+    io.outbuf = std::fs::read(&args[1])?;
     Ok(())
 }

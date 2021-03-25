@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::OpenOptions;
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 
@@ -258,11 +258,7 @@ impl Cmds {
                 let mut io = CmdStdio::default();
                 if i == 0 {
                     if let Some(path) = self.cmd_args[i].get_stdin_redirect() {
-                        OpenOptions::new()
-                            .read(true)
-                            .open(path)
-                            .unwrap()
-                            .read_to_end(&mut io.inbuf)?;
+                        io.inbuf = std::fs::read(path)?;
                     }
                 } else {
                     io.inbuf = WaitFun::wait_output(
