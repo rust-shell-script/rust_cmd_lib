@@ -265,7 +265,7 @@ fn parse_msg(input: TokenStream) -> TokenStream {
         if let TokenTree::Literal(lit) = tt {
             let s = lit.to_string();
             if s.starts_with('\"') || s.starts_with('r') {
-                let str_lit = lexer::Lexer::parse_str_lit(&lit);
+                let str_lit = lexer::parse_str_lit(&lit);
                 output.extend(quote!(+ #str_lit));
                 valid = true;
             }

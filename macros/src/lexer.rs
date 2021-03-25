@@ -4,6 +4,83 @@ use proc_macro_error::abort;
 use quote::quote;
 use std::iter::Peekable;
 
+// Parse string literal to tokenstream, used by most of the macros
+//
+// - support ${var} or $var for interpolation
+//   - to escape '$' itself, use "$$"
+// - support normal rust character escapes:
+//   https://doc.rust-lang.org/reference/tokens.html#ascii-escapes
+pub fn parse_str_lit(lit: &Literal) -> TokenStream {
+    let s = lit.to_string();
+    if !s.starts_with('\"') {
+        return quote!(#lit);
+    }
+    let mut iter = s[1..s.len() - 1] // To trim outside ""
+        .chars()
+        .peekable();
+    let mut output = quote!("");
+    let mut last_part = String::new();
+    fn extend_last_part(last_part: &mut String, ch: char) {
+        if last_part.is_empty() {
+            last_part.push('"'); // start new string literal
+        }
+        last_part.push(ch);
+    }
+    fn parse_last_part(last_part: &mut String, output: &mut TokenStream) {
+        if !last_part.is_empty() {
+            last_part.push('"'); // seal it
+            let l = syn::parse_str::<Literal>(&last_part).unwrap();
+            output.extend(quote!(+ #l));
+            last_part.clear();
+        }
+    }
+
+    while let Some(ch) = iter.next() {
+        if ch == '$' {
+            if iter.peek() == Some(&'$') {
+                iter.next();
+                extend_last_part(&mut last_part, '$');
+                continue;
+            }
+
+            parse_last_part(&mut last_part, &mut output);
+            let mut with_brace = false;
+            if iter.peek() == Some(&'{') {
+                with_brace = true;
+                iter.next();
+            }
+            let mut var = String::new();
+            while let Some(&c) = iter.peek() {
+                if !c.is_ascii_alphanumeric() && c != '_' {
+                    break;
+                }
+                if var.is_empty() && c.is_ascii_digit() {
+                    break;
+                }
+                var.push(c);
+                iter.next();
+            }
+            if with_brace {
+                if iter.peek() != Some(&'}') {
+                    abort!(lit.span(), "bad substitution");
+                } else {
+                    iter.next();
+                }
+            }
+            if !var.is_empty() {
+                let var = syn::parse_str::<Ident>(&var).unwrap();
+                output.extend(quote!(+ &#var.to_string()));
+            } else {
+                output.extend(quote!(+ &'$'.to_string()));
+            }
+        } else {
+            extend_last_part(&mut last_part, ch);
+        }
+    }
+    parse_last_part(&mut last_part, &mut output);
+    output
+}
+
 enum SepToken {
     Space,
     SemiColon,
@@ -134,7 +211,7 @@ impl Lexer {
         let s = lit.to_string();
         if s.starts_with('\"') || s.starts_with('r') {
             // string literal
-            self.extend_last_arg(Self::parse_str_lit(&lit));
+            self.extend_last_arg(parse_str_lit(&lit));
         } else {
             let mut is_redirect = false;
             if s == "1" || s == "2" {
@@ -301,77 +378,6 @@ impl Lexer {
             }
         }
         append
-    }
-
-    pub fn parse_str_lit(lit: &Literal) -> TokenStream {
-        let s = lit.to_string();
-        if !s.starts_with('\"') {
-            return quote!(#lit);
-        }
-        let mut iter = s[1..s.len() - 1] // To trim outside ""
-            .chars()
-            .peekable();
-        let mut output = quote!("");
-        let mut last_part = String::new();
-        fn extend_last_part(last_part: &mut String, ch: char) {
-            if last_part.is_empty() {
-                last_part.push('"'); // start new string literal
-            }
-            last_part.push(ch);
-        }
-        fn parse_last_part(last_part: &mut String, output: &mut TokenStream) {
-            if !last_part.is_empty() {
-                last_part.push('"'); // seal it
-                let l = syn::parse_str::<Literal>(&last_part).unwrap();
-                output.extend(quote!(+ #l));
-                last_part.clear();
-            }
-        }
-
-        while let Some(ch) = iter.next() {
-            if ch == '$' {
-                if iter.peek() == Some(&'$') {
-                    iter.next();
-                    extend_last_part(&mut last_part, '$');
-                    continue;
-                }
-
-                parse_last_part(&mut last_part, &mut output);
-                let mut with_brace = false;
-                if iter.peek() == Some(&'{') {
-                    with_brace = true;
-                    iter.next();
-                }
-                let mut var = String::new();
-                while let Some(&c) = iter.peek() {
-                    if !c.is_ascii_alphanumeric() && c != '_' {
-                        break;
-                    }
-                    if var.is_empty() && c.is_ascii_digit() {
-                        break;
-                    }
-                    var.push(c);
-                    iter.next();
-                }
-                if with_brace {
-                    if iter.peek() != Some(&'}') {
-                        abort!(lit.span(), "bad substitution");
-                    } else {
-                        iter.next();
-                    }
-                }
-                if !var.is_empty() {
-                    let var = syn::parse_str::<Ident>(&var).unwrap();
-                    output.extend(quote!(+ &#var.to_string()));
-                } else {
-                    output.extend(quote!(+ &'$'.to_string()));
-                }
-            } else {
-                extend_last_part(&mut last_part, ch);
-            }
-        }
-        parse_last_part(&mut last_part, &mut output);
-        output
     }
 }
 
