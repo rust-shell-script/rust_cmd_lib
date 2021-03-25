@@ -305,7 +305,7 @@ pub use cmd_lib_macros::{
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use builtins::{
-    builtin_die, builtin_echo, builtin_err, builtin_info, builtin_true, builtin_warn,
+    builtin_cat, builtin_die, builtin_echo, builtin_err, builtin_info, builtin_true, builtin_warn,
 };
 pub use process::{
     export_cmd, set_debug, set_pipefail, Cmd, CmdArgs, CmdEnvs, CmdStdio, Cmds, GroupCmds, Redirect,

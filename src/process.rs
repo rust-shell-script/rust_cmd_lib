@@ -3,14 +3,14 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::OpenOptions;
-use std::io::{Error, ErrorKind, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 
 pub type CmdArgs = Vec<String>;
 pub type CmdEnvs = HashMap<String, String>;
 /// IO struct for builtin or custom commands
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CmdStdio {
     pub inbuf: Vec<u8>,
     pub outbuf: Vec<u8>,
@@ -222,7 +222,13 @@ impl Cmds {
         let mut children: Vec<ProcHandle> = Vec::new();
         // spawning all the sub-processes
         for (i, cmd) in self.pipes.iter_mut().enumerate() {
-            if i != 0 {
+            // check commands defined in CMD_MAP
+            let args = self.cmd_args[i].get_args().clone();
+            let envs = self.cmd_args[i].get_envs().clone();
+            let command = &args[0].as_str();
+            let in_cmd_map = CMD_MAP.lock().unwrap().contains_key(command);
+
+            if i != 0 && !in_cmd_map {
                 let mut stdin_setup_done = false;
                 if let ProcHandle::ProcChild(Some(child)) = &mut children[i - 1] {
                     if let Some(output) = child.stdout.take() {
@@ -244,18 +250,21 @@ impl Cmds {
                 cmd.current_dir(self.current_dir.clone());
             }
 
-            // check commands defined in CMD_MAP
-            let args = self.cmd_args[i].get_args().clone();
-            let envs = self.cmd_args[i].get_envs().clone();
-            let command = &args[0].as_str();
-            let in_cmd_map = CMD_MAP.lock().unwrap().contains_key(command);
             if command == &"cd" {
                 Self::run_cd_cmd(&args, &mut self.current_dir)?;
                 *current_dir = self.current_dir.clone();
                 children.push(ProcHandle::ProcBuf(None));
             } else if in_cmd_map {
                 let mut io = CmdStdio::default();
-                if i != 0 {
+                if i == 0 {
+                    if let Some(path) = self.cmd_args[i].get_stdin_redirect() {
+                        OpenOptions::new()
+                            .read(true)
+                            .open(path)
+                            .unwrap()
+                            .read_to_end(&mut io.inbuf)?;
+                    }
+                } else {
                     io.inbuf = WaitFun::wait_output(
                         &mut children[i - 1],
                         &self.cmd_args[i - 1].get_args().join(" "),
@@ -406,6 +415,7 @@ pub struct Cmd {
     args: Vec<String>,
     envs: HashMap<String, String>,
     redirects: Vec<Redirect>,
+    stdin_redirect: Option<String>,
     stdout_redirect: Option<(String, bool)>,
     stderr_redirect: Option<(String, bool)>,
 }
@@ -441,6 +451,10 @@ impl Cmd {
     pub fn add_redirect(mut self, redirect: Redirect) -> Self {
         self.redirects.push(redirect);
         self
+    }
+
+    fn get_stdin_redirect(&self) -> &Option<String> {
+        &self.stdin_redirect
     }
 
     fn get_stdout_redirect(&self) -> &Option<(String, bool)> {
@@ -489,6 +503,7 @@ impl Cmd {
                             cmd.stdin(file);
                         }
                     }
+                    self.stdin_redirect = Some(path.into());
                 }
                 Redirect::StdoutToStderr => {
                     if !in_cmd_map {
