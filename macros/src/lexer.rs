@@ -50,7 +50,7 @@ impl Lexer {
         while let Some(item) = iter.next() {
             match item {
                 TokenTree::Group(_) => {
-                    abort!(item.span(), "grouping is only allowed for variables");
+                    abort!(iter.span(), "grouping is only allowed for variables");
                 }
                 TokenTree::Literal(lit) => {
                     self.scan_literal(lit, &mut iter);
@@ -268,28 +268,29 @@ impl Lexer {
         } else if let Some(TokenTree::Group(g)) = iter.peek_no_gap() {
             if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
                 abort!(
-                    g,
+                    g.span(),
                     "invalid grouping: found {:?}, only \"brace/bracket\" is allowed",
                     format!("{:?}", g.delimiter()).to_lowercase()
                 );
             }
             let mut found_var = false;
             for tt in g.stream() {
+                let span = tt.span();
                 if let TokenTree::Ident(ref var) = tt {
                     if found_var {
-                        abort!(tt, "more than one variable in grouping");
+                        abort!(span, "more than one variable in grouping");
                     }
                     if g.delimiter() == Delimiter::Brace {
                         self.extend_last_arg(quote!(&#var.to_string()));
                     } else {
                         if !self.last_arg_str.is_empty() {
-                            abort!(tt, "vector variable can only be used alone");
+                            abort!(span, "vector variable can only be used alone");
                         }
                         self.args.push(ParseArg::ParseArgVec(quote!(#var)));
                     }
                     found_var = true;
                 } else {
-                    abort!(tt, "invalid grouping: extra tokens");
+                    abort!(span, "invalid grouping: extra tokens");
                 }
             }
         } else {
