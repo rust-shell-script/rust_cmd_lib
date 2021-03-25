@@ -320,15 +320,13 @@ impl Lexer {
             } else {
                 abort!(span, "invalid punctuation");
             }
+        } else if self.last_redirect.is_some() {
+            abort!(
+                iter.span(),
+                "wrong redirection format: no spacing permitted before '&'"
+            );
         } else {
-            if self.last_redirect.is_some() {
-                abort!(
-                    iter.span(),
-                    "wrong redirection format: no spacing permitted before '&'"
-                );
-            } else {
-                abort!(iter.span(), "invalid token after '&'");
-            }
+            abort!(iter.span(), "invalid token after '&'");
         }
     }
 
