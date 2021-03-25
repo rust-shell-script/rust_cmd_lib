@@ -101,7 +101,7 @@ impl GroupCmds {
 }
 
 enum ProcHandle {
-    ProcChild(Child),         // for normal commands
+    ProcChild(Option<Child>), // for normal commands
     ProcBuf(Option<Vec<u8>>), // for builtin/custom commands
 }
 
@@ -111,13 +111,15 @@ impl WaitCmd {
         // wait last process result
         let (handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
         match handle {
-            ProcHandle::ProcChild(mut child) => {
-                let status = child.wait()?;
-                if !status.success() {
-                    return Err(Cmds::status_to_io_error(
-                        status,
-                        &format!("{} exited with error", cmd),
-                    ));
+            ProcHandle::ProcChild(child_opt) => {
+                if let Some(mut child) = child_opt {
+                    let status = child.wait()?;
+                    if !status.success() {
+                        return Err(Cmds::status_to_io_error(
+                            status,
+                            &format!("{} exited with error", cmd),
+                        ));
+                    }
                 }
             }
             ProcHandle::ProcBuf(mut ss) => {
@@ -132,33 +134,38 @@ impl WaitCmd {
 
 pub struct WaitFun(Vec<ProcHandle>, Vec<String>);
 impl WaitFun {
-    pub fn wait_result(&mut self) -> FunResult {
-        let mut ret = String::new();
-        // wait last process result
-        let (handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
+    fn wait_output(handle: &mut ProcHandle, cmd: &str) -> std::io::Result<Vec<u8>> {
         match handle {
-            ProcHandle::ProcChild(child) => {
-                let output = child.wait_with_output()?;
-                if !output.status.success() {
-                    return Err(Cmds::status_to_io_error(
-                        output.status,
-                        &format!("{} exited with error", cmd),
-                    ));
-                } else {
-                    ret = String::from_utf8_lossy(&output.stdout).to_string();
+            ProcHandle::ProcChild(child_opt) => {
+                if let Some(child) = child_opt.take() {
+                    let output = child.wait_with_output()?;
+                    if !output.status.success() {
+                        return Err(Cmds::status_to_io_error(
+                            output.status,
+                            &format!("{} exited with error", cmd),
+                        ));
+                    } else {
+                        return Ok(output.stdout);
+                    }
                 }
             }
-            ProcHandle::ProcBuf(mut ss) => {
+            ProcHandle::ProcBuf(ss) => {
                 if let Some(s) = ss.take() {
-                    ret = String::from_utf8_lossy(&s).to_string();
+                    return Ok(s);
                 }
             }
         }
+        Ok(vec![])
+    }
 
-        Cmds::wait_children(&mut self.0, &mut self.1)?;
+    pub fn wait_result(&mut self) -> FunResult {
+        // wait last process result
+        let (mut handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
+        let mut ret = String::from_utf8_lossy(&Self::wait_output(&mut handle, &cmd)?).to_string();
         if ret.ends_with('\n') {
             ret.pop();
         }
+        Cmds::wait_children(&mut self.0, &mut self.1)?;
         Ok(ret)
     }
 }
@@ -217,7 +224,7 @@ impl Cmds {
         for (i, cmd) in self.pipes.iter_mut().enumerate() {
             if i != 0 {
                 let mut stdin_setup_done = false;
-                if let ProcHandle::ProcChild(child) = &mut children[i - 1] {
+                if let ProcHandle::ProcChild(Some(child)) = &mut children[i - 1] {
                     if let Some(output) = child.stdout.take() {
                         cmd.stdin(output);
                         stdin_setup_done = true;
@@ -248,6 +255,12 @@ impl Cmds {
                 children.push(ProcHandle::ProcBuf(None));
             } else if in_cmd_map {
                 let mut io = CmdStdio::default();
+                if i != 0 {
+                    io.inbuf = WaitFun::wait_output(
+                        &mut children[i - 1],
+                        &self.cmd_args[i - 1].get_args().join(" "),
+                    )?;
+                }
                 let internal_cmd = CMD_MAP.lock().unwrap()[command];
                 internal_cmd(args, envs, &mut io)?;
                 if let Some((path, append)) = self.cmd_args[i].get_stderr_redirect() {
@@ -275,7 +288,7 @@ impl Cmds {
                         }
                     }
                 }
-                children.push(ProcHandle::ProcChild(child));
+                children.push(ProcHandle::ProcChild(Some(child)));
             }
         }
 
@@ -296,7 +309,7 @@ impl Cmds {
     fn wait_children(children: &mut Vec<ProcHandle>, cmds: &mut Vec<String>) -> CmdResult {
         while !children.is_empty() {
             let (child_handle, cmd) = (children.pop().unwrap(), cmds.pop().unwrap());
-            if let ProcHandle::ProcChild(mut child) = child_handle {
+            if let ProcHandle::ProcChild(Some(mut child)) = child_handle {
                 let status = child.wait()?;
                 if !status.success() && std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into()) {
                     return Err(Self::status_to_io_error(
