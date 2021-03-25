@@ -11,34 +11,18 @@ enum SepToken {
     Pipe,
 }
 
-#[derive(PartialEq, Debug)]
 enum RedirectFd {
     Stdin,
     Stdout { append: bool },
     Stderr { append: bool },
     StdoutErr { append: bool },
 }
-impl RedirectFd {
-    fn get_id(&self) -> i32 {
-        match self {
-            Self::Stdin => 0,
-            Self::Stdout { append: _ } => 1,
-            Self::Stderr { append: _ } | Self::StdoutErr { append: _ } => 2,
-        }
-    }
-
-    fn get_append(&self) -> bool {
-        self == &Self::Stdout { append: true }
-            || self == &Self::Stderr { append: true }
-            || self == &Self::StdoutErr { append: true }
-    }
-}
 
 #[derive(Default)]
 pub struct Lexer {
     args: Vec<ParseArg>,
     last_arg_str: TokenStream,
-    last_redirect: Option<RedirectFd>,
+    last_redirect: Option<(RedirectFd, Span)>,
 }
 impl Lexer {
     pub fn scan(mut self, input: TokenStream) -> Parser {
@@ -89,20 +73,31 @@ impl Lexer {
     }
 
     fn add_arg_with_token(&mut self, token: SepToken) {
-        if let Some(ref fd) = self.last_redirect {
-            let fd_id = fd.get_id();
-            let fd_append = fd.get_append();
+        if let Some((redirect, span)) = self.last_redirect.take() {
+            if self.last_arg_str.is_empty() {
+                abort!(span, "wrong redirection format: missing target");
+            }
+
+            let mut stdouterr = false;
+            let (fd, append) = match redirect {
+                RedirectFd::Stdin => (0, false),
+                RedirectFd::Stdout { append } => (1, append),
+                RedirectFd::Stderr { append } => (2, append),
+                RedirectFd::StdoutErr { append } => {
+                    stdouterr = true;
+                    (2, append)
+                }
+            };
             let last_arg_str = &self.last_arg_str;
             self.args.push(ParseArg::ParseRedirectFile(
-                fd_id,
+                fd,
                 quote!(#last_arg_str),
-                fd_append,
+                append,
             ));
-            if let RedirectFd::StdoutErr { append: _ } = fd {
+            if stdouterr {
                 self.args
                     .push(ParseArg::ParseRedirectFile(1, quote!(#last_arg_str), true));
             }
-            self.last_redirect = None;
         } else if !self.last_arg_str.is_empty() {
             let last_arg_str = &self.last_arg_str;
             let last_arg = ParseArg::ParseArgStr(quote!(#last_arg_str));
@@ -126,19 +121,9 @@ impl Lexer {
 
     fn set_redirect(&mut self, span: Span, fd: RedirectFd) {
         if self.last_redirect.is_some() {
-            abort!(span, "wrong redirection format");
+            abort!(span, "wrong double redirection format");
         }
-        self.last_redirect = Some(fd);
-    }
-
-    fn add_fd_redirect_arg(&mut self, new_fd: i32) {
-        if let Some(ref fd) = self.last_redirect {
-            if !fd.get_append() {
-                self.args
-                    .push(ParseArg::ParseRedirectFd(fd.get_id(), new_fd));
-                self.last_redirect = None;
-            }
-        }
+        self.last_redirect = Some((fd, span));
     }
 
     fn scan_literal(
@@ -208,20 +193,20 @@ impl Lexer {
         iter: &mut TokenStreamPeekable<impl Iterator<Item = TokenTree>>,
         fd: i32,
     ) {
+        let append = Self::check_append(iter);
         self.set_redirect(
             iter.span(),
             if fd == 1 {
-                RedirectFd::Stdout {
-                    append: Self::check_append(iter),
-                }
+                RedirectFd::Stdout { append }
             } else {
-                RedirectFd::Stderr {
-                    append: Self::check_append(iter),
-                }
+                RedirectFd::Stderr { append }
             },
         );
         if let Some(TokenTree::Punct(p)) = iter.peek_no_gap() {
             if p.as_char() == '&' {
+                if append {
+                    abort!(p.span(), "raw fd not allowed for append redirection");
+                }
                 iter.next();
                 if let Some(TokenTree::Literal(lit)) = iter.peek_no_gap() {
                     let s = lit.to_string();
@@ -229,12 +214,13 @@ impl Lexer {
                         abort!(lit.span(), "invalid literal string after &");
                     }
                     if &s == "1" {
-                        self.add_fd_redirect_arg(1);
+                        self.args.push(ParseArg::ParseRedirectFd(fd, 1));
                     } else if &s == "2" {
-                        self.add_fd_redirect_arg(2);
+                        self.args.push(ParseArg::ParseRedirectFd(fd, 2));
                     } else {
                         abort!(lit.span(), "Only &1 or &2 is supported");
                     }
+                    self.last_redirect = None;
                     iter.next();
                 } else {
                     abort!(iter.span(), "expect &1 or &2");
@@ -258,7 +244,14 @@ impl Lexer {
                 abort!(span, "invalid punctuation");
             }
         } else {
-            abort!(iter.span(), "invalid token after '&'");
+            if self.last_redirect.is_some() {
+                abort!(
+                    iter.span(),
+                    "wrong redirection format: no spacing permitted before '&'"
+                );
+            } else {
+                abort!(iter.span(), "invalid token after '&'");
+            }
         }
     }
 
