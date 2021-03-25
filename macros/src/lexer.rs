@@ -131,16 +131,14 @@ impl Lexer {
         self.last_redirect = Some(fd);
     }
 
-    fn add_fd_redirect_arg(&mut self, span: Span, new_fd: i32) {
+    fn add_fd_redirect_arg(&mut self, new_fd: i32) {
         if let Some(ref fd) = self.last_redirect {
             if !fd.get_append() {
                 self.args
                     .push(ParseArg::ParseRedirectFd(fd.get_id(), new_fd));
                 self.last_redirect = None;
-                return;
             }
         }
-        abort!(span, "invalid token");
     }
 
     fn scan_literal(
@@ -231,9 +229,9 @@ impl Lexer {
                         abort!(lit.span(), "invalid literal string after &");
                     }
                     if &s == "1" {
-                        self.add_fd_redirect_arg(lit.span(), 1);
+                        self.add_fd_redirect_arg(1);
                     } else if &s == "2" {
-                        self.add_fd_redirect_arg(lit.span(), 2);
+                        self.add_fd_redirect_arg(2);
                     } else {
                         abort!(lit.span(), "Only &1 or &2 is supported");
                     }
