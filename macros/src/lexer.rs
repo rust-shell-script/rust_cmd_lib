@@ -14,21 +14,23 @@ enum SepToken {
 #[derive(PartialEq, Debug)]
 enum RedirectFd {
     Stdin,
-    Stdout(bool),    // append?
-    Stderr(bool),    // append?
-    StdoutErr(bool), // append?
+    Stdout { append: bool },
+    Stderr { append: bool },
+    StdoutErr { append: bool },
 }
 impl RedirectFd {
     fn get_id(&self) -> i32 {
         match self {
             Self::Stdin => 0,
-            Self::Stdout(_) => 1,
-            Self::Stderr(_) | Self::StdoutErr(_) => 2,
+            Self::Stdout { append: _ } => 1,
+            Self::Stderr { append: _ } | Self::StdoutErr { append: _ } => 2,
         }
     }
 
     fn get_append(&self) -> bool {
-        self == &Self::Stdout(true) || self == &Self::Stderr(true) || self == &Self::StdoutErr(true)
+        self == &Self::Stdout { append: true }
+            || self == &Self::Stderr { append: true }
+            || self == &Self::StdoutErr { append: true }
     }
 }
 
@@ -96,7 +98,7 @@ impl Lexer {
                 quote!(#last_arg_str),
                 fd_append,
             ));
-            if let RedirectFd::StdoutErr(_) = fd {
+            if let RedirectFd::StdoutErr { append: _ } = fd {
                 self.args
                     .push(ParseArg::ParseRedirectFile(1, quote!(#last_arg_str), true));
             }
@@ -211,9 +213,13 @@ impl Lexer {
         self.set_redirect(
             iter.span(),
             if fd == 1 {
-                RedirectFd::Stdout(Self::check_append(iter))
+                RedirectFd::Stdout {
+                    append: Self::check_append(iter),
+                }
             } else {
-                RedirectFd::Stderr(Self::check_append(iter))
+                RedirectFd::Stderr {
+                    append: Self::check_append(iter),
+                }
             },
         );
         if let Some(TokenTree::Punct(p)) = iter.peek_no_gap() {
@@ -244,7 +250,12 @@ impl Lexer {
             let span = p.span();
             if p.as_char() == '>' {
                 iter.next();
-                self.set_redirect(span, RedirectFd::StdoutErr(Self::check_append(iter)));
+                self.set_redirect(
+                    span,
+                    RedirectFd::StdoutErr {
+                        append: Self::check_append(iter),
+                    },
+                );
             } else {
                 abort!(span, "invalid punctuation");
             }
