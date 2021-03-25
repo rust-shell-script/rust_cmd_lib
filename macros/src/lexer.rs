@@ -4,13 +4,13 @@ use proc_macro_error::abort;
 use quote::quote;
 use std::iter::Peekable;
 
-// Parse string literal to tokenstream, used by most of the macros
+// Scan string literal to tokenstream, used by most of the macros
 //
 // - support ${var} or $var for interpolation
 //   - to escape '$' itself, use "$$"
 // - support normal rust character escapes:
 //   https://doc.rust-lang.org/reference/tokens.html#ascii-escapes
-pub fn parse_str_lit(lit: &Literal) -> TokenStream {
+pub fn scan_str_lit(lit: &Literal) -> TokenStream {
     let s = lit.to_string();
     if !s.starts_with('\"') {
         return quote!(#lit);
@@ -26,7 +26,7 @@ pub fn parse_str_lit(lit: &Literal) -> TokenStream {
         }
         last_part.push(ch);
     }
-    fn parse_last_part(last_part: &mut String, output: &mut TokenStream) {
+    fn seal_last_part(last_part: &mut String, output: &mut TokenStream) {
         if !last_part.is_empty() {
             last_part.push('"'); // seal it
             let l = syn::parse_str::<Literal>(&last_part).unwrap();
@@ -43,7 +43,7 @@ pub fn parse_str_lit(lit: &Literal) -> TokenStream {
                 continue;
             }
 
-            parse_last_part(&mut last_part, &mut output);
+            seal_last_part(&mut last_part, &mut output);
             let mut with_brace = false;
             if iter.peek() == Some(&'{') {
                 with_brace = true;
@@ -77,7 +77,7 @@ pub fn parse_str_lit(lit: &Literal) -> TokenStream {
             extend_last_part(&mut last_part, ch);
         }
     }
-    parse_last_part(&mut last_part, &mut output);
+    seal_last_part(&mut last_part, &mut output);
     output
 }
 
@@ -211,7 +211,7 @@ impl Lexer {
         let s = lit.to_string();
         if s.starts_with('\"') || s.starts_with('r') {
             // string literal
-            self.extend_last_arg(parse_str_lit(&lit));
+            self.extend_last_arg(scan_str_lit(&lit));
         } else {
             let mut is_redirect = false;
             if s == "1" || s == "2" {
