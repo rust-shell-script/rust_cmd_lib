@@ -11,7 +11,7 @@ enum SepToken {
     Pipe,
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Debug)]
 enum RedirectFd {
     Stdin,
     Stdout(bool),    // append?
@@ -87,10 +87,10 @@ impl Lexer {
     }
 
     fn add_arg_with_token(&mut self, token: SepToken) {
-        if let Some(fd) = self.last_redirect.clone() {
-            let last_arg_str = self.last_arg_str.clone();
+        if let Some(ref fd) = self.last_redirect {
             let fd_id = fd.get_id();
             let fd_append = fd.get_append();
+            let last_arg_str = &self.last_arg_str;
             self.args.push(ParseArg::ParseRedirectFile(
                 fd_id,
                 quote!(#last_arg_str),
@@ -102,7 +102,7 @@ impl Lexer {
             }
             self.last_redirect = None;
         } else if !self.last_arg_str.is_empty() {
-            let last_arg_str = self.last_arg_str.clone();
+            let last_arg_str = &self.last_arg_str;
             let last_arg = ParseArg::ParseArgStr(quote!(#last_arg_str));
             self.args.push(last_arg);
         }
@@ -130,7 +130,7 @@ impl Lexer {
     }
 
     fn add_fd_redirect_arg(&mut self, span: Span, new_fd: i32) {
-        if let Some(fd) = self.last_redirect.clone() {
+        if let Some(ref fd) = self.last_redirect {
             if !fd.get_append() {
                 self.args
                     .push(ParseArg::ParseRedirectFd(fd.get_id(), new_fd));
@@ -327,12 +327,10 @@ impl Lexer {
 
         while let Some(ch) = iter.next() {
             if ch == '$' {
-                if let Some(&pc) = iter.peek() {
-                    if pc == '$' {
-                        extend_last_part(&mut last_part, pc);
-                        iter.next();
-                        continue;
-                    }
+                if iter.peek() == Some(&'$') {
+                    iter.next();
+                    extend_last_part(&mut last_part, '$');
+                    continue;
                 }
 
                 parse_last_part(&mut last_part, &mut output);
