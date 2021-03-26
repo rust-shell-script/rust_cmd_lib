@@ -8,10 +8,10 @@
 //      Running `target/debug/examples/dd_test -b 4096 -f /dev/nvme0n1 -t 4`
 // Dropping caches at first
 // Running with thread_num: 4, block_size: 4096
-// thread 1 bandwidth: 286MB/s
-// thread 3 bandwidth: 269MB/s
-// thread 2 bandwidth: 267MB/s
-// thread 0 bandwidth: 265MB/s
+// thread 1 bandwidth: 286 MB/s
+// thread 3 bandwidth: 269 MB/s
+// thread 2 bandwidth: 267 MB/s
+// thread 0 bandwidth: 265 MB/s
 // Total bandwidth: 1.01 GiB/s
 use byte_unit::Byte;
 use cmd_lib::*;
@@ -51,10 +51,10 @@ fn main() -> CmdResult {
         let off = cnt * i;
         let bandwidth = run_fun!(
             sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
-            | awk r"/copied/{print $10 $11}" | cut -d / -f1
+            | awk r#"/copied/{print $(NF-1) " " $NF}"#
         )
         .unwrap();
-        cmd_info!("thread $i bandwidth: ${bandwidth}/s");
+        cmd_info!("thread $i bandwidth: $bandwidth");
     });
     let total_bandwidth =
         Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128).get_appropriate_unit(true);
