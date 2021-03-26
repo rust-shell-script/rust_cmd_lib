@@ -114,18 +114,31 @@ impl WaitCmd {
         match handle {
             ProcHandle::ProcChild(child_opt) => {
                 if let Some(mut child) = child_opt {
-                    let status = child.wait()?;
-                    if !status.success() {
-                        return Err(Cmds::status_to_io_error(
-                            status,
-                            &format!("{} exited with error", cmd),
-                        ));
+                    let status_result = child.wait();
+                    match status_result {
+                        Err(e) => {
+                            let _ = Cmds::wait_children(&mut self.0, &mut self.1);
+                            return Err(e);
+                        }
+                        Ok(status) => {
+                            if !status.success() {
+                                let _ = Cmds::wait_children(&mut self.0, &mut self.1);
+                                return Err(Cmds::status_to_io_error(
+                                    status,
+                                    &format!("{} exited with error", cmd),
+                                ));
+                            }
+                        }
                     }
                 }
             }
             ProcHandle::ProcBuf(mut ss) => {
                 if let Some(s) = ss.take() {
-                    std::io::stdout().write_all(&s)?;
+                    let result = std::io::stdout().write_all(&s);
+                    if let Err(e) = result {
+                        let _ = Cmds::wait_children(&mut self.0, &mut self.1);
+                        return Err(e);
+                    }
                 }
             }
         }
@@ -159,15 +172,40 @@ impl WaitFun {
         Ok(vec![])
     }
 
+    pub fn wait_raw_result(&mut self) -> std::io::Result<Vec<u8>> {
+        let (mut handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
+        let wait_last = Self::wait_output(&mut handle, &cmd);
+        let _ = Cmds::wait_children(&mut self.0, &mut self.1);
+        match wait_last {
+            Err(e) => {
+                let _ = Cmds::wait_children(&mut self.0, &mut self.1);
+                Err(e)
+            }
+            Ok(output) => {
+                Cmds::wait_children(&mut self.0, &mut self.1)?;
+                Ok(output)
+            }
+        }
+    }
+
     pub fn wait_result(&mut self) -> FunResult {
         // wait last process result
         let (mut handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
-        let mut ret = String::from_utf8_lossy(&Self::wait_output(&mut handle, &cmd)?).to_string();
-        if ret.ends_with('\n') {
-            ret.pop();
+        let wait_last = Self::wait_output(&mut handle, &cmd);
+        match wait_last {
+            Err(e) => {
+                let _ = Cmds::wait_children(&mut self.0, &mut self.1);
+                Err(e)
+            }
+            Ok(output) => {
+                let mut ret = String::from_utf8_lossy(&output).to_string();
+                if ret.ends_with('\n') {
+                    ret.pop();
+                }
+                Cmds::wait_children(&mut self.0, &mut self.1)?;
+                Ok(ret)
+            }
         }
-        Cmds::wait_children(&mut self.0, &mut self.1)?;
-        Ok(ret)
     }
 }
 
