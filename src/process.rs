@@ -175,7 +175,6 @@ impl WaitFun {
     pub fn wait_raw_result(&mut self) -> std::io::Result<Vec<u8>> {
         let (mut handle, cmd) = (self.0.pop().unwrap(), self.1.pop().unwrap());
         let wait_last = Self::wait_output(&mut handle, &cmd);
-        let _ = Cmds::wait_children(&mut self.0, &mut self.1);
         match wait_last {
             Err(e) => {
                 let _ = Cmds::wait_children(&mut self.0, &mut self.1);
