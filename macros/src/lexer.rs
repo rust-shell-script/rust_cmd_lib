@@ -71,7 +71,7 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
                 let var = syn::parse_str::<Ident>(&var).unwrap();
                 output.extend(quote!(+ &#var.to_string()));
             } else {
-                output.extend(quote!(+ &'$'.to_string()));
+                output.extend(quote!(+ "$"));
             }
         } else {
             extend_last_part(&mut last_part, ch);
@@ -118,7 +118,7 @@ impl Lexer {
                 }
                 TokenTree::Ident(ident) => {
                     let s = ident.to_string();
-                    self.extend_last_arg(quote!(&#s));
+                    self.extend_last_arg(quote!(#s));
                 }
                 TokenTree::Punct(punct) => {
                     let ch = punct.as_char();
@@ -136,7 +136,8 @@ impl Lexer {
                     } else if ch == '$' {
                         self.scan_dollar(&mut iter);
                     } else {
-                        self.extend_last_arg(quote!(&#ch.to_string()));
+                        let s = ch.to_string();
+                        self.extend_last_arg(quote!(#s));
                     }
                 }
             }
@@ -224,7 +225,7 @@ impl Lexer {
                 }
             }
             if !is_redirect {
-                self.extend_last_arg(quote!(&#lit.to_string()));
+                self.extend_last_arg(quote!(#s));
             }
         }
     }
