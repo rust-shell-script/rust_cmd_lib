@@ -246,7 +246,7 @@ impl Lexer {
         // expect new command
         match iter.peek() {
             Some(TokenTree::Punct(np)) => {
-                if np.as_char() == '|' {
+                if np.as_char() == '|' || np.as_char() == ';' {
                     abort!(np.span(), "expect new command after '|'");
                 }
             }
