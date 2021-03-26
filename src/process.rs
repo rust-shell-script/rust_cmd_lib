@@ -2,7 +2,7 @@ use crate::{builtin_true, CmdResult, FunResult};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fmt;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
@@ -225,7 +225,7 @@ impl Cmds {
         let mut children: Vec<ProcHandle> = Vec::new();
         // spawning all the sub-processes
         for (i, cmd_opt) in self.pipes.iter_mut().enumerate() {
-            // check commands defined in CMD_MAP
+            self.cmd_args[i].setup_redirects(cmd_opt)?;
             let args = self.cmd_args[i].get_args().clone();
             let envs = self.cmd_args[i].get_envs().clone();
             let command = if args.is_empty() {
@@ -233,6 +233,7 @@ impl Cmds {
             } else {
                 args[0].as_str()
             };
+            // check commands defined in CMD_MAP
             let in_cmd_map = CMD_MAP.lock().unwrap().contains_key(command);
 
             if i != 0 && !in_cmd_map {
@@ -282,12 +283,12 @@ impl Cmds {
                 let internal_cmd = CMD_MAP.lock().unwrap()[command];
                 internal_cmd(args, envs, &mut io)?;
                 if let Some((path, append)) = self.cmd_args[i].get_stderr_redirect() {
-                    Cmd::open_file(path, *append).write_all(&io.errbuf)?;
+                    Cmd::open_file(path, *append)?.write_all(&io.errbuf)?;
                 } else {
                     std::io::stderr().write_all(&io.errbuf)?;
                 }
                 if let Some((path, append)) = self.cmd_args[i].get_stdout_redirect() {
-                    Cmd::open_file(path, *append).write_all(&io.outbuf)?;
+                    Cmd::open_file(path, *append)?.write_all(&io.outbuf)?;
                     children.push(ProcHandle::ProcBuf(None));
                 } else {
                     children.push(ProcHandle::ProcBuf(Some(io.outbuf)));
@@ -483,7 +484,7 @@ impl Cmd {
     fn gen_command(&mut self) -> Option<Command> {
         let in_cmd_map =
             self.args.is_empty() || CMD_MAP.lock().unwrap().contains_key(self.args[0].as_str());
-        let mut cmd_opt = if in_cmd_map {
+        if in_cmd_map {
             None
         } else {
             let cmd_args: Vec<String> = self.get_args().to_vec();
@@ -491,22 +492,19 @@ impl Cmd {
             cmd.args(&cmd_args[1..]);
             cmd.stdout(Stdio::piped());
             Some(cmd)
-        };
-        self.setup_redirects(&mut cmd_opt);
-        cmd_opt
+        }
     }
 
-    fn open_file(path: &str, append: bool) -> std::fs::File {
+    fn open_file(path: &str, append: bool) -> std::io::Result<File> {
         OpenOptions::new()
             .create(true)
             .truncate(!append)
             .write(true)
             .append(append)
             .open(path)
-            .unwrap()
     }
 
-    fn setup_redirects(&mut self, cmd_opt: &mut Option<Command>) {
+    fn setup_redirects(&mut self, cmd_opt: &mut Option<Command>) -> CmdResult {
         let mut stdout_file = "/dev/stdout";
         let mut stderr_file = "/dev/stderr";
         for redirect in self.redirects.iter() {
@@ -516,7 +514,7 @@ impl Cmd {
                         if path == "/dev/null" {
                             cmd.stdin(Stdio::null());
                         } else {
-                            let file = OpenOptions::new().read(true).open(path).unwrap();
+                            let file = OpenOptions::new().read(true).open(path)?;
                             cmd.stdin(file);
                         }
                     }
@@ -524,13 +522,13 @@ impl Cmd {
                 }
                 Redirect::StdoutToStderr => {
                     if let Some(cmd) = cmd_opt {
-                        cmd.stdout(Self::open_file(stderr_file, true));
+                        cmd.stdout(Self::open_file(stderr_file, true)?);
                     }
                     self.stdout_redirect = Some(("/dev/stderr".into(), false));
                 }
                 Redirect::StderrToStdout => {
                     if let Some(cmd) = cmd_opt {
-                        cmd.stderr(Self::open_file(stdout_file, true));
+                        cmd.stderr(Self::open_file(stdout_file, true)?);
                     }
                     self.stderr_redirect = Some(("/dev/stdout".into(), false));
                 }
@@ -539,7 +537,7 @@ impl Cmd {
                         if path == "/dev/null" {
                             cmd.stdout(Stdio::null());
                         } else {
-                            cmd.stdout(Self::open_file(path, *append));
+                            cmd.stdout(Self::open_file(path, *append)?);
                             stdout_file = path;
                         }
                     }
@@ -550,7 +548,7 @@ impl Cmd {
                         if path == "/dev/null" {
                             cmd.stderr(Stdio::null());
                         } else {
-                            cmd.stderr(Self::open_file(path, *append));
+                            cmd.stderr(Self::open_file(path, *append)?);
                             stderr_file = path;
                         }
                     }
@@ -558,6 +556,7 @@ impl Cmd {
                 }
             }
         }
+        Ok(())
     }
 }
 
