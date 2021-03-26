@@ -218,7 +218,7 @@ impl Lexer {
                 if let Some(TokenTree::Punct(ref p)) = iter.peek_no_gap() {
                     if p.as_char() == '>' {
                         iter.next();
-                        self.scan_redirect_out(iter, s.parse().unwrap());
+                        self.scan_redirect_out(iter, if s == "1" { 1 } else { 2 });
                         is_redirect = true;
                     }
                 }
