@@ -97,30 +97,23 @@ impl Parser {
         while *i < self.args.len() {
             match self.args[*i].clone() {
                 ParseRedirectFd(fd1, fd2) => {
-                    if fd1 == fd2 {
-                        *i += 1;
-                        continue;
+                    if fd1 != fd2 {
+                        let mut redirect = quote!(::cmd_lib::Redirect);
+                        match (fd1, fd2) {
+                            (1, 2) => redirect.extend(quote!(::StdoutToStderr)),
+                            (2, 1) => redirect.extend(quote!(::StderrToStdout)),
+                            _ => panic!("unsupported fd numbers: {} {}", fd1, fd2),
+                        }
+                        ret.extend(quote!(.add_redirect(#redirect)));
                     }
-                    let mut redirect = quote!(::cmd_lib::Redirect);
-                    if fd1 == 1 && fd2 == 2 {
-                        redirect.extend(quote!(::StdoutToStderr));
-                    } else if fd1 == 2 && fd2 == 1 {
-                        redirect.extend(quote!(::StderrToStdout));
-                    } else {
-                        panic!("unsupported fd numbers: {} {}", fd1, fd2);
-                    }
-                    ret.extend(quote!(.add_redirect(#redirect)));
                 }
                 ParseRedirectFile(fd1, file, append) => {
                     let mut redirect = quote!(::cmd_lib::Redirect);
-                    if fd1 == 0 {
-                        redirect.extend(quote!(::FileToStdin(#file)));
-                    } else if fd1 == 1 {
-                        redirect.extend(quote!(::StdoutToFile(#file, #append)));
-                    } else if fd1 == 2 {
-                        redirect.extend(quote!(::StderrToFile(#file, #append)));
-                    } else {
-                        panic!("unsupported fd ({}) redirect to file {}", fd1, file);
+                    match fd1 {
+                        0 => redirect.extend(quote!(::FileToStdin(#file))),
+                        1 => redirect.extend(quote!(::StdoutToFile(#file, #append))),
+                        2 => redirect.extend(quote!(::StderrToFile(#file, #append))),
+                        _ => panic!("unsupported fd ({}) redirect to file {}", fd1, file),
                     }
                     ret.extend(quote!(.add_redirect(#redirect)));
                 }
