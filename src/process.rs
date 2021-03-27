@@ -261,6 +261,7 @@ impl Cmds {
 
         let len = self.cmds.len();
         let mut children: Vec<ProcHandle> = Vec::new();
+        let mut cmds: Vec<String> = Vec::new();
         // spawning all the sub-processes
         for i in 0..len {
             let cur_cmd = &mut self.cmds[i];
@@ -303,24 +304,24 @@ impl Cmds {
                 } else {
                     io.inbuf = WaitFun::wait_output(
                         &mut children[i - 1],
-                        &self.cmds[i - 1].get_args().join(" ").clone(),
+                        &cmds[i - 1],
                     )?;
                 }
                 let internal_cmd = CMD_MAP.lock().unwrap()[arg0.as_str()];
                 internal_cmd(args, envs, &mut io)?;
-                if let Some((path, append)) = self.cmds[i].get_stderr_redirect() {
+                if let Some((path, append)) = cur_cmd.get_stderr_redirect() {
                     Cmd::open_file(path, *append)?.write_all(&io.errbuf)?;
                 } else {
                     std::io::stderr().write_all(&io.errbuf)?;
                 }
-                if let Some((path, append)) = self.cmds[i].get_stdout_redirect() {
+                if let Some((path, append)) = cur_cmd.get_stdout_redirect() {
                     Cmd::open_file(path, *append)?.write_all(&io.outbuf)?;
                     children.push(ProcHandle::ProcBuf(None));
                 } else {
                     children.push(ProcHandle::ProcBuf(Some(io.outbuf)));
                 }
             } else {
-                if i == len - 1 && !for_fun && self.cmds[i].get_stdout_redirect().is_none() {
+                if i == len - 1 && !for_fun && cur_cmd.get_stdout_redirect().is_none() {
                     if let Some(cmd) = cmd_opt.as_mut() {
                         cmd.stdout(Stdio::inherit());
                     }
@@ -337,12 +338,10 @@ impl Cmds {
                 }
                 children.push(ProcHandle::ProcChild(Some(child)));
             }
+            cmds.push(cur_cmd.get_args().join(" ").clone());
         }
 
-        Ok(WaitCmd(
-            children,
-            self.cmds.iter().map(|c| c.get_args().join(" ")).collect(),
-        ))
+        Ok(WaitCmd(children, cmds))
     }
 
     fn spawn_with_output(&mut self, current_dir: &mut String) -> std::io::Result<WaitFun> {
