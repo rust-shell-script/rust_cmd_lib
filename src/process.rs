@@ -229,27 +229,11 @@ impl Cmds {
     }
 
     fn get_full_cmd(&self) -> String {
-        let mut ret = String::new();
-        for cmd_arg in self.cmd_args.iter() {
-            if !ret.is_empty() {
-                ret += " | ";
-            }
-            ret += &format!("{:?}", cmd_arg.get_args());
-            let mut extra = String::new();
-            if !cmd_arg.get_envs().is_empty() {
-                extra += &format!("envs: {:?}", cmd_arg.get_envs());
-            }
-            if !cmd_arg.get_redirects().is_empty() {
-                if !extra.is_empty() {
-                    extra += ", ";
-                }
-                extra += &format!("redirects: {:?}", cmd_arg.get_redirects());
-            }
-            if !extra.is_empty() {
-                ret += &format!(" ({})", extra);
-            }
-        }
-        ret
+        self.cmd_args
+            .iter()
+            .map(|cmd| cmd.debug_str())
+            .collect::<Vec<String>>()
+            .join(" | ")
     }
 
     fn spawn(&mut self, current_dir: &mut String, for_fun: bool) -> std::io::Result<WaitCmd> {
@@ -490,6 +474,25 @@ impl Cmd {
         &self.envs
     }
 
+    fn debug_str(&self) -> String {
+        let mut ret = String::new();
+        ret += &format!("{:?}", self.args);
+        let mut extra = String::new();
+        if !self.envs.is_empty() {
+            extra += &format!("envs: {:?}", self.envs);
+        }
+        if !self.redirects.is_empty() {
+            if !extra.is_empty() {
+                extra += ", ";
+            }
+            extra += &format!("redirects: {:?}", self.redirects);
+        }
+        if !extra.is_empty() {
+            ret += &format!(" ({})", extra);
+        }
+        ret
+    }
+
     pub fn add_redirect(mut self, redirect: Redirect) -> Self {
         self.redirects.push(redirect);
         self
@@ -505,10 +508,6 @@ impl Cmd {
 
     fn get_stderr_redirect(&self) -> &Option<(String, bool)> {
         &self.stderr_redirect
-    }
-
-    fn get_redirects(&self) -> &Vec<Redirect> {
-        &self.redirects
     }
 
     fn gen_command(&mut self) -> Option<Command> {
