@@ -213,7 +213,6 @@ impl WaitFun {
 pub struct Cmds {
     pipes: Vec<Option<Command>>,
     cmd_args: Vec<Cmd>,
-    current_dir: String,
 }
 
 impl Cmds {
@@ -290,20 +289,14 @@ impl Cmds {
                 }
             }
 
-            // inherit outside current_dir setting
-            if self.current_dir.is_empty() {
-                self.current_dir = current_dir.clone();
-            }
-            // update current_dir for current process
-            if !self.current_dir.is_empty() {
-                if let Some(cmd) = cmd_opt {
-                    cmd.current_dir(self.current_dir.clone());
+            if let Some(cmd) = cmd_opt {
+                if !current_dir.is_empty() {
+                    cmd.current_dir(current_dir.clone());
                 }
             }
 
             if command == "cd" {
-                Self::run_cd_cmd(&args, &mut self.current_dir)?;
-                *current_dir = self.current_dir.clone();
+                Self::run_cd_cmd(&args, current_dir)?;
                 children.push(ProcHandle::ProcBuf(None));
             } else if in_cmd_map {
                 let mut io = CmdStdio::default();
