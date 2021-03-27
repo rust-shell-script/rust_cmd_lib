@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
-use std::io::{Error, ErrorKind, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 
@@ -12,10 +12,24 @@ pub type CmdEnvs = HashMap<String, String>;
 /// IO struct for builtin or custom commands
 #[derive(Default, Debug)]
 pub struct CmdStdio {
-    pub inbuf: Vec<u8>,
-    pub outbuf: Vec<u8>,
-    pub errbuf: Vec<u8>,
+    inbuf: Vec<u8>,
+    outbuf: Vec<u8>,
+    errbuf: Vec<u8>,
 }
+impl CmdStdio {
+    pub fn stdin(&self) -> impl Read + '_ {
+        self.inbuf.as_slice()
+    }
+
+    pub fn stdout(&mut self) -> impl Write + '_ {
+        &mut self.outbuf
+    }
+
+    pub fn stderr(&mut self) -> impl Write + '_ {
+        &mut self.errbuf
+    }
+}
+
 type FnFun = fn(CmdArgs, CmdEnvs, &mut CmdStdio) -> CmdResult;
 
 lazy_static! {

@@ -1,5 +1,5 @@
 use crate::{CmdArgs, CmdEnvs, CmdResult, CmdStdio};
-use std::io::Write;
+use std::io::{Read, Write};
 
 #[doc(hidden)]
 pub fn builtin_true(_args: CmdArgs, _envs: CmdEnvs, _io: &mut CmdStdio) -> CmdResult {
@@ -9,41 +9,42 @@ pub fn builtin_true(_args: CmdArgs, _envs: CmdEnvs, _io: &mut CmdStdio) -> CmdRe
 #[doc(hidden)]
 pub fn builtin_echo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
     let msg = args[1..].join(" ");
-    writeln!(io.outbuf, "{}", msg)
+    writeln!(io.stdout(), "{}", msg)
 }
 
 #[doc(hidden)]
 pub fn builtin_info(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
     let msg = args[1..].join(" ");
-    writeln!(io.errbuf, "{}", msg)
+    writeln!(io.stderr(), "{}", msg)
 }
 
 #[doc(hidden)]
 pub fn builtin_warn(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
     let msg = format!("WARNING: {}", args[1..].join(" "));
-    writeln!(io.errbuf, "{}", msg)
+    writeln!(io.stderr(), "{}", msg)
 }
 
 #[doc(hidden)]
 pub fn builtin_err(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
     let msg = format!("ERROR: {}", args[1..].join(" "));
-    writeln!(io.errbuf, "{}", msg)
+    writeln!(io.stderr(), "{}", msg)
 }
 
 #[doc(hidden)]
 pub fn builtin_die(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
     let msg = format!("FATAL: {}", args[1..].join(" "));
-    writeln!(io.errbuf, "{}", msg)
+    writeln!(io.stderr(), "{}", msg)
 }
 
 #[doc(hidden)]
 pub fn builtin_cat(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
     if args.len() == 1 {
-        std::mem::swap(&mut io.inbuf, &mut io.outbuf);
-        io.inbuf.clear();
+        let mut buf = vec![];
+        io.stdin().read_to_end(&mut buf)?;
+        io.stdout().write_all(&buf)?;
         return Ok(());
     }
 
-    io.outbuf = std::fs::read(&args[1])?;
+    io.stdout().write_all(&std::fs::read(&args[1])?)?;
     Ok(())
 }

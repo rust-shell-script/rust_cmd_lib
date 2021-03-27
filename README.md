@@ -194,8 +194,8 @@ Declare your function with `export_cmd` attribute, and import it with `use_custo
 #[export_cmd(my_cmd)]
 fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
     let msg = format!("msg from foo(), args: {:?}", args);
-    writeln!(io.errbuf, "{}", msg)?;
-    writeln!(io.outbuf, "bar")
+    writeln!(io.stderr(), "{}", msg)?;
+    writeln!(io.stdout(), "bar")
 }
 
 use_custom_cmd!(my_cmd);

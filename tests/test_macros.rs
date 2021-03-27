@@ -210,15 +210,15 @@ fn test_export_cmd() {
     #[export_cmd(my_cmd)]
     fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
         let msg = format!("msg from foo(), args: {:?}", args);
-        writeln!(io.errbuf, "{}", msg)?;
-        writeln!(io.outbuf, "bar")
+        writeln!(io.stderr(), "{}", msg)?;
+        writeln!(io.stdout(), "bar")
     }
 
     #[export_cmd(my_cmd2)]
     fn foo2(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
         let msg = format!("msg from foo2(), args: {:?}", args);
-        writeln!(io.errbuf, "{}", msg)?;
-        writeln!(io.outbuf, "bar2")
+        writeln!(io.stderr(), "{}", msg)?;
+        writeln!(io.stdout(), "bar2")
     }
     use_custom_cmd!(my_cmd, my_cmd2);
     assert!(run_cmd!(echo "from" "builtin").is_ok());
@@ -230,7 +230,7 @@ fn test_export_cmd() {
 fn test_escape() {
     let xxx = 42;
     assert_eq!(
-        run_fun!(echo "\"a你好${xxx}世界b\"").unwrap(),
+        run_fun!(/bin/echo "\"a你好${xxx}世界b\"").unwrap(),
         "\"a你好42世界b\""
     );
 }
