@@ -253,15 +253,7 @@ impl Cmds {
             let mut cmd_opt = cur_cmd.get_std_cmd();
             let args = cur_cmd.get_args().clone();
             let envs = cur_cmd.get_envs().clone();
-            let command = if args.is_empty() {
-                ""
-            } else {
-                args[0].as_str()
-            };
-            // check commands defined in CMD_MAP
-            let in_cmd_map = CMD_MAP.lock().unwrap().contains_key(command);
-
-            if i != 0 && !in_cmd_map {
+            if i != 0 && !cur_cmd.in_cmd_map {
                 let mut stdin_setup_done = false;
                 if let ProcHandle::ProcChild(Some(child)) = &mut children[i - 1] {
                     if let Some(output) = child.stdout.take() {
@@ -284,10 +276,11 @@ impl Cmds {
                 }
             }
 
-            if command == "cd" {
+            let arg0 = cur_cmd.get_arg0();
+            if arg0 == "cd" {
                 Self::run_cd_cmd(&args, current_dir)?;
                 children.push(ProcHandle::ProcBuf(None));
-            } else if in_cmd_map {
+            } else if cur_cmd.in_cmd_map {
                 let mut io = CmdStdio::default();
                 if i == 0 {
                     if let Some(path) = cur_cmd.get_stdin_redirect() {
@@ -299,7 +292,7 @@ impl Cmds {
                         &self.cmds[i - 1].get_args().join(" ").clone(),
                     )?;
                 }
-                let internal_cmd = CMD_MAP.lock().unwrap()[command];
+                let internal_cmd = CMD_MAP.lock().unwrap()[arg0.as_str()];
                 internal_cmd(args, envs, &mut io)?;
                 if let Some((path, append)) = self.cmds[i].get_stderr_redirect() {
                     Cmd::open_file(path, *append)?.write_all(&io.errbuf)?;
@@ -334,10 +327,7 @@ impl Cmds {
 
         Ok(WaitCmd(
             children,
-            self.cmds
-                .iter()
-                .map(|c| c.get_args().join(" "))
-                .collect(),
+            self.cmds.iter().map(|c| c.get_args().join(" ")).collect(),
         ))
     }
 
@@ -382,13 +372,11 @@ impl Cmds {
     }
 
     fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
-        let mut handle = self.spawn(current_dir, false)?;
-        handle.wait_result()
+        self.spawn(current_dir, false)?.wait_result()
     }
 
     fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
-        let mut handle = self.spawn_with_output(current_dir)?;
-        handle.wait_result()
+        self.spawn_with_output(current_dir)?.wait_result()
     }
 
     fn status_to_io_error(status: ExitStatus, command: &str) -> Error {
@@ -439,9 +427,10 @@ impl fmt::Debug for Redirect {
 }
 
 #[doc(hidden)]
-#[derive(Default)]
 pub struct Cmd {
     // for parsing
+    arg0: String,
+    in_cmd_map: bool,
     args: Vec<String>,
     envs: HashMap<String, String>,
     redirects: Vec<Redirect>,
@@ -453,9 +442,28 @@ pub struct Cmd {
     std_cmd: Option<Command>,
 }
 
+impl Default for Cmd {
+    fn default() -> Self {
+        Cmd {
+            arg0: "".into(),
+            in_cmd_map: true,
+            args: vec![],
+            envs: HashMap::new(),
+            redirects: vec![],
+            stdin_redirect: None,
+            stdout_redirect: None,
+            stderr_redirect: None,
+            std_cmd: None,
+        }
+    }
+}
+
 impl Cmd {
     pub fn add_arg(mut self, arg: String) -> Self {
         if self.args.is_empty() {
+            self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg.as_str());
+            self.arg0 = arg.clone();
+
             let v: Vec<&str> = arg.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 self.envs.insert(v[0].to_owned(), v[1].to_owned());
@@ -471,6 +479,10 @@ impl Cmd {
             self = self.add_arg(arg);
         }
         self
+    }
+
+    fn get_arg0(&self) -> String {
+        self.arg0.clone()
     }
 
     fn get_args(&self) -> &Vec<String> {
