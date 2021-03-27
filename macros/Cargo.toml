@@ -5,7 +5,7 @@ license = "MIT OR Apache-2.0"
 homepage = "https://github.com/rust-shell-script/rust_cmd_lib"
 repository = "https://github.com/rust-shell-script/rust_cmd_lib"
 keywords = ["shell", "script", "cli", "process", "pipe"]
-version = "0.14.6"
+version = "0.15.0"
 authors = ["Tao Guo <tao.guo.code@gmail.com>"]
 edition = "2018"
 
