@@ -49,20 +49,20 @@ pub fn set_pipefail(enable: bool) {
 #[doc(hidden)]
 #[derive(Default)]
 pub struct GroupCmds {
-    cmds: Vec<(Cmds, Option<Cmds>)>, // (cmd, orCmd) pairs
+    group_cmds: Vec<(Cmds, Option<Cmds>)>, // (cmd, orCmd) pairs
     current_dir: String,
 }
 
 impl GroupCmds {
     pub fn add(mut self, cmds: Cmds, or_cmds: Option<Cmds>) -> Self {
-        self.cmds.push((cmds, or_cmds));
+        self.group_cmds.push((cmds, or_cmds));
         self
     }
 
     pub fn run_cmd(&mut self) -> CmdResult {
-        for cmd in self.cmds.iter_mut() {
-            if let Err(err) = cmd.0.run_cmd(&mut self.current_dir) {
-                if let Some(or_cmds) = &mut cmd.1 {
+        for cmds in self.group_cmds.iter_mut() {
+            if let Err(err) = cmds.0.run_cmd(&mut self.current_dir) {
+                if let Some(or_cmds) = &mut cmds.1 {
                     or_cmds.run_cmd(&mut self.current_dir)?;
                 } else {
                     return Err(err);
@@ -73,7 +73,7 @@ impl GroupCmds {
     }
 
     pub fn run_fun(&mut self) -> FunResult {
-        let mut last_cmd = self.cmds.pop().unwrap();
+        let mut last_cmd = self.group_cmds.pop().unwrap();
         self.run_cmd()?;
         // run last function command
         let ret = last_cmd.0.run_fun(&mut self.current_dir);
@@ -89,14 +89,14 @@ impl GroupCmds {
     }
 
     pub fn spawn(mut self) -> std::io::Result<WaitCmd> {
-        assert_eq!(self.cmds.len(), 1);
-        let mut cmds = self.cmds.pop().unwrap().0;
+        assert_eq!(self.group_cmds.len(), 1);
+        let mut cmds = self.group_cmds.pop().unwrap().0;
         cmds.spawn(&mut self.current_dir, false)
     }
 
     pub fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
-        assert_eq!(self.cmds.len(), 1);
-        let mut cmds = self.cmds.pop().unwrap().0;
+        assert_eq!(self.group_cmds.len(), 1);
+        let mut cmds = self.group_cmds.pop().unwrap().0;
         cmds.spawn_with_output(&mut self.current_dir)
     }
 }
@@ -211,8 +211,7 @@ impl WaitFun {
 #[doc(hidden)]
 #[derive(Default)]
 pub struct Cmds {
-    pipes: Vec<Option<Command>>,
-    cmd_args: Vec<Cmd>,
+    cmds: Vec<Cmd>,
 }
 
 impl Cmds {
@@ -223,13 +222,13 @@ impl Cmds {
                 pipe_cmd.env(k, v);
             }
         }
-        self.pipes.push(pipe_cmd_opt);
-        self.cmd_args.push(cmd);
+        cmd.set_std_cmd(pipe_cmd_opt);
+        self.cmds.push(cmd);
         self
     }
 
     fn get_full_cmd(&self) -> String {
-        self.cmd_args
+        self.cmds
             .iter()
             .map(|cmd| cmd.debug_str())
             .collect::<Vec<String>>()
@@ -241,13 +240,19 @@ impl Cmds {
             eprintln!("Running {} ...", self.get_full_cmd());
         }
 
-        let len = self.pipes.len();
+        // set up redirects
+        for cmd in self.cmds.iter_mut() {
+            cmd.setup_redirects()?;
+        }
+
+        let len = self.cmds.len();
         let mut children: Vec<ProcHandle> = Vec::new();
         // spawning all the sub-processes
-        for (i, cmd_opt) in self.pipes.iter_mut().enumerate() {
-            self.cmd_args[i].setup_redirects(cmd_opt)?;
-            let args = self.cmd_args[i].get_args().clone();
-            let envs = self.cmd_args[i].get_envs().clone();
+        for i in 0..len {
+            let cur_cmd = &mut self.cmds[i];
+            let mut cmd_opt = cur_cmd.get_std_cmd();
+            let args = cur_cmd.get_args().clone();
+            let envs = cur_cmd.get_envs().clone();
             let command = if args.is_empty() {
                 ""
             } else {
@@ -260,20 +265,20 @@ impl Cmds {
                 let mut stdin_setup_done = false;
                 if let ProcHandle::ProcChild(Some(child)) = &mut children[i - 1] {
                     if let Some(output) = child.stdout.take() {
-                        if let Some(cmd) = cmd_opt {
+                        if let Some(cmd) = cmd_opt.as_mut() {
                             cmd.stdin(output);
                         }
                         stdin_setup_done = true;
                     }
                 }
                 if !stdin_setup_done {
-                    if let Some(cmd) = cmd_opt {
+                    if let Some(cmd) = cmd_opt.as_mut() {
                         cmd.stdin(Stdio::piped());
                     }
                 }
             }
 
-            if let Some(cmd) = cmd_opt {
+            if let Some(cmd) = cmd_opt.as_mut() {
                 if !current_dir.is_empty() {
                     cmd.current_dir(current_dir.clone());
                 }
@@ -285,31 +290,31 @@ impl Cmds {
             } else if in_cmd_map {
                 let mut io = CmdStdio::default();
                 if i == 0 {
-                    if let Some(path) = self.cmd_args[i].get_stdin_redirect() {
+                    if let Some(path) = cur_cmd.get_stdin_redirect() {
                         io.inbuf = std::fs::read(path)?;
                     }
                 } else {
                     io.inbuf = WaitFun::wait_output(
                         &mut children[i - 1],
-                        &self.cmd_args[i - 1].get_args().join(" "),
+                        &self.cmds[i - 1].get_args().join(" ").clone(),
                     )?;
                 }
                 let internal_cmd = CMD_MAP.lock().unwrap()[command];
                 internal_cmd(args, envs, &mut io)?;
-                if let Some((path, append)) = self.cmd_args[i].get_stderr_redirect() {
+                if let Some((path, append)) = self.cmds[i].get_stderr_redirect() {
                     Cmd::open_file(path, *append)?.write_all(&io.errbuf)?;
                 } else {
                     std::io::stderr().write_all(&io.errbuf)?;
                 }
-                if let Some((path, append)) = self.cmd_args[i].get_stdout_redirect() {
+                if let Some((path, append)) = self.cmds[i].get_stdout_redirect() {
                     Cmd::open_file(path, *append)?.write_all(&io.outbuf)?;
                     children.push(ProcHandle::ProcBuf(None));
                 } else {
                     children.push(ProcHandle::ProcBuf(Some(io.outbuf)));
                 }
             } else {
-                if i == len - 1 && !for_fun && self.cmd_args[i].get_stdout_redirect().is_none() {
-                    if let Some(cmd) = cmd_opt {
+                if i == len - 1 && !for_fun && self.cmds[i].get_stdout_redirect().is_none() {
+                    if let Some(cmd) = cmd_opt.as_mut() {
                         cmd.stdout(Stdio::inherit());
                     }
                 }
@@ -329,7 +334,7 @@ impl Cmds {
 
         Ok(WaitCmd(
             children,
-            self.cmd_args
+            self.cmds
                 .iter()
                 .map(|c| c.get_args().join(" "))
                 .collect(),
@@ -378,13 +383,11 @@ impl Cmds {
 
     fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
         let mut handle = self.spawn(current_dir, false)?;
-        self.pipes.clear(); // to avoid wait deadlock
         handle.wait_result()
     }
 
     fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
         let mut handle = self.spawn_with_output(current_dir)?;
-        self.pipes.clear(); // to avoid wait deadlock
         handle.wait_result()
     }
 
@@ -438,12 +441,16 @@ impl fmt::Debug for Redirect {
 #[doc(hidden)]
 #[derive(Default)]
 pub struct Cmd {
+    // for parsing
     args: Vec<String>,
     envs: HashMap<String, String>,
     redirects: Vec<Redirect>,
     stdin_redirect: Option<String>,
     stdout_redirect: Option<(String, bool)>,
     stderr_redirect: Option<(String, bool)>,
+
+    // for running
+    std_cmd: Option<Command>,
 }
 
 impl Cmd {
@@ -516,12 +523,20 @@ impl Cmd {
         if in_cmd_map {
             None
         } else {
-            let cmd_args: Vec<String> = self.get_args().to_vec();
-            let mut cmd = Command::new(&cmd_args[0]);
-            cmd.args(&cmd_args[1..]);
+            let cmds: Vec<String> = self.get_args().to_vec();
+            let mut cmd = Command::new(&cmds[0]);
+            cmd.args(&cmds[1..]);
             cmd.stdout(Stdio::piped());
             Some(cmd)
         }
+    }
+
+    fn get_std_cmd(&mut self) -> Option<Command> {
+        self.std_cmd.take()
+    }
+
+    fn set_std_cmd(&mut self, cmd_opt: Option<Command>) {
+        self.std_cmd = cmd_opt;
     }
 
     fn open_file(path: &str, append: bool) -> std::io::Result<File> {
@@ -533,13 +548,13 @@ impl Cmd {
             .open(path)
     }
 
-    fn setup_redirects(&mut self, cmd_opt: &mut Option<Command>) -> CmdResult {
+    fn setup_redirects(&mut self) -> CmdResult {
         let mut stdout_file = "/dev/stdout";
         let mut stderr_file = "/dev/stderr";
         for redirect in self.redirects.iter() {
             match redirect {
                 Redirect::FileToStdin(path) => {
-                    if let Some(cmd) = cmd_opt {
+                    if let Some(cmd) = self.std_cmd.as_mut() {
                         if path == "/dev/null" {
                             cmd.stdin(Stdio::null());
                         } else {
@@ -550,19 +565,19 @@ impl Cmd {
                     self.stdin_redirect = Some(path.into());
                 }
                 Redirect::StdoutToStderr => {
-                    if let Some(cmd) = cmd_opt {
+                    if let Some(cmd) = self.std_cmd.as_mut() {
                         cmd.stdout(Self::open_file(stderr_file, true)?);
                     }
                     self.stdout_redirect = Some(("/dev/stderr".into(), false));
                 }
                 Redirect::StderrToStdout => {
-                    if let Some(cmd) = cmd_opt {
+                    if let Some(cmd) = self.std_cmd.as_mut() {
                         cmd.stderr(Self::open_file(stdout_file, true)?);
                     }
                     self.stderr_redirect = Some(("/dev/stdout".into(), false));
                 }
                 Redirect::StdoutToFile(path, append) => {
-                    if let Some(cmd) = cmd_opt {
+                    if let Some(cmd) = self.std_cmd.as_mut() {
                         if path == "/dev/null" {
                             cmd.stdout(Stdio::null());
                         } else {
@@ -573,7 +588,7 @@ impl Cmd {
                     self.stdout_redirect = Some((path.into(), *append));
                 }
                 Redirect::StderrToFile(path, append) => {
-                    if let Some(cmd) = cmd_opt {
+                    if let Some(cmd) = self.std_cmd.as_mut() {
                         if path == "/dev/null" {
                             cmd.stderr(Stdio::null());
                         } else {
