@@ -299,16 +299,19 @@
 //!
 
 pub use cmd_lib_macros::{
-    cmd_die, cmd_info, export_cmd, run_cmd, run_fun, spawn, spawn_with_output, use_builtin_cmd,
-    use_custom_cmd,
+    cmd_debug, cmd_die, cmd_error, cmd_info, cmd_trace, cmd_warn, export_cmd, run_cmd, run_fun,
+    spawn, spawn_with_output, use_builtin_cmd, use_custom_cmd,
 };
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use builtins::{
-    builtin_cat, builtin_die, builtin_echo, builtin_err, builtin_info, builtin_true, builtin_warn,
+    builtin_cat, builtin_debug, builtin_die, builtin_echo, builtin_error, builtin_info,
+    builtin_trace, builtin_true, builtin_warn,
 };
+pub use logger::init_builtin_log;
 pub use process::{export_cmd, set_debug, set_pipefail, Cmd, CmdEnv, Cmds, GroupCmds, Redirect};
 
 mod builtins;
+mod logger;
 mod process;
 mod thread_local;

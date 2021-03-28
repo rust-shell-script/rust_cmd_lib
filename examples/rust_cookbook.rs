@@ -2,8 +2,9 @@
 // Rewrite examples with rust_cmd_lib from
 // https://rust-lang-nursery.github.io/rust-cookbook/os/external.html
 //
-use cmd_lib::{run_cmd, run_fun, CmdResult};
+use cmd_lib::{init_builtin_log, run_cmd, run_fun, CmdResult};
 fn main() -> CmdResult {
+    init_builtin_log();
     cmd_lib::set_pipefail(false); // do not fail due to pipe errors
 
     // Run an external command and process stdout

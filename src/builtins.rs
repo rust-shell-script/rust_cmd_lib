@@ -13,27 +13,39 @@ pub fn builtin_echo(env: &mut CmdEnv) -> CmdResult {
 }
 
 #[doc(hidden)]
-pub fn builtin_info(env: &mut CmdEnv) -> CmdResult {
-    let msg = env.args()[1..].join(" ");
-    writeln!(env.stderr(), "{}", msg)
+pub fn builtin_die(env: &mut CmdEnv) -> CmdResult {
+    log::error!("FATAL: {}", env.args()[1..].join(" "));
+    std::process::exit(1);
+}
+
+#[doc(hidden)]
+pub fn builtin_error(env: &mut CmdEnv) -> CmdResult {
+    log::error!("{}", env.args()[1..].join(" "));
+    Ok(())
 }
 
 #[doc(hidden)]
 pub fn builtin_warn(env: &mut CmdEnv) -> CmdResult {
-    let msg = format!("WARNING: {}", env.args()[1..].join(" "));
-    writeln!(env.stderr(), "{}", msg)
+    log::warn!("{}", env.args()[1..].join(" "));
+    Ok(())
 }
 
 #[doc(hidden)]
-pub fn builtin_err(env: &mut CmdEnv) -> CmdResult {
-    let msg = format!("ERROR: {}", env.args()[1..].join(" "));
-    writeln!(env.stderr(), "{}", msg)
+pub fn builtin_info(env: &mut CmdEnv) -> CmdResult {
+    log::info!("{}", env.args()[1..].join(" "));
+    Ok(())
 }
 
 #[doc(hidden)]
-pub fn builtin_die(env: &mut CmdEnv) -> CmdResult {
-    let msg = format!("FATAL: {}", env.args()[1..].join(" "));
-    writeln!(env.stderr(), "{}", msg)
+pub fn builtin_debug(env: &mut CmdEnv) -> CmdResult {
+    log::debug!("{}", env.args()[1..].join(" "));
+    Ok(())
+}
+
+#[doc(hidden)]
+pub fn builtin_trace(env: &mut CmdEnv) -> CmdResult {
+    log::trace!("{}", env.args()[1..].join(" "));
+    Ok(())
 }
 
 #[doc(hidden)]

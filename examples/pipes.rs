@@ -341,6 +341,7 @@ fn rand() -> i32 {
 
 fn main() -> CmdResult {
     use_builtin_cmd!(info);
+    init_builtin_log();
 
     // simple pre-check of TERM, tput's error message should be enough
     let term = std::env::var("TERM").unwrap();

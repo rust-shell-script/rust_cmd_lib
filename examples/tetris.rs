@@ -1,5 +1,5 @@
 #![allow(non_upper_case_globals)]
-use cmd_lib::{run_cmd, run_fun, tls_get, tls_init, tls_set, CmdResult};
+use cmd_lib::*;
 use std::io::Read;
 use std::{thread, time};
 
@@ -557,6 +557,7 @@ fn cmd_exit() {
 }
 
 fn main() -> CmdResult {
+    init_builtin_log();
     #[rustfmt::skip]
     let old_cfg = run_fun!(stty -g)?; // let's save terminal state ...
     tls_set!(old_stty_cfg, |cfg| *cfg = old_cfg);

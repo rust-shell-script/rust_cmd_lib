@@ -152,7 +152,7 @@ impl Cmds {
 
     fn spawn(&mut self, current_dir: &mut String, with_output: bool) -> std::io::Result<WaitCmd> {
         if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
-            eprintln!(
+            log::info!(
                 "Running {} ...",
                 self.cmds
                     .iter()
@@ -556,7 +556,7 @@ impl Cmd {
         let dir = &self.args[1];
         if !std::path::Path::new(&dir).is_dir() {
             let err_msg = format!("cd: {}: No such file or directory", dir);
-            eprintln!("{}", err_msg);
+            log::error!("{}", err_msg);
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 

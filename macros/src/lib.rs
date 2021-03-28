@@ -149,11 +149,11 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// ```
 /// # use cmd_lib::run_fun;
 /// let version = run_fun!(rustc --version)?;
-/// eprintln!("Your rust version is {}", version);
+/// log::info!("Your rust version is {}", version);
 ///
 /// // with pipes
 /// let n = run_fun!(echo "the quick brown fox jumped over the lazy dog" | wc -w)?;
-/// eprintln!("There are {} words in above sentence", n);
+/// log::info!("There are {} words in above sentence", n);
 /// # Ok::<(), std::io::Error>(())
 /// ```
 #[proc_macro]
@@ -215,8 +215,6 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     .into()
 }
 
-#[proc_macro]
-#[proc_macro_error]
 /// Print info messages
 ///
 /// e.g:
@@ -227,9 +225,39 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 ///
 /// ```
 /// format should be string literals, and variable interpolation is supported.
+#[proc_macro]
+#[proc_macro_error]
 pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(eprintln!("{}", #msg)).into()
+    quote!(::log::info!("{}", #msg)).into()
+}
+
+#[proc_macro]
+#[proc_macro_error]
+pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let msg = parse_msg(input.into());
+    quote!(::log::error!("{}", #msg)).into()
+}
+
+#[proc_macro]
+#[proc_macro_error]
+pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let msg = parse_msg(input.into());
+    quote!(::log::warn!("{}", #msg)).into()
+}
+
+#[proc_macro]
+#[proc_macro_error]
+pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let msg = parse_msg(input.into());
+    quote!(::log::debug!("{}", #msg)).into()
+}
+
+#[proc_macro]
+#[proc_macro_error]
+pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let msg = parse_msg(input.into());
+    quote!(::log::trace!("{}", #msg)).into()
 }
 
 #[proc_macro]
@@ -251,7 +279,7 @@ pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!(
-        eprintln!("FATAL: {}", #msg);
+        ::log::error!("FATAL: {}", #msg);
         std::process::exit(1);
     )
     .into()
