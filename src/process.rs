@@ -32,10 +32,6 @@ impl<'a> CmdEnv<'a> {
         self.args
     }
 
-    pub fn vars(&self) -> &HashMap<String, String> {
-        self.vars
-    }
-
     pub fn var(&self, key: &str) -> Option<&String> {
         self.vars.get(key)
     }
