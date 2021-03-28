@@ -533,9 +533,9 @@ impl Cmd {
             // spawning process
             let mut child = cmd.spawn()?;
             if !is_first {
-                if let Some(mut input) = child.stdin.take() {
-                    if let (ProcHandle::ProcBuf(ss), _) = prev_child.take().unwrap() {
-                        if let Some(s) = ss.take() {
+                if let (ProcHandle::ProcBuf(ss), _) = prev_child.take().unwrap() {
+                    if let Some(s) = ss.take() {
+                        if let Some(mut input) = child.stdin.take() {
                             input.write_all(&s)?;
                         }
                     }
