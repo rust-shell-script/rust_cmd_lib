@@ -397,13 +397,12 @@ impl Default for Cmd {
 impl Cmd {
     pub fn add_arg(mut self, arg: String) -> Self {
         if self.args.is_empty() {
-            self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg.as_str());
-
             let v: Vec<&str> = arg.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 self.envs.insert(v[0].to_owned(), v[1].to_owned());
                 return self;
             }
+            self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg.as_str());
         }
         self.args.push(arg);
         self
