@@ -444,17 +444,13 @@ impl Cmd {
         is_last: bool,
         prev_child: &mut Option<&mut (ProcHandle, String)>,
     ) -> std::io::Result<(ProcHandle, String)> {
-        if let Some(cmd) = self.std_cmd.as_mut() {
-            if !current_dir.is_empty() {
-                cmd.current_dir(current_dir.clone());
-            }
-        }
-
         if self.arg0 == "cd" {
             self.run_cd_cmd(current_dir)?;
             Ok((ProcHandle::ProcBuf(None), self.debug_str()))
         } else if self.in_cmd_map {
             let mut io = CmdStdio::default();
+
+            // setup stdin
             if is_first {
                 if let Some(ref path) = self.stdin_redirect {
                     io.inbuf = std::fs::read(path)?;
@@ -462,13 +458,18 @@ impl Cmd {
             } else {
                 io.inbuf = WaitFun::wait_output(&mut prev_child.take().unwrap())?;
             }
+
             let internal_cmd = CMD_MAP.lock().unwrap()[self.arg0.as_str()];
             internal_cmd(self.args.clone(), self.envs.clone(), &mut io)?;
+
+            // setup stderr
             if let Some((ref path, append)) = self.stderr_redirect {
                 Cmd::open_file(path, append)?.write_all(&io.errbuf)?;
             } else {
                 std::io::stderr().write_all(&io.errbuf)?;
             }
+
+            // setup stdout
             if let Some((ref path, append)) = self.stdout_redirect {
                 Cmd::open_file(path, append)?.write_all(&io.outbuf)?;
                 Ok((ProcHandle::ProcBuf(None), self.debug_str()))
@@ -476,32 +477,34 @@ impl Cmd {
                 Ok((ProcHandle::ProcBuf(Some(io.outbuf)), self.debug_str()))
             }
         } else {
-            // setup stdin
+            let mut cmd = self.std_cmd.take().unwrap();
+
+            // setup current_dir
+            if !current_dir.is_empty() {
+                cmd.current_dir(current_dir.clone());
+            }
+
+            // update stdin
             if !is_first {
                 let mut stdin_setup_done = false;
                 if let Some((ProcHandle::ProcChild(Some(child)), _)) = prev_child {
                     if let Some(output) = child.stdout.take() {
-                        if let Some(cmd) = self.std_cmd.as_mut() {
-                            cmd.stdin(output);
-                        }
+                        cmd.stdin(output);
                         stdin_setup_done = true;
                     }
                 }
                 if !stdin_setup_done {
-                    if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stdin(Stdio::piped());
-                    }
+                    cmd.stdin(Stdio::piped());
                 }
             }
 
-            // setup stdout
+            // update stdout
             if is_last && !with_output && self.stdout_redirect.is_none() {
-                if let Some(cmd) = self.std_cmd.as_mut() {
-                    cmd.stdout(Stdio::inherit());
-                }
+                cmd.stdout(Stdio::inherit());
             }
 
-            let mut child = self.std_cmd.take().unwrap().spawn()?;
+            // spawning process
+            let mut child = cmd.spawn()?;
             if !is_first {
                 if let Some(mut input) = child.stdin.take() {
                     if let (ProcHandle::ProcBuf(ss), _) = prev_child.take().unwrap() {
