@@ -264,8 +264,8 @@ You can use the [glob](https://github.com/rust-lang-nursery/glob) package instea
 #### Thread Safety
 
 This library tries very hard to not set global states, so parallel `cargo test` can be executed just fine.
-However, there might be some internal process related APIs which are not thread-safe. More
-investigation is needed.
+The only known APIs not supported in multi-thread environment are the
+`tls_init/tls_get/tls_set` macros, and you should only use them for *thread local* variables.
 
 
 License: MIT OR Apache-2.0
