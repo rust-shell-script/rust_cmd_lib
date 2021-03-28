@@ -8,10 +8,10 @@ use quote::{quote, ToTokens};
 /// # use cmd_lib::*;
 /// # use std::io::Write;
 /// #[export_cmd(my_cmd)]
-/// fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
-///     let msg = format!("msg from foo(), args: {:?}\n", args);
-///     writeln!(io.stderr(), "{}", msg)?;
-///     writeln!(io.stdout(), "bar")
+/// fn foo(env: &mut CmdEnv) -> CmdResult {
+///     let msg = format!("msg from foo(), args: {:?}\n", env.args());
+///     writeln!(env.stderr(), "{}", msg)?;
+///     writeln!(env.stdout(), "bar")
 /// }
 ///
 /// use_custom_cmd!(my_cmd);
@@ -45,10 +45,10 @@ pub fn export_cmd(
 /// ```
 /// # use cmd_lib::*;
 /// #[export_cmd(my_cmd)]
-/// fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
-///     let msg = format!("msg from foo(), args: {:?}\n", args);
-///     writeln!(io.stderr(), "{}", msg)?;
-///     writeln!(io.stdout(), "bar")
+/// fn foo(env: &mut CmdEnv) -> CmdResult {
+///     let msg = format!("msg from foo(), args: {:?}\n", env.args());
+///     writeln!(env.stderr(), "{}", msg)?;
+///     writeln!(env.stdout(), "bar")
 /// }
 ///
 /// use_custom_cmd!(my_cmd);

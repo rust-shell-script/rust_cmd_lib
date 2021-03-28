@@ -215,10 +215,10 @@
 //! # use cmd_lib::*;
 //! # use std::io::Write;
 //! #[export_cmd(my_cmd)]
-//! fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
-//!     let msg = format!("msg from foo(), args: {:?}", args);
-//!     writeln!(io.stderr(), "{}", msg)?;
-//!     writeln!(io.stdout(), "bar")
+//! fn foo(env: &mut CmdEnv) -> CmdResult {
+//!     let msg = format!("msg from foo(), args: {:?}", env.args());
+//!     writeln!(env.stderr(), "{}", msg)?;
+//!     writeln!(env.stdout(), "bar")
 //! }
 //!
 //! use_custom_cmd!(my_cmd);
@@ -307,9 +307,7 @@ pub type CmdResult = std::io::Result<()>;
 pub use builtins::{
     builtin_cat, builtin_die, builtin_echo, builtin_err, builtin_info, builtin_true, builtin_warn,
 };
-pub use process::{
-    export_cmd, set_debug, set_pipefail, Cmd, CmdArgs, CmdEnvs, CmdStdio, Cmds, GroupCmds, Redirect,
-};
+pub use process::{export_cmd, set_debug, set_pipefail, Cmd, CmdEnv, Cmds, GroupCmds, Redirect};
 
 mod builtins;
 mod process;

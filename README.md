@@ -192,10 +192,10 @@ Declare your function with `export_cmd` attribute, and import it with `use_custo
 
 ```rust
 #[export_cmd(my_cmd)]
-fn foo(args: CmdArgs, _envs: CmdEnvs, io: &mut CmdStdio) -> CmdResult {
-    let msg = format!("msg from foo(), args: {:?}", args);
-    writeln!(io.stderr(), "{}", msg)?;
-    writeln!(io.stdout(), "bar")
+fn foo(env: &mut CmdEnv) -> CmdResult {
+    let msg = format!("msg from foo(), args: {:?}", env.args());
+    writeln!(env.stderr(), "{}", msg)?;
+    writeln!(env.stdout(), "bar")
 }
 
 use_custom_cmd!(my_cmd);

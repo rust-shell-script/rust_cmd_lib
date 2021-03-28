@@ -7,16 +7,43 @@ use std::io::{Error, ErrorKind, Read, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 
-pub type CmdArgs = Vec<String>;
-pub type CmdEnvs = HashMap<String, String>;
-/// IO struct for builtin or custom commands
-#[derive(Default, Debug)]
-pub struct CmdStdio {
+/// Process environment for builtin or custom commands
+pub struct CmdEnv<'a> {
     inbuf: Vec<u8>,
     outbuf: Vec<u8>,
     errbuf: Vec<u8>,
+    args: &'a [String],
+    vars: &'a HashMap<String, String>,
+    current_dir: &'a str,
 }
-impl CmdStdio {
+impl<'a> CmdEnv<'a> {
+    fn new(args: &'a [String], vars: &'a HashMap<String, String>, current_dir: &'a str) -> Self {
+        CmdEnv {
+            inbuf: vec![],
+            outbuf: vec![],
+            errbuf: vec![],
+            args,
+            vars,
+            current_dir,
+        }
+    }
+
+    pub fn args(&self) -> &[String] {
+        self.args
+    }
+
+    pub fn vars(&self) -> &HashMap<String, String> {
+        self.vars
+    }
+
+    pub fn var(&self, key: &str) -> Option<&String> {
+        self.vars.get(key)
+    }
+
+    pub fn current_dir(&self) -> &str {
+        self.current_dir
+    }
+
     pub fn stdin(&self) -> impl Read + '_ {
         self.inbuf.as_slice()
     }
@@ -30,7 +57,7 @@ impl CmdStdio {
     }
 }
 
-type FnFun = fn(CmdArgs, CmdEnvs, &mut CmdStdio) -> CmdResult;
+type FnFun = fn(&mut CmdEnv) -> CmdResult;
 
 lazy_static! {
     static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
@@ -344,7 +371,6 @@ impl fmt::Debug for Redirect {
 #[doc(hidden)]
 pub struct Cmd {
     // for parsing
-    arg0: String,
     in_cmd_map: bool,
     args: Vec<String>,
     envs: HashMap<String, String>,
@@ -360,7 +386,6 @@ pub struct Cmd {
 impl Default for Cmd {
     fn default() -> Self {
         Cmd {
-            arg0: "".into(),
             in_cmd_map: true,
             args: vec![],
             envs: HashMap::new(),
@@ -377,7 +402,6 @@ impl Cmd {
     pub fn add_arg(mut self, arg: String) -> Self {
         if self.args.is_empty() {
             self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg.as_str());
-            self.arg0 = arg.clone();
 
             let v: Vec<&str> = arg.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
@@ -394,6 +418,19 @@ impl Cmd {
             self = self.add_arg(arg);
         }
         self
+    }
+
+    pub fn add_redirect(mut self, redirect: Redirect) -> Self {
+        self.redirects.push(redirect);
+        self
+    }
+
+    fn arg0(&self) -> &str {
+        if self.args.is_empty() {
+            ""
+        } else {
+            &self.args[0]
+        }
     }
 
     fn debug_str(&self) -> String {
@@ -413,11 +450,6 @@ impl Cmd {
             ret += &format!(" ({})", extra);
         }
         ret
-    }
-
-    pub fn add_redirect(mut self, redirect: Redirect) -> Self {
-        self.redirects.push(redirect);
-        self
     }
 
     fn gen_command(mut self) -> Self {
@@ -444,37 +476,37 @@ impl Cmd {
         is_last: bool,
         prev_child: &mut Option<&mut (ProcHandle, String)>,
     ) -> std::io::Result<(ProcHandle, String)> {
-        if self.arg0 == "cd" {
+        if self.arg0() == "cd" {
             self.run_cd_cmd(current_dir)?;
             Ok((ProcHandle::ProcBuf(None), self.debug_str()))
         } else if self.in_cmd_map {
-            let mut io = CmdStdio::default();
+            let mut env = CmdEnv::new(&self.args, &self.envs, &current_dir);
 
             // setup stdin
             if is_first {
                 if let Some(ref path) = self.stdin_redirect {
-                    io.inbuf = std::fs::read(path)?;
+                    env.inbuf = std::fs::read(path)?;
                 }
             } else {
-                io.inbuf = WaitFun::wait_output(&mut prev_child.take().unwrap())?;
+                env.inbuf = WaitFun::wait_output(&mut prev_child.take().unwrap())?;
             }
 
-            let internal_cmd = CMD_MAP.lock().unwrap()[self.arg0.as_str()];
-            internal_cmd(self.args.clone(), self.envs.clone(), &mut io)?;
+            let internal_cmd = CMD_MAP.lock().unwrap()[self.arg0()];
+            internal_cmd(&mut env)?;
 
             // setup stderr
             if let Some((ref path, append)) = self.stderr_redirect {
-                Cmd::open_file(path, append)?.write_all(&io.errbuf)?;
+                Cmd::open_file(path, append)?.write_all(&env.errbuf)?;
             } else {
-                std::io::stderr().write_all(&io.errbuf)?;
+                std::io::stderr().write_all(&env.errbuf)?;
             }
 
             // setup stdout
             if let Some((ref path, append)) = self.stdout_redirect {
-                Cmd::open_file(path, append)?.write_all(&io.outbuf)?;
+                Cmd::open_file(path, append)?.write_all(&env.outbuf)?;
                 Ok((ProcHandle::ProcBuf(None), self.debug_str()))
             } else {
-                Ok((ProcHandle::ProcBuf(Some(io.outbuf)), self.debug_str()))
+                Ok((ProcHandle::ProcBuf(Some(env.outbuf)), self.debug_str()))
             }
         } else {
             let mut cmd = self.std_cmd.take().unwrap();
