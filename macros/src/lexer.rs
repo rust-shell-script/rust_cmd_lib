@@ -105,7 +105,7 @@ impl Lexer {
     pub fn scan(mut self, input: TokenStream) -> Parser {
         let mut iter = TokenStreamPeekable {
             peekable: input.into_iter().peekable(),
-            span: None,
+            span: Span::call_site(),
         };
         let mut allow_or_token = true;
         while let Some(item) = iter.next() {
@@ -380,17 +380,16 @@ impl Lexer {
 
 struct TokenStreamPeekable<I: Iterator<Item = TokenTree>> {
     peekable: Peekable<I>,
-    span: Option<Span>,
+    span: Span,
 }
 
 impl<I: Iterator<Item = TokenTree>> Iterator for TokenStreamPeekable<I> {
     type Item = I::Item;
     fn next(&mut self) -> Option<TokenTree> {
         if let Some(tt) = self.peekable.next() {
-            self.span = Some(tt.span());
+            self.span = tt.span();
             Some(tt)
         } else {
-            self.span = None;
             None
         }
     }
@@ -406,7 +405,7 @@ impl<I: Iterator<Item = TokenTree>> TokenStreamPeekable<I> {
         match self.peekable.peek() {
             None => None,
             Some(item) => {
-                let (_, cur_end) = Self::span_location(&self.span.unwrap());
+                let (_, cur_end) = Self::span_location(&self.span);
                 let (new_start, _) = Self::span_location(&item.span());
                 if new_start > cur_end {
                     None
@@ -418,7 +417,7 @@ impl<I: Iterator<Item = TokenTree>> TokenStreamPeekable<I> {
     }
 
     fn span(&self) -> Span {
-        self.span.unwrap()
+        self.span
     }
 
     // helper function to get (start, end) of Span
