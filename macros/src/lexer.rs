@@ -151,8 +151,9 @@ impl Lexer {
     }
 
     fn add_arg_with_token(&mut self, token: SepToken) {
+        let last_arg_str = &self.last_arg_str;
         if let Some((redirect, span)) = self.last_redirect.take() {
-            if self.last_arg_str.is_empty() {
+            if last_arg_str.is_empty() {
                 abort!(span, "wrong redirection format: missing target");
             }
 
@@ -166,7 +167,6 @@ impl Lexer {
                     (2, append)
                 }
             };
-            let last_arg_str = &self.last_arg_str;
             self.args.push(ParseArg::ParseRedirectFile(
                 fd,
                 quote!(#last_arg_str),
@@ -176,10 +176,8 @@ impl Lexer {
                 self.args
                     .push(ParseArg::ParseRedirectFile(1, quote!(#last_arg_str), true));
             }
-        } else if !self.last_arg_str.is_empty() {
-            let last_arg_str = &self.last_arg_str;
-            let last_arg = ParseArg::ParseArgStr(quote!(#last_arg_str));
-            self.args.push(last_arg);
+        } else if !last_arg_str.is_empty() {
+            self.args.push(ParseArg::ParseArgStr(quote!(#last_arg_str)));
         }
         match token {
             SepToken::Space => {}
