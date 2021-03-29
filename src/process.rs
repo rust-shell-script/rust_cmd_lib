@@ -101,13 +101,8 @@ impl GroupCmds {
         for cmds in self.group_cmds.iter_mut() {
             if let Err(err) = cmds.0.run_cmd(&mut self.current_dir) {
                 if let Some(or_cmds) = &mut cmds.1 {
-                    let ret = or_cmds.run_cmd(&mut self.current_dir);
-                    if let Err(err) = ret {
-                        error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
-                        return Err(err);
-                    }
+                    return or_cmds.run_cmd(&mut self.current_dir);
                 } else {
-                    error!("Running {} failed, Error: {}", cmds.0.get_full_cmds(), err);
                     return Err(err);
                 }
             }
@@ -122,14 +117,8 @@ impl GroupCmds {
         let ret = last_cmd.0.run_fun(&mut self.current_dir);
         if let Err(e) = ret {
             if let Some(or_cmds) = &mut last_cmd.1 {
-                let or_ret = or_cmds.run_fun(&mut self.current_dir);
-                if let Err(ref err) = or_ret {
-                    error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
-                }
-                or_ret
+                or_cmds.run_fun(&mut self.current_dir)
             } else {
-                let full_cmds = last_cmd.0.get_full_cmds();
-                error!("Running {} failed, Error: {}", full_cmds, e);
                 Err(e)
             }
         } else {
@@ -210,11 +199,25 @@ impl Cmds {
     }
 
     fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
-        self.spawn(current_dir, false)?.wait_result()
+        let spawn_ret = self.spawn(current_dir, false);
+        match spawn_ret {
+            Err(err) => {
+                error!("Spawning {} failed, Error: {}", self.get_full_cmds(), err);
+                Err(err)
+            }
+            Ok(mut handle) => handle.wait_result(),
+        }
     }
 
     fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
-        WaitFun(self.spawn(current_dir, true)?.0).wait_result()
+        let spawn_ret = self.spawn(current_dir, true);
+        match spawn_ret {
+            Err(err) => {
+                error!("Spawning {} failed, Error: {}", self.get_full_cmds(), err);
+                Err(err)
+            }
+            Ok(handle) => WaitFun(handle.0).wait_result(),
+        }
     }
 }
 
@@ -235,16 +238,19 @@ impl WaitCmd {
                     Self::log_stderr(&mut child);
                     match status_result {
                         Err(e) => {
+                            error!("Running {} failed, Error: {}", cmd, e);
                             let _ = Self::wait_children(&mut self.0);
                             return Err(e);
                         }
                         Ok(status) => {
                             if !status.success() {
                                 let _ = Self::wait_children(&mut self.0);
-                                return Err(Self::status_to_io_error(
+                                let e = Self::status_to_io_error(
                                     status,
                                     &format!("{} exited with error", cmd),
-                                ));
+                                );
+                                error!("Running {} failed, Error: {}", cmd, e);
+                                return Err(e);
                             }
                         }
                     }
@@ -254,6 +260,7 @@ impl WaitCmd {
                 if let Some(s) = ss.take() {
                     let result = std::io::stdout().write_all(&s);
                     if let Err(e) = result {
+                        error!("Running {} failed, Error: {}", cmd, e);
                         let _ = Self::wait_children(&mut self.0);
                         return Err(e);
                     }
@@ -267,13 +274,24 @@ impl WaitCmd {
         while !children.is_empty() {
             let (child_handle, cmd) = children.pop().unwrap();
             if let ProcHandle::ProcChild(Some(mut child)) = child_handle {
-                let status = child.wait()?;
+                let status_ret = child.wait();
                 Self::log_stderr(&mut child);
-                if !status.success() && std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into()) {
-                    return Err(Self::status_to_io_error(
-                        status,
-                        &format!("{} exited with error", cmd),
-                    ));
+                match status_ret {
+                    Err(e) => {
+                        error!("Running {} failed, Error: {}", cmd, e);
+                        return Err(e);
+                    }
+                    Ok(status) => {
+                        if !status.success() && std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into())
+                        {
+                            let e = Self::status_to_io_error(
+                                status,
+                                &format!("{} exited with error", cmd),
+                            );
+                            error!("Running {} failed, Error: {}", cmd, e);
+                            return Err(e);
+                        }
+                    }
                 }
             }
         }
@@ -336,6 +354,7 @@ impl WaitFun {
         let wait_last = Self::wait_output(&mut handle);
         match wait_last {
             Err(e) => {
+                error!("Running {} failed, Error: {}", handle.1, e);
                 let _ = WaitCmd::wait_children(&mut self.0);
                 Err(e)
             }
@@ -352,6 +371,7 @@ impl WaitFun {
         let wait_last = Self::wait_output(&mut handle);
         match wait_last {
             Err(e) => {
+                error!("Running {} failed, Error: {}", handle.1, e);
                 let _ = WaitCmd::wait_children(&mut self.0);
                 Err(e)
             }
