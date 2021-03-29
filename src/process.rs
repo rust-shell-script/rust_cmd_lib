@@ -1,6 +1,6 @@
 use crate::{builtin_true, CmdResult, FunResult};
 use lazy_static::lazy_static;
-use log::error;
+use log::{debug, error};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
@@ -182,7 +182,7 @@ impl Cmds {
 
     fn spawn(&mut self, current_dir: &mut String, with_output: bool) -> std::io::Result<WaitCmd> {
         if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
-            log::info!("Running {} ...", self.get_full_cmds());
+            debug!("Running {} ...", self.get_full_cmds());
         }
 
         // set up redirects

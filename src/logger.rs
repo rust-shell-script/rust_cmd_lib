@@ -6,7 +6,7 @@ static LOGGER: CmdLogger = CmdLogger;
 ///
 /// This is to make examples in this library work, and users should usually use a real logger
 /// instead. When being used, it should be called early in the main() function. Default log level
-/// is set to `info`.
+/// is set to `debug`.
 ///
 /// # Panics
 ///
@@ -14,14 +14,14 @@ static LOGGER: CmdLogger = CmdLogger;
 /// library has already initialized a global logger.
 pub fn init_builtin_logger() {
     log::set_logger(&LOGGER)
-        .map(|()| log::set_max_level(LevelFilter::Info))
+        .map(|()| log::set_max_level(LevelFilter::Debug))
         .unwrap();
 }
 
 struct CmdLogger;
 impl log::Log for CmdLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Info
+        metadata.level() <= Level::Debug
     }
 
     fn log(&self, record: &Record) {
