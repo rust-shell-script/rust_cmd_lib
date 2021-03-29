@@ -101,12 +101,12 @@ impl GroupCmds {
             if let Err(err) = cmds.0.run_cmd(&mut self.current_dir) {
                 if let Some(or_cmds) = &mut cmds.1 {
                     let ret = or_cmds.run_cmd(&mut self.current_dir);
-                    if ret.is_err() {
-                        log::error!("Running {} failed", or_cmds.get_full_cmds());
-                        return ret;
+                    if let Err(err) = ret {
+                        log::error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
+                        return Err(err);
                     }
                 } else {
-                    log::error!("Running {} failed", cmds.0.get_full_cmds());
+                    log::error!("Running {} failed, Error: {}", cmds.0.get_full_cmds(), err);
                     return Err(err);
                 }
             }
@@ -122,12 +122,16 @@ impl GroupCmds {
         if let Err(e) = ret {
             if let Some(or_cmds) = &mut last_cmd.1 {
                 let or_ret = or_cmds.run_fun(&mut self.current_dir);
-                if or_ret.is_err() {
-                    log::error!("Running {} failed", or_cmds.get_full_cmds());
+                if let Err(ref err) = or_ret {
+                    log::error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
                 }
                 or_ret
             } else {
-                log::error!("Running {} failed", last_cmd.0.get_full_cmds());
+                log::error!(
+                    "Running {} failed, Error: {}",
+                    last_cmd.0.get_full_cmds(),
+                    e
+                );
                 Err(e)
             }
         } else {
@@ -139,8 +143,8 @@ impl GroupCmds {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap().0;
         let ret = cmds.spawn(&mut self.current_dir, false);
-        if ret.is_err() {
-            log::error!("Spawning {} failed", cmds.get_full_cmds());
+        if let Err(ref err) = ret {
+            log::error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
         }
         ret
     }
@@ -150,9 +154,9 @@ impl GroupCmds {
         let mut cmds = self.group_cmds.pop().unwrap().0;
         match cmds.spawn(&mut self.current_dir, true) {
             Ok(ret) => Ok(WaitFun(ret.0)),
-            Err(e) => {
-                log::error!("Spawning {} failed", cmds.get_full_cmds());
-                Err(e)
+            Err(err) => {
+                log::error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
+                Err(err)
             }
         }
     }
