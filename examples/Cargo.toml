@@ -6,10 +6,6 @@ edition = "2018"
 
 [dev-dependencies]
 cmd_lib = { path = ".." }
-rayon = "1.5"
-structopt = "0.3"
-byte-unit = "4.0"
-log = "0.4"
 
 [[example]]
 name = "dd_test"

@@ -15,8 +15,13 @@ impl log::Log for CmdLogger {
     }
 
     fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            eprintln!("{}", record.args());
+        let metadata = record.metadata();
+        if self.enabled(metadata) {
+            if metadata.level() >= Level::Info {
+                eprintln!("{}", record.args());
+            } else {
+                eprintln!("{}: {}", record.level(), record.args());
+            }
         }
     }
 
