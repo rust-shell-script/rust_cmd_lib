@@ -100,8 +100,13 @@ impl GroupCmds {
         for cmds in self.group_cmds.iter_mut() {
             if let Err(err) = cmds.0.run_cmd(&mut self.current_dir) {
                 if let Some(or_cmds) = &mut cmds.1 {
-                    or_cmds.run_cmd(&mut self.current_dir)?;
+                    let ret = or_cmds.run_cmd(&mut self.current_dir);
+                    if ret.is_err() {
+                        log::error!("Running {} failed", or_cmds.get_full_cmds());
+                        return ret;
+                    }
                 } else {
+                    log::error!("Running {} failed", cmds.0.get_full_cmds());
                     return Err(err);
                 }
             }
@@ -116,8 +121,13 @@ impl GroupCmds {
         let ret = last_cmd.0.run_fun(&mut self.current_dir);
         if let Err(e) = ret {
             if let Some(or_cmds) = &mut last_cmd.1 {
-                or_cmds.run_fun(&mut self.current_dir)
+                let or_ret = or_cmds.run_fun(&mut self.current_dir);
+                if or_ret.is_err() {
+                    log::error!("Running {} failed", or_cmds.get_full_cmds());
+                }
+                or_ret
             } else {
+                log::error!("Running {} failed", last_cmd.0.get_full_cmds());
                 Err(e)
             }
         } else {
@@ -128,13 +138,23 @@ impl GroupCmds {
     pub fn spawn(mut self) -> std::io::Result<WaitCmd> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap().0;
-        cmds.spawn(&mut self.current_dir, false)
+        let ret = cmds.spawn(&mut self.current_dir, false);
+        if ret.is_err() {
+            log::error!("Spawning {} failed", cmds.get_full_cmds());
+        }
+        ret
     }
 
     pub fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap().0;
-        Ok(WaitFun(cmds.spawn(&mut self.current_dir, true)?.0))
+        match cmds.spawn(&mut self.current_dir, true) {
+            Ok(ret) => Ok(WaitFun(ret.0)),
+            Err(e) => {
+                log::error!("Spawning {} failed", cmds.get_full_cmds());
+                Err(e)
+            }
+        }
     }
 }
 
@@ -150,16 +170,17 @@ impl Cmds {
         self
     }
 
+    fn get_full_cmds(&self) -> String {
+        self.cmds
+            .iter()
+            .map(|cmd| cmd.debug_str())
+            .collect::<Vec<String>>()
+            .join(" | ")
+    }
+
     fn spawn(&mut self, current_dir: &mut String, with_output: bool) -> std::io::Result<WaitCmd> {
         if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
-            log::info!(
-                "Running {} ...",
-                self.cmds
-                    .iter()
-                    .map(|cmd| cmd.debug_str())
-                    .collect::<Vec<String>>()
-                    .join(" | ")
-            );
+            log::info!("Running {} ...", self.get_full_cmds());
         }
 
         // set up redirects
