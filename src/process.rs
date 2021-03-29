@@ -1,5 +1,6 @@
 use crate::{builtin_true, CmdResult, FunResult};
 use lazy_static::lazy_static;
+use log::error;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
@@ -102,11 +103,11 @@ impl GroupCmds {
                 if let Some(or_cmds) = &mut cmds.1 {
                     let ret = or_cmds.run_cmd(&mut self.current_dir);
                     if let Err(err) = ret {
-                        log::error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
+                        error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
                         return Err(err);
                     }
                 } else {
-                    log::error!("Running {} failed, Error: {}", cmds.0.get_full_cmds(), err);
+                    error!("Running {} failed, Error: {}", cmds.0.get_full_cmds(), err);
                     return Err(err);
                 }
             }
@@ -123,15 +124,12 @@ impl GroupCmds {
             if let Some(or_cmds) = &mut last_cmd.1 {
                 let or_ret = or_cmds.run_fun(&mut self.current_dir);
                 if let Err(ref err) = or_ret {
-                    log::error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
+                    error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
                 }
                 or_ret
             } else {
-                log::error!(
-                    "Running {} failed, Error: {}",
-                    last_cmd.0.get_full_cmds(),
-                    e
-                );
+                let full_cmds = last_cmd.0.get_full_cmds();
+                error!("Running {} failed, Error: {}", full_cmds, e);
                 Err(e)
             }
         } else {
@@ -144,7 +142,7 @@ impl GroupCmds {
         let mut cmds = self.group_cmds.pop().unwrap().0;
         let ret = cmds.spawn(&mut self.current_dir, false);
         if let Err(ref err) = ret {
-            log::error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
+            error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
         }
         ret
     }
@@ -155,7 +153,7 @@ impl GroupCmds {
         match cmds.spawn(&mut self.current_dir, true) {
             Ok(ret) => Ok(WaitFun(ret.0)),
             Err(err) => {
-                log::error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
+                error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
                 Err(err)
             }
         }
@@ -581,7 +579,7 @@ impl Cmd {
         let dir = &self.args[1];
         if !std::path::Path::new(&dir).is_dir() {
             let err_msg = format!("cd: {}: No such file or directory", dir);
-            log::error!("{}", err_msg);
+            error!("{}", err_msg);
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
