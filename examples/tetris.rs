@@ -557,7 +557,7 @@ fn cmd_exit() {
 }
 
 fn main() -> CmdResult {
-    init_builtin_log();
+    init_builtin_logger();
     #[rustfmt::skip]
     let old_cfg = run_fun!(stty -g)?; // let's save terminal state ...
     tls_set!(old_stty_cfg, |cfg| *cfg = old_cfg);

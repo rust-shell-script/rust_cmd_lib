@@ -215,7 +215,23 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     .into()
 }
 
-/// Print info messages
+/// Logs a message at the error level with interpolation support
+#[proc_macro]
+#[proc_macro_error]
+pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let msg = parse_msg(input.into());
+    quote!(::log::error!("{}", #msg)).into()
+}
+
+/// Logs a message at the warn level with interpolation support
+#[proc_macro]
+#[proc_macro_error]
+pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let msg = parse_msg(input.into());
+    quote!(::log::warn!("{}", #msg)).into()
+}
+
+/// Logs a message at the info level with interpolation support
 ///
 /// e.g:
 /// ```
@@ -232,20 +248,7 @@ pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     quote!(::log::info!("{}", #msg)).into()
 }
 
-#[proc_macro]
-#[proc_macro_error]
-pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let msg = parse_msg(input.into());
-    quote!(::log::error!("{}", #msg)).into()
-}
-
-#[proc_macro]
-#[proc_macro_error]
-pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let msg = parse_msg(input.into());
-    quote!(::log::warn!("{}", #msg)).into()
-}
-
+/// Logs a message at the debug level with interpolation support
 #[proc_macro]
 #[proc_macro_error]
 pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -253,6 +256,7 @@ pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     quote!(::log::debug!("{}", #msg)).into()
 }
 
+/// Logs a message at the trace level with interpolation support
 #[proc_macro]
 #[proc_macro_error]
 pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -262,7 +266,7 @@ pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 #[proc_macro_error]
-/// Report fatal errors and exit process conveniently
+/// Logs a fatal message at the error level, and exit process
 ///
 /// e.g:
 /// ```no_run

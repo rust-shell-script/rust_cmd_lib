@@ -34,7 +34,7 @@ struct Opt {
 
 fn main() -> CmdResult {
     use_builtin_cmd!(echo, info);
-    init_builtin_log();
+    init_builtin_logger();
     let Opt {
         block_size,
         thread_num,
