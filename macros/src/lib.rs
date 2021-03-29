@@ -231,6 +231,14 @@ pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     quote!(::log::warn!("{}", #msg)).into()
 }
 
+/// Print a message to stdout with interpolation support
+#[proc_macro]
+#[proc_macro_error]
+pub fn cmd_echo(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let msg = parse_msg(input.into());
+    quote!(println!("{}", #msg)).into()
+}
+
 /// Logs a message at the info level with interpolation support
 ///
 /// e.g:

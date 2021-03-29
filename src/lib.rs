@@ -299,8 +299,8 @@
 //!
 
 pub use cmd_lib_macros::{
-    cmd_debug, cmd_die, cmd_error, cmd_info, cmd_trace, cmd_warn, export_cmd, run_cmd, run_fun,
-    spawn, spawn_with_output, use_builtin_cmd, use_custom_cmd,
+    cmd_debug, cmd_die, cmd_echo, cmd_error, cmd_info, cmd_trace, cmd_warn, export_cmd, run_cmd,
+    run_fun, spawn, spawn_with_output, use_builtin_cmd, use_custom_cmd,
 };
 pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;

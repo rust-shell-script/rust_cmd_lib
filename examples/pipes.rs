@@ -97,7 +97,7 @@ fn print_help() {
     let colors = run_fun!(tput colors).unwrap();
     let term = std::env::var("TERM").unwrap();
     #[rustfmt::skip]
-    cmd_info!("
+    cmd_echo!("
 Usage: $prog [OPTION]...
 Animated pipes terminal screensaver.
 
@@ -117,8 +117,7 @@ Animated pipes terminal screensaver.
   -h                    print this help message
   -v                    print version number
 
-Note: -t and -c can be used more than once.
-");
+Note: -t and -c can be used more than once.");
 }
 
 // parse command-line options
