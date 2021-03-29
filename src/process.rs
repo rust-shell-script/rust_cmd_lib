@@ -1,10 +1,10 @@
 use crate::{builtin_true, CmdResult, FunResult};
 use lazy_static::lazy_static;
-use log::{debug, error};
+use log::{debug, error, info};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 
@@ -232,6 +232,7 @@ impl WaitCmd {
             ProcHandle::ProcChild(child_opt) => {
                 if let Some(mut child) = child_opt {
                     let status_result = child.wait();
+                    Self::log_stderr(&mut child);
                     match status_result {
                         Err(e) => {
                             let _ = Self::wait_children(&mut self.0);
@@ -267,6 +268,7 @@ impl WaitCmd {
             let (child_handle, cmd) = children.pop().unwrap();
             if let ProcHandle::ProcChild(Some(mut child)) = child_handle {
                 let status = child.wait()?;
+                Self::log_stderr(&mut child);
                 if !status.success() && std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into()) {
                     return Err(Self::status_to_io_error(
                         status,
@@ -276,6 +278,15 @@ impl WaitCmd {
             }
         }
         Ok(())
+    }
+
+    fn log_stderr(child: &mut Child) {
+        if let Some(stderr) = child.stderr.take() {
+            BufReader::new(stderr)
+                .lines()
+                .filter_map(|line| line.ok())
+                .for_each(|line| info!("{}", line));
+        }
     }
 
     fn status_to_io_error(status: ExitStatus, command: &str) -> Error {
@@ -300,6 +311,7 @@ impl WaitFun {
             (ProcHandle::ProcChild(child_opt), cmd) => {
                 if let Some(child) = child_opt.take() {
                     let output = child.wait_with_output()?;
+                    Self::log_stderr_output(&output.stderr);
                     if !output.status.success() {
                         return Err(WaitCmd::status_to_io_error(
                             output.status,
@@ -352,6 +364,13 @@ impl WaitFun {
                 Ok(ret)
             }
         }
+    }
+
+    fn log_stderr_output(output: &[u8]) {
+        BufReader::new(output)
+            .lines()
+            .filter_map(|line| line.ok())
+            .for_each(|line| info!("{}", line));
     }
 }
 
@@ -478,6 +497,7 @@ impl Cmd {
             let mut cmd = Command::new(&cmds[0]);
             cmd.args(&cmds[1..]);
             cmd.stdout(Stdio::piped()); // set stdout piped() by default, update later if needed
+            cmd.stderr(Stdio::piped());
             for (k, v) in self.envs.iter() {
                 cmd.env(k, v);
             }
