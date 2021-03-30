@@ -4,7 +4,7 @@ use log::{debug, error, info};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
+use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 
@@ -137,7 +137,7 @@ impl GroupCmds {
         }
     }
 
-    pub fn spawn(mut self) -> std::io::Result<WaitCmd> {
+    pub fn spawn(mut self) -> Result<WaitCmd> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap().0;
         let ret = cmds.spawn(&mut self.current_dir, false);
@@ -147,7 +147,7 @@ impl GroupCmds {
         ret
     }
 
-    pub fn spawn_with_output(mut self) -> std::io::Result<WaitFun> {
+    pub fn spawn_with_output(mut self) -> Result<WaitFun> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap().0;
         match cmds.spawn(&mut self.current_dir, true) {
@@ -180,7 +180,7 @@ impl Cmds {
             .join(" | ")
     }
 
-    fn spawn(&mut self, current_dir: &mut String, with_output: bool) -> std::io::Result<WaitCmd> {
+    fn spawn(&mut self, current_dir: &mut String, with_output: bool) -> Result<WaitCmd> {
         if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
             debug!("Running {} ...", self.get_full_cmds());
         }
@@ -317,7 +317,7 @@ impl WaitCmd {
 
 pub struct WaitFun(Vec<(ProcHandle, String)>);
 impl WaitFun {
-    fn wait_output(handle: &mut (ProcHandle, String)) -> std::io::Result<Vec<u8>> {
+    fn wait_output(handle: &mut (ProcHandle, String)) -> Result<Vec<u8>> {
         match handle {
             (ProcHandle::ProcChild(child_opt), cmd) => {
                 if let Some(child) = child_opt.take() {
@@ -342,7 +342,7 @@ impl WaitFun {
         Ok(vec![])
     }
 
-    pub fn wait_raw_result(&mut self) -> std::io::Result<Vec<u8>> {
+    pub fn wait_raw_result(&mut self) -> Result<Vec<u8>> {
         let ret = self.wait_raw_result_nolog();
         if let Err(ref err) = ret {
             error!("Running {} failed, Error: {}", self.get_full_cmd(), err);
@@ -350,7 +350,7 @@ impl WaitFun {
         ret
     }
 
-    pub fn wait_raw_result_nolog(&mut self) -> std::io::Result<Vec<u8>> {
+    pub fn wait_raw_result_nolog(&mut self) -> Result<Vec<u8>> {
         let mut handle = self.0.pop().unwrap();
         let wait_last = Self::wait_output(&mut handle);
         match wait_last {
@@ -548,7 +548,7 @@ impl Cmd {
         is_first: bool,
         is_last: bool,
         prev_child: &mut Option<&mut (ProcHandle, String)>,
-    ) -> std::io::Result<(ProcHandle, String)> {
+    ) -> Result<(ProcHandle, String)> {
         if self.arg0() == "cd" {
             self.run_cd_cmd(current_dir)?;
             Ok((ProcHandle::ProcBuf(None), self.debug_str()))
@@ -646,7 +646,7 @@ impl Cmd {
         Ok(())
     }
 
-    fn open_file(path: &str, read_only: bool, append: bool) -> std::io::Result<File> {
+    fn open_file(path: &str, read_only: bool, append: bool) -> Result<File> {
         if read_only {
             OpenOptions::new().read(true).open(path)
         } else {
@@ -659,11 +659,7 @@ impl Cmd {
         }
     }
 
-    fn open_file_for_stdio(
-        path: &str,
-        read_only: bool,
-        append: bool,
-    ) -> std::io::Result<impl Into<Stdio>> {
+    fn open_file_for_stdio(path: &str, read_only: bool, append: bool) -> Result<impl Into<Stdio>> {
         if path == "/dev/null" {
             Ok(Stdio::null())
         } else {
