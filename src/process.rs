@@ -1,10 +1,12 @@
 use crate::{builtin_true, CmdResult, FunResult};
+use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Write};
+use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 
@@ -640,6 +642,11 @@ impl Cmd {
             let err_msg = format!("cd: {}: No such file or directory", dir);
             error!("{}", err_msg);
             return Err(Error::new(ErrorKind::Other, err_msg));
+        }
+
+        if let Err(e) = Path::new(dir).access(AccessMode::EXECUTE) {
+            error!("cd {}: {}", dir, e);
+            return Err(e);
         }
 
         *current_dir = dir.clone();
