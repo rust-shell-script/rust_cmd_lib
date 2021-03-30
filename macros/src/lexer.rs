@@ -422,22 +422,26 @@ impl<I: Iterator<Item = TokenTree>> TokenStreamPeekable<I> {
 
     // helper function to get (start, end) of Span
     fn span_location(span: &Span) -> (usize, usize) {
-        let s = format!("{:?}", span);
         let mut start = 0;
         let mut end = 0;
-        let mut parse_second = false;
-        for c in s.chars().skip(6) {
-            if c == '.' {
-                parse_second = true;
-            } else if c.is_ascii_digit() {
-                let digit = c.to_digit(10).unwrap() as usize;
-                if !parse_second {
-                    start = start * 10 + digit;
-                } else {
-                    end = end * 10 + digit;
+        let mut parse_start = true;
+        format!("{:?}", span) // output is like this: #0 bytes(95..97)
+            .chars()
+            .skip_while(|c| *c != '(')
+            .skip(1)
+            .take_while(|c| *c != ')')
+            .for_each(|c| {
+                if c == '.' {
+                    parse_start = false;
+                } else if c.is_ascii_digit() {
+                    let digit = c.to_digit(10).unwrap() as usize;
+                    if parse_start {
+                        start = start * 10 + digit;
+                    } else {
+                        end = end * 10 + digit;
+                    }
                 }
-            }
-        }
+            });
         (start, end)
     }
 }
