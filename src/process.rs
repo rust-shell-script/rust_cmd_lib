@@ -210,11 +210,11 @@ impl Cmds {
     }
 
     fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
-        self.spawn(current_dir, false)?.wait_result_impl()
+        self.spawn(current_dir, false)?.wait_result_nolog()
     }
 
     fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
-        WaitFun(self.spawn(current_dir, true)?.0).wait_result_impl()
+        WaitFun(self.spawn(current_dir, true)?.0).wait_result_nolog()
     }
 }
 
@@ -232,14 +232,14 @@ impl WaitCmd {
             .map(|cmd| cmd.1.to_owned())
             .collect::<Vec<_>>()
             .join(" | ");
-        let ret = self.wait_result_impl();
+        let ret = self.wait_result_nolog();
         if let Err(ref err) = ret {
             error!("Running {} failed, Error: {}", full_cmd, err);
         }
         ret
     }
 
-    fn wait_result_impl(&mut self) -> CmdResult {
+    fn wait_result_nolog(&mut self) -> CmdResult {
         // wait last process result
         let (handle, cmd) = self.0.pop().unwrap();
         match handle {
@@ -346,6 +346,14 @@ impl WaitFun {
     }
 
     pub fn wait_raw_result(&mut self) -> std::io::Result<Vec<u8>> {
+        let ret = self.wait_raw_result_nolog();
+        if let Err(ref err) = ret {
+            error!("Running {} failed, Error: {}", self.get_full_cmd(), err);
+        }
+        ret
+    }
+
+    pub fn wait_raw_result_nolog(&mut self) -> std::io::Result<Vec<u8>> {
         let mut handle = self.0.pop().unwrap();
         let wait_last = Self::wait_output(&mut handle);
         match wait_last {
@@ -360,21 +368,23 @@ impl WaitFun {
         }
     }
 
-    pub fn wait_result(&mut self) -> FunResult {
-        let full_cmd = self
-            .0
+    fn get_full_cmd(&self) -> String {
+        self.0
             .iter()
             .map(|cmd| cmd.1.to_owned())
             .collect::<Vec<_>>()
-            .join(" | ");
-        let ret = self.wait_result_impl();
+            .join(" | ")
+    }
+
+    pub fn wait_result(&mut self) -> FunResult {
+        let ret = self.wait_result_nolog();
         if let Err(ref err) = ret {
-            error!("Running {} failed, Error: {}", full_cmd, err);
+            error!("Running {} failed, Error: {}", self.get_full_cmd(), err);
         }
         ret
     }
 
-    pub fn wait_result_impl(&mut self) -> FunResult {
+    pub fn wait_result_nolog(&mut self) -> FunResult {
         // wait last process result
         let mut handle = self.0.pop().unwrap();
         let wait_last = Self::wait_output(&mut handle);
