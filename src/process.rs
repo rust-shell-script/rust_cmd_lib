@@ -569,14 +569,18 @@ impl Cmd {
 
             // setup stderr
             if let Some((ref path, append)) = self.stderr_redirect {
-                Cmd::open_file(path, append)?.write_all(&env.errbuf)?;
+                Cmd::open_file(path, false, append)?.write_all(&env.errbuf)?;
             } else {
                 WaitFun::log_stderr_output(&env.errbuf[..]);
             }
 
             // setup stdout
             if let Some((ref path, append)) = self.stdout_redirect {
-                Cmd::open_file(path, append)?.write_all(&env.outbuf)?;
+                if path == "/dev/stderr" && self.stderr_redirect.is_none() {
+                    WaitFun::log_stderr_output(&env.outbuf[..]);
+                } else {
+                    Cmd::open_file(path, false, append)?.write_all(&env.outbuf)?;
+                }
                 Ok((ProcHandle::ProcBuf(None), self.debug_str()))
             } else {
                 Ok((ProcHandle::ProcBuf(Some(env.outbuf)), self.debug_str()))
@@ -642,13 +646,29 @@ impl Cmd {
         Ok(())
     }
 
-    fn open_file(path: &str, append: bool) -> std::io::Result<File> {
-        OpenOptions::new()
-            .create(true)
-            .truncate(!append)
-            .write(true)
-            .append(append)
-            .open(path)
+    fn open_file(path: &str, read_only: bool, append: bool) -> std::io::Result<File> {
+        if read_only {
+            OpenOptions::new().read(true).open(path)
+        } else {
+            OpenOptions::new()
+                .create(true)
+                .truncate(!append)
+                .write(true)
+                .append(append)
+                .open(path)
+        }
+    }
+
+    fn open_file_for_stdio(
+        path: &str,
+        read_only: bool,
+        append: bool,
+    ) -> std::io::Result<impl Into<Stdio>> {
+        if path == "/dev/null" {
+            Ok(Stdio::null())
+        } else {
+            Ok(Stdio::from(Self::open_file(path, read_only, append)?))
+        }
     }
 
     fn setup_redirects(&mut self) -> CmdResult {
@@ -658,47 +678,34 @@ impl Cmd {
             match redirect {
                 Redirect::FileToStdin(path) => {
                     if let Some(cmd) = self.std_cmd.as_mut() {
-                        if path == "/dev/null" {
-                            cmd.stdin(Stdio::null());
-                        } else {
-                            let file = OpenOptions::new().read(true).open(path)?;
-                            cmd.stdin(file);
-                        }
+                        cmd.stdin(Self::open_file_for_stdio(path, true, false)?);
                     }
                     self.stdin_redirect = Some(path.into());
                 }
                 Redirect::StdoutToStderr => {
                     if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stdout(Self::open_file(stderr_file, true)?);
+                        cmd.stdout(Self::open_file_for_stdio(stderr_file, false, true)?);
                     }
-                    self.stdout_redirect = Some(("/dev/stderr".into(), false));
+                    self.stdout_redirect = Some((stderr_file.into(), false));
                 }
                 Redirect::StderrToStdout => {
                     if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stderr(Self::open_file(stdout_file, true)?);
+                        cmd.stderr(Self::open_file_for_stdio(stdout_file, false, true)?);
                     }
-                    self.stderr_redirect = Some(("/dev/stdout".into(), false));
+                    self.stderr_redirect = Some((stdout_file.into(), false));
                 }
                 Redirect::StdoutToFile(path, append) => {
                     if let Some(cmd) = self.std_cmd.as_mut() {
-                        if path == "/dev/null" {
-                            cmd.stdout(Stdio::null());
-                        } else {
-                            cmd.stdout(Self::open_file(path, *append)?);
-                            stdout_file = path;
-                        }
+                        cmd.stdout(Self::open_file_for_stdio(path, false, *append)?);
                     }
+                    stdout_file = path;
                     self.stdout_redirect = Some((path.into(), *append));
                 }
                 Redirect::StderrToFile(path, append) => {
                     if let Some(cmd) = self.std_cmd.as_mut() {
-                        if path == "/dev/null" {
-                            cmd.stderr(Stdio::null());
-                        } else {
-                            cmd.stderr(Self::open_file(path, *append)?);
-                            stderr_file = path;
-                        }
+                        cmd.stderr(Self::open_file_for_stdio(path, false, *append)?);
                     }
+                    stderr_file = path;
                     self.stderr_redirect = Some((path.into(), *append));
                 }
             }
