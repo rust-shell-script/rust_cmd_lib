@@ -296,10 +296,7 @@ impl WaitCmd {
 
     fn log_stderr(child: &mut Child) {
         if let Some(stderr) = child.stderr.take() {
-            BufReader::new(stderr)
-                .lines()
-                .filter_map(|line| line.ok())
-                .for_each(|line| info!("{}", line));
+            WaitFun::log_stderr_output(stderr);
         }
     }
 
@@ -325,7 +322,7 @@ impl WaitFun {
             (ProcHandle::ProcChild(child_opt), cmd) => {
                 if let Some(child) = child_opt.take() {
                     let output = child.wait_with_output()?;
-                    Self::log_stderr_output(&output.stderr);
+                    Self::log_stderr_output(&output.stderr[..]);
                     if !output.status.success() {
                         return Err(WaitCmd::status_to_io_error(
                             output.status,
@@ -404,7 +401,7 @@ impl WaitFun {
         }
     }
 
-    fn log_stderr_output(output: &[u8]) {
+    fn log_stderr_output(output: impl Read) {
         BufReader::new(output)
             .lines()
             .filter_map(|line| line.ok())
@@ -574,7 +571,7 @@ impl Cmd {
             if let Some((ref path, append)) = self.stderr_redirect {
                 Cmd::open_file(path, append)?.write_all(&env.errbuf)?;
             } else {
-                std::io::stderr().write_all(&env.errbuf)?;
+                WaitFun::log_stderr_output(&env.errbuf[..]);
             }
 
             // setup stdout
