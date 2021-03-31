@@ -306,26 +306,32 @@ impl Lexer {
     }
 
     fn scan_ampersand(&mut self, iter: &mut TokenStreamPeekable<impl Iterator<Item = TokenTree>>) {
-        if let Some(TokenTree::Punct(p)) = iter.peek_no_gap() {
-            let span = p.span();
-            if p.as_char() == '>' {
-                iter.next();
-                self.set_redirect(
-                    span,
-                    RedirectFd::StdoutErr {
-                        append: Self::check_append(iter),
-                    },
-                );
+        if let Some(tt) = iter.peek_no_gap() {
+            if let TokenTree::Punct(p) = tt {
+                let span = p.span();
+                if p.as_char() == '>' {
+                    iter.next();
+                    self.set_redirect(
+                        span,
+                        RedirectFd::StdoutErr {
+                            append: Self::check_append(iter),
+                        },
+                    );
+                } else {
+                    abort!(span, "invalid punctuation");
+                }
             } else {
-                abort!(span, "invalid punctuation");
+                abort!(tt.span(), "invalid format after '&'");
             }
         } else if self.last_redirect.is_some() {
             abort!(
                 iter.span(),
                 "wrong redirection format: no spacing permitted before '&'"
             );
+        } else if iter.peek().is_some() {
+            abort!(iter.span(), "invalid spacing after '&'");
         } else {
-            abort!(iter.span(), "invalid token after '&'");
+            abort!(iter.span(), "invalid '&' at the end");
         }
     }
 
