@@ -164,7 +164,7 @@ impl Lexer {
                 RedirectFd::Stderr { append } => (2, append),
                 RedirectFd::StdoutErr { append } => {
                     stdouterr = true;
-                    (2, append)
+                    (1, append)
                 }
             };
             self.args.push(ParseArg::ParseRedirectFile(
@@ -173,8 +173,7 @@ impl Lexer {
                 append,
             ));
             if stdouterr {
-                self.args
-                    .push(ParseArg::ParseRedirectFile(1, quote!(#last_arg_str), true));
+                self.args.push(ParseArg::ParseRedirectFd(2, 1));
             }
         } else if !last_arg_str.is_empty() {
             self.args.push(ParseArg::ParseArgStr(quote!(#last_arg_str)));
