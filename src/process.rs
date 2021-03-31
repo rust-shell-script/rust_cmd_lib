@@ -508,20 +508,19 @@ impl Cmd {
     }
 
     fn debug_str(&self) -> String {
-        let mut ret = String::new();
-        ret += &format!("{:?}", self.args);
+        let mut ret = format!("{:?}", self.args);
         let mut extra = String::new();
         if !self.envs.is_empty() {
-            extra += &format!("envs: {:?}", self.envs);
+            extra += &format!("{:?}", self.envs);
         }
         if !self.redirects.is_empty() {
             if !extra.is_empty() {
                 extra += ", ";
             }
-            extra += &format!("redirects: {:?}", self.redirects);
+            extra += &format!("{:?}", self.redirects);
         }
         if !extra.is_empty() {
-            ret += &format!(" ({})", extra);
+            ret += &format!("({})", extra);
         }
         ret
     }
