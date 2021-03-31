@@ -238,6 +238,12 @@ impl Lexer {
             if p.as_char() == '|' {
                 is_pipe = false;
                 iter.next();
+            } else if p.as_char() == '&' {
+                if let Some(ref redirect) = self.last_redirect {
+                    abort!(redirect.1, "invalid '&': found previous redirect");
+                }
+                self.args.push(ParseArg::ParseRedirectFd(2, 1));
+                iter.next();
             }
         }
 
