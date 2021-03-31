@@ -612,7 +612,7 @@ impl Cmd {
             // spawning process
             let mut child = cmd.spawn()?;
             if !is_first {
-                if let (ProcHandle::ProcBuf(ss), _) = prev_child.take().unwrap() {
+                if let Some((ProcHandle::ProcBuf(ss), _)) = prev_child.take() {
                     if let Some(s) = ss.take() {
                         if let Some(mut input) = child.stdin.take() {
                             input.write_all(&s)?;
@@ -661,6 +661,14 @@ impl Cmd {
         }
     }
 
+    fn open_file_for_stdio(file: &File, path: &str) -> Result<impl Into<Stdio>> {
+        if path == "/dev/null" {
+            Ok(Stdio::null())
+        } else {
+            Ok(Stdio::from(file.try_clone()?))
+        }
+    }
+
     fn setup_redirects(&mut self) -> CmdResult {
         let mut stdout_file = "/dev/stdout";
         let mut stderr_file = "/dev/stderr";
@@ -680,7 +688,7 @@ impl Cmd {
                         Self::open_file(stderr_file, false, true)?
                     };
                     if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stdout(file.try_clone()?);
+                        cmd.stderr(Self::open_file_for_stdio(&file, stderr_file)?);
                     }
                     self.stdout_redirect = Some(file);
                 }
@@ -691,14 +699,14 @@ impl Cmd {
                         Self::open_file(stdout_file, false, true)?
                     };
                     if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stderr(file.try_clone()?);
+                        cmd.stderr(Self::open_file_for_stdio(&file, stdout_file)?);
                     }
                     self.stderr_redirect = Some(file);
                 }
                 Redirect::StdoutToFile(path, append) => {
                     let file = Self::open_file(path, false, *append)?;
                     if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stdout(file.try_clone()?);
+                        cmd.stdout(Self::open_file_for_stdio(&file, path)?);
                     }
                     stdout_file = path;
                     self.stdout_redirect = Some(file);
@@ -706,7 +714,7 @@ impl Cmd {
                 Redirect::StderrToFile(path, append) => {
                     let file = Self::open_file(path, false, *append)?;
                     if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stderr(file.try_clone()?);
+                        cmd.stderr(Self::open_file_for_stdio(&file, path)?);
                     }
                     stderr_file = path;
                     self.stderr_redirect = Some(file);
