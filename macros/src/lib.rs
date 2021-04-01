@@ -149,11 +149,11 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// ```
 /// # use cmd_lib::run_fun;
 /// let version = run_fun!(rustc --version)?;
-/// log::info!("Your rust version is {}", version);
+/// println!("Your rust version is {}", version);
 ///
 /// // with pipes
 /// let n = run_fun!(echo "the quick brown fox jumped over the lazy dog" | wc -w)?;
-/// log::info!("There are {} words in above sentence", n);
+/// println!("There are {} words in above sentence", n);
 /// # Ok::<(), std::io::Error>(())
 /// ```
 #[proc_macro]
@@ -220,7 +220,7 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 #[proc_macro_error]
 pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::log::error!("{}", #msg)).into()
+    quote!(::cmd_lib::log::error!("{}", #msg)).into()
 }
 
 /// Logs a message at the warn level with interpolation support
@@ -228,7 +228,7 @@ pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::log::warn!("{}", #msg)).into()
+    quote!(::cmd_lib::log::warn!("{}", #msg)).into()
 }
 
 /// Print a message to stdout with interpolation support
@@ -253,7 +253,7 @@ pub fn cmd_echo(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::log::info!("{}", #msg)).into()
+    quote!(::cmd_lib::log::info!("{}", #msg)).into()
 }
 
 /// Logs a message at the debug level with interpolation support
@@ -261,7 +261,7 @@ pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::log::debug!("{}", #msg)).into()
+    quote!(::cmd_lib::log::debug!("{}", #msg)).into()
 }
 
 /// Logs a message at the trace level with interpolation support
@@ -269,7 +269,7 @@ pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::log::trace!("{}", #msg)).into()
+    quote!(::cmd_lib::log::trace!("{}", #msg)).into()
 }
 
 #[proc_macro]
@@ -291,7 +291,7 @@ pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!(
-        ::log::error!("FATAL: {}", #msg);
+        ::cmd_lib::log::error!("FATAL: {}", #msg);
         std::process::exit(1);
     )
     .into()

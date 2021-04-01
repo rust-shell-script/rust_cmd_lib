@@ -308,6 +308,8 @@ pub use builtins::{
     builtin_cat, builtin_debug, builtin_die, builtin_echo, builtin_error, builtin_info,
     builtin_trace, builtin_true, builtin_warn,
 };
+#[doc(hidden)]
+pub use log;
 pub use logger::init_builtin_logger;
 pub use process::{export_cmd, set_debug, set_pipefail, Cmd, CmdEnv, Cmds, GroupCmds, Redirect};
 
