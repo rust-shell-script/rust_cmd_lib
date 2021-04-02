@@ -237,14 +237,10 @@ fn test_escape() {
 
 #[test]
 fn test_current_dir() {
+    let path = run_fun!(ls /; cd /tmp; pwd).unwrap();
     assert_eq!(
-        run_fun!(
-            ls /;
-            cd /tmp;
-            pwd;
-        )
-        .unwrap(),
-        "/tmp"
+        std::fs::canonicalize(&path).unwrap(),
+        std::fs::canonicalize("/tmp").unwrap()
     );
 }
 
