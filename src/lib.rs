@@ -314,6 +314,7 @@ pub use logger::init_builtin_logger;
 pub use process::{export_cmd, set_debug, set_pipefail, Cmd, CmdEnv, Cmds, GroupCmds, Redirect};
 
 mod builtins;
+mod io;
 mod logger;
 mod process;
 mod thread_local;

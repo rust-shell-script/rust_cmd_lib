@@ -1,7 +1,9 @@
+use crate::io::*;
 use crate::{builtin_true, CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
 use log::{debug, error, info};
+use os_pipe::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
@@ -12,25 +14,14 @@ use std::sync::Mutex;
 
 /// Process environment for builtin or custom commands
 pub struct CmdEnv<'a> {
-    inbuf: Vec<u8>,
-    outbuf: Vec<u8>,
-    errbuf: Vec<u8>,
+    stdin: CmdIn,
+    stdout: CmdOut,
+    stderr: CmdOut,
     args: &'a [String],
     vars: &'a HashMap<String, String>,
     current_dir: &'a str,
 }
 impl<'a> CmdEnv<'a> {
-    fn new(args: &'a [String], vars: &'a HashMap<String, String>, current_dir: &'a str) -> Self {
-        CmdEnv {
-            inbuf: vec![],
-            outbuf: vec![],
-            errbuf: vec![],
-            args,
-            vars,
-            current_dir,
-        }
-    }
-
     pub fn args(&self) -> &[String] {
         self.args
     }
@@ -43,16 +34,16 @@ impl<'a> CmdEnv<'a> {
         self.current_dir
     }
 
-    pub fn stdin(&self) -> impl Read + '_ {
-        self.inbuf.as_slice()
+    pub fn stdin(&mut self) -> impl Read + '_ {
+        &mut self.stdin
     }
 
     pub fn stdout(&mut self) -> impl Write + '_ {
-        &mut self.outbuf
+        &mut self.stdout
     }
 
     pub fn stderr(&mut self) -> impl Write + '_ {
-        &mut self.errbuf
+        &mut self.stderr
     }
 }
 
@@ -187,23 +178,23 @@ impl Cmds {
             debug!("Running {} ...", self.get_full_cmds());
         }
 
-        // set up redirects
-        for cmd in self.cmds.iter_mut() {
-            cmd.setup_redirects()?;
-        }
-
         // spawning all the sub-processes
         let mut children: Vec<(ProcHandle, String)> = Vec::new();
         let len = self.cmds.len();
         let mut last_child = None;
+        let mut last_pipe_in = None;
         for (i, cmd) in self.cmds.iter_mut().enumerate() {
-            let child = cmd.spawn(
-                current_dir,
-                with_output,
-                i == 0,
-                i == len - 1,
-                &mut last_child,
-            )?;
+            let is_first = i == 0;
+            let is_last = i == len - 1;
+            // update redirects
+            if !is_last {
+                let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
+                cmd.setup_redirects(&mut last_pipe_in, Some(pipe_writer))?;
+                last_pipe_in = Some(pipe_reader);
+            } else {
+                cmd.setup_redirects(&mut last_pipe_in, None)?;
+            }
+            let child = cmd.spawn(current_dir, is_first, with_output, &mut last_child)?;
             children.push(child);
             last_child = children.last_mut();
         }
@@ -448,14 +439,15 @@ pub struct Cmd {
     // for parsing
     in_cmd_map: bool,
     args: Vec<String>,
-    envs: HashMap<String, String>,
+    vars: HashMap<String, String>,
     redirects: Vec<Redirect>,
 
     // for running
     std_cmd: Option<Command>,
-    stdin_redirect: Option<File>,
-    stdout_redirect: Option<File>,
-    stderr_redirect: Option<File>,
+    stdin_redirect: Option<CmdIn>,
+    stdout_redirect: Option<CmdOut>,
+    stderr_redirect: Option<CmdOut>,
+    stderr_logging: Option<CmdIn>,
 }
 
 impl Default for Cmd {
@@ -463,12 +455,13 @@ impl Default for Cmd {
         Cmd {
             in_cmd_map: true,
             args: vec![],
-            envs: HashMap::new(),
+            vars: HashMap::new(),
             redirects: vec![],
+            std_cmd: None,
             stdin_redirect: None,
             stdout_redirect: None,
             stderr_redirect: None,
-            std_cmd: None,
+            stderr_logging: None,
         }
     }
 }
@@ -478,7 +471,7 @@ impl Cmd {
         if self.args.is_empty() {
             let v: Vec<&str> = arg.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                self.envs.insert(v[0].to_owned(), v[1].to_owned());
+                self.vars.insert(v[0].to_owned(), v[1].to_owned());
                 return self;
             }
             self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg.as_str());
@@ -510,8 +503,8 @@ impl Cmd {
     fn debug_str(&self) -> String {
         let mut ret = format!("{:?}", self.args);
         let mut extra = String::new();
-        if !self.envs.is_empty() {
-            extra += &format!("{:?}", self.envs);
+        if !self.vars.is_empty() {
+            extra += &format!("{:?}", self.vars);
         }
         if !self.redirects.is_empty() {
             if !extra.is_empty() {
@@ -532,9 +525,8 @@ impl Cmd {
             let cmds: Vec<String> = self.args.to_vec();
             let mut cmd = Command::new(&cmds[0]);
             cmd.args(&cmds[1..]);
-            cmd.stdout(Stdio::piped()); // set stdout piped() by default, update later if needed
             cmd.stderr(Stdio::piped());
-            for (k, v) in self.envs.iter() {
+            for (k, v) in self.vars.iter() {
                 cmd.env(k, v);
             }
             self.std_cmd = Some(cmd);
@@ -545,42 +537,56 @@ impl Cmd {
     fn spawn(
         &mut self,
         current_dir: &mut String,
-        with_output: bool,
         is_first: bool,
-        is_last: bool,
+        with_output: bool,
         prev_child: &mut Option<&mut (ProcHandle, String)>,
     ) -> Result<(ProcHandle, String)> {
         if self.arg0() == "cd" {
             self.run_cd_cmd(current_dir)?;
             Ok((ProcHandle::ProcBuf(None), self.debug_str()))
         } else if self.in_cmd_map {
-            let mut env = CmdEnv::new(&self.args, &self.envs, &current_dir);
-
-            // setup stdin
-            if is_first {
-                if let Some(mut input) = self.stdin_redirect.take() {
-                    input.read_to_end(&mut env.inbuf)?;
-                }
-            } else {
-                env.inbuf = WaitFun::wait_output(&mut prev_child.take().unwrap())?;
-            }
+            let mut pipe_out = None;
+            let mut env = CmdEnv {
+                args: &self.args,
+                vars: &self.vars,
+                current_dir: &current_dir,
+                stdin: if let Some(redirect_in) = self.stdin_redirect.take() {
+                    redirect_in
+                } else {
+                    CmdIn::CmdPipe(dup_stdin()?)
+                },
+                stdout: if let Some(redirect_out) = self.stdout_redirect.take() {
+                    redirect_out
+                } else if with_output {
+                    let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
+                    pipe_out = Some(pipe_reader);
+                    CmdOut::CmdPipe(pipe_writer)
+                } else {
+                    CmdOut::CmdPipe(dup_stdout()?)
+                },
+                stderr: if let Some(redirect_err) = self.stderr_redirect.take() {
+                    redirect_err
+                } else {
+                    CmdOut::CmdPipe(dup_stderr()?)
+                },
+            };
 
             let internal_cmd = CMD_MAP.lock().unwrap()[self.arg0()];
             internal_cmd(&mut env)?;
+            drop(env);
 
-            // setup stderr
-            if let Some(mut output_err) = self.stderr_redirect.take() {
-                output_err.write_all(&env.errbuf)?;
-            } else {
-                WaitFun::log_stderr_output(&env.errbuf[..]);
+            // update stderr
+            if let Some(output) = self.stderr_logging.take() {
+                WaitFun::log_stderr_output(output);
             }
 
             // setup stdout
-            if let Some(mut output) = self.stdout_redirect.take() {
-                output.write_all(&env.outbuf)?;
-                Ok((ProcHandle::ProcBuf(None), self.debug_str()))
+            if let Some(mut output) = pipe_out.take() {
+                let mut buf = vec![];
+                output.read_to_end(&mut buf)?;
+                Ok((ProcHandle::ProcBuf(Some(buf)), self.debug_str()))
             } else {
-                Ok((ProcHandle::ProcBuf(Some(env.outbuf)), self.debug_str()))
+                Ok((ProcHandle::ProcBuf(None), self.debug_str()))
             }
         } else {
             let mut cmd = self.std_cmd.take().unwrap();
@@ -591,22 +597,20 @@ impl Cmd {
             }
 
             // update stdin
-            if !is_first {
-                let mut stdin_setup_done = false;
-                if let Some((ProcHandle::ProcChild(Some(child)), _)) = prev_child {
-                    if let Some(output) = child.stdout.take() {
-                        cmd.stdin(output);
-                        stdin_setup_done = true;
-                    }
-                }
-                if !stdin_setup_done {
-                    cmd.stdin(Stdio::piped());
-                }
+            if let Some(redirect_in) = self.stdin_redirect.take() {
+                cmd.stdin(redirect_in);
             }
 
             // update stdout
-            if is_last && !with_output && self.stdout_redirect.is_none() {
-                cmd.stdout(Stdio::inherit());
+            if let Some(redirect_out) = self.stdout_redirect.take() {
+                cmd.stdout(redirect_out);
+            } else if with_output {
+                cmd.stdout(Stdio::piped());
+            }
+
+            // update stderr
+            if let Some(redirect_err) = self.stderr_redirect.take() {
+                cmd.stderr(redirect_err);
             }
 
             // spawning process
@@ -661,63 +665,52 @@ impl Cmd {
         }
     }
 
-    fn open_file_for_stdio(file: &File, path: &str) -> Result<impl Into<Stdio>> {
-        if path == "/dev/null" {
-            Ok(Stdio::null())
-        } else {
-            Ok(Stdio::from(file.try_clone()?))
+    fn setup_redirects(
+        &mut self,
+        pipe_in: &mut Option<PipeReader>,
+        pipe_out: Option<PipeWriter>,
+    ) -> CmdResult {
+        if self.in_cmd_map {
+            // set up error pipe
+            let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
+            self.stderr_redirect = Some(CmdOut::CmdPipe(pipe_writer));
+            self.stderr_logging = Some(CmdIn::CmdPipe(pipe_reader));
         }
-    }
 
-    fn setup_redirects(&mut self) -> CmdResult {
-        let mut stdout_file = "/dev/stdout";
-        let mut stderr_file = "/dev/stderr";
+        if let Some(pipe) = pipe_in.take() {
+            self.stdin_redirect = Some(CmdIn::CmdPipe(pipe));
+        }
+        if let Some(pipe) = pipe_out {
+            self.stdout_redirect = Some(CmdOut::CmdPipe(pipe));
+        }
+
         for redirect in self.redirects.iter() {
             match redirect {
                 Redirect::FileToStdin(path) => {
                     let file = Self::open_file(path, true, false)?;
-                    if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stdin(file.try_clone()?);
-                    }
-                    self.stdin_redirect = Some(file);
+                    self.stdin_redirect = Some(CmdIn::CmdFile(file));
                 }
                 Redirect::StdoutToStderr => {
-                    let file = if let Some(ref f) = self.stderr_redirect {
-                        f.try_clone()?
+                    if let Some(ref redirect) = self.stderr_redirect {
+                        self.stdout_redirect = Some(redirect.try_clone()?);
                     } else {
-                        Self::open_file(stderr_file, false, true)?
-                    };
-                    if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stderr(Self::open_file_for_stdio(&file, stderr_file)?);
+                        self.stdout_redirect = Some(CmdOut::CmdPipe(dup_stdout()?));
                     }
-                    self.stdout_redirect = Some(file);
                 }
                 Redirect::StderrToStdout => {
-                    let file = if let Some(ref f) = self.stdout_redirect {
-                        f.try_clone()?
+                    if let Some(ref redirect) = self.stdout_redirect {
+                        self.stderr_redirect = Some(redirect.try_clone()?);
                     } else {
-                        Self::open_file(stdout_file, false, true)?
-                    };
-                    if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stderr(Self::open_file_for_stdio(&file, stdout_file)?);
+                        self.stderr_redirect = Some(CmdOut::CmdPipe(dup_stderr()?));
                     }
-                    self.stderr_redirect = Some(file);
                 }
                 Redirect::StdoutToFile(path, append) => {
                     let file = Self::open_file(path, false, *append)?;
-                    if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stdout(Self::open_file_for_stdio(&file, path)?);
-                    }
-                    stdout_file = path;
-                    self.stdout_redirect = Some(file);
+                    self.stdout_redirect = Some(CmdOut::CmdFile(file));
                 }
                 Redirect::StderrToFile(path, append) => {
                     let file = Self::open_file(path, false, *append)?;
-                    if let Some(cmd) = self.std_cmd.as_mut() {
-                        cmd.stderr(Self::open_file_for_stdio(&file, path)?);
-                    }
-                    stderr_file = path;
-                    self.stderr_redirect = Some(file);
+                    self.stderr_redirect = Some(CmdOut::CmdFile(file));
                 }
             }
         }

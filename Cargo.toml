@@ -20,6 +20,7 @@ cmd_lib_macros = { version = "1.0.8", path = "./macros" }
 lazy_static = "1.4.0"
 log = "0.4"
 faccess = "0.2"
+os_pipe = "0.9"
 
 [dev-dependencies]
 rayon = "1.5"
