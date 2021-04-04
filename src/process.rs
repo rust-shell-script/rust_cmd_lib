@@ -687,8 +687,11 @@ impl Cmd {
         for redirect in self.redirects.iter() {
             match redirect {
                 Redirect::FileToStdin(path) => {
-                    let file = Self::open_file(path, true, false)?;
-                    self.stdin_redirect = Some(CmdIn::CmdFile(file));
+                    self.stdin_redirect = Some(if path == "/dev/null" {
+                        CmdIn::CmdNull
+                    } else {
+                        CmdIn::CmdFile(Self::open_file(path, true, false)?)
+                    });
                 }
                 Redirect::StdoutToStderr => {
                     if let Some(ref redirect) = self.stderr_redirect {
@@ -705,12 +708,18 @@ impl Cmd {
                     }
                 }
                 Redirect::StdoutToFile(path, append) => {
-                    let file = Self::open_file(path, false, *append)?;
-                    self.stdout_redirect = Some(CmdOut::CmdFile(file));
+                    self.stdout_redirect = Some(if path == "/dev/null" {
+                        CmdOut::CmdNull
+                    } else {
+                        CmdOut::CmdFile(Self::open_file(path, false, *append)?)
+                    });
                 }
                 Redirect::StderrToFile(path, append) => {
-                    let file = Self::open_file(path, false, *append)?;
-                    self.stderr_redirect = Some(CmdOut::CmdFile(file));
+                    self.stderr_redirect = Some(if path == "/dev/null" {
+                        CmdOut::CmdNull
+                    } else {
+                        CmdOut::CmdFile(Self::open_file(path, false, *append)?)
+                    });
                 }
             }
         }
