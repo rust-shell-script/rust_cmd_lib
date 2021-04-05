@@ -115,10 +115,14 @@ eprintln!("There are {} words in above sentence", n);
 ```
 
 #### Abstraction without overhead
+
 Since all the macros' lexical analysis and syntactic analysis happen at compile time, it can
 basically generate code the same as calling `std::process` APIs manually. It also includes
 command type checking, so most of the errors can be found at compile time instead of at
-runtime.
+runtime. With tools like `rust-analyzer`, it can give you real-time feedback for broken
+commands being used.
+
+You can use `cargo expand` to check the generated code.
 
 #### Intuitive parameters passing
 When passing parameters to `run_cmd!` and `run_fun!` macros, if they are not part to rust
@@ -159,6 +163,23 @@ for opts in gopts {
 #### Redirection and Piping
 Right now piping and stdin, stdout, stderr redirection are supported. Most parts are the same as in
 [bash scripts](https://www.gnu.org/software/bash/manual/html_node/Redirections.html#Redirections).
+
+#### logging
+
+This library provides convenient macros and builtin commands for logging. It also automatically logs
+command execution failures, along with messages which were printed to stderr originally.
+
+```rust
+let dir: &str = "folder with spaces";
+assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir).is_ok());
+assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
+// output:
+// INFO - mkdir: cannot create directory ‘/tmp/folder with spaces’: File exists
+// ERROR - Running ["mkdir", "/tmp/folder with spaces"] failed, Error: ["mkdir", "/tmp/folder with spaces"] exited with error; status code: 1
+```
+
+It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite logging
+implementation.
 
 #### Builtin commands
 ##### cd

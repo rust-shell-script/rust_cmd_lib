@@ -13,7 +13,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
-/// Process environment for builtin or custom commands
+/// Environment for builtin or custom commands
 pub struct CmdEnv {
     stdin: CmdIn,
     stdout: CmdOut,
@@ -23,26 +23,32 @@ pub struct CmdEnv {
     current_dir: String,
 }
 impl CmdEnv {
+    /// Returns the arguments for this command
     pub fn args(&self) -> &[String] {
         &self.args
     }
 
+    /// Fetches the environment variable key for this command
     pub fn var(&self, key: &str) -> Option<&String> {
         self.vars.get(key)
     }
 
+    /// Returns the current working directory for this command
     pub fn current_dir(&self) -> &str {
         &self.current_dir
     }
 
+    /// Returns a new handle to the standard input for this command
     pub fn stdin(&mut self) -> impl Read + '_ {
         &mut self.stdin
     }
 
+    /// Returns a new handle to the standard output for this command
     pub fn stdout(&mut self) -> impl Write + '_ {
         &mut self.stdout
     }
 
+    /// Returns a new handle to the standard error for this command
     pub fn stderr(&mut self) -> impl Write + '_ {
         &mut self.stderr
     }
