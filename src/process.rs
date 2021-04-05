@@ -242,7 +242,7 @@ impl WaitCmd {
 
 pub struct WaitFun(Vec<CmdChildHandle>);
 impl WaitFun {
-    pub fn wait_raw_result(&mut self) -> Result<Box<dyn Read>> {
+    pub fn wait_raw_result(&mut self) -> Result<Vec<u8>> {
         let ret = self.wait_raw_result_nolog();
         if let Err(ref err) = ret {
             error!(
@@ -254,7 +254,7 @@ impl WaitFun {
         ret
     }
 
-    pub fn wait_raw_result_nolog(&mut self) -> Result<Box<dyn Read>> {
+    pub fn wait_raw_result_nolog(&mut self) -> Result<Vec<u8>> {
         let handle = self.0.pop().unwrap();
         let wait_last = handle.wait_with_output();
         match wait_last {
@@ -290,10 +290,8 @@ impl WaitFun {
                 let _ = WaitCmd::wait_children(&mut self.0);
                 Err(e)
             }
-            Ok(mut output) => {
-                let mut buf = vec![];
-                output.read_to_end(&mut buf)?;
-                let mut ret = String::from_utf8_lossy(&buf).to_string();
+            Ok(output) => {
+                let mut ret = String::from_utf8_lossy(&output).to_string();
                 if ret.ends_with('\n') {
                     ret.pop();
                 }
@@ -428,7 +426,6 @@ impl Cmd {
             let cmds: Vec<String> = self.args.to_vec();
             let mut cmd = Command::new(&cmds[0]);
             cmd.args(&cmds[1..]);
-            cmd.stdout(Stdio::piped());
             cmd.stderr(Stdio::piped());
             for (k, v) in self.vars.iter() {
                 cmd.env(k, v);

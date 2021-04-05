@@ -69,30 +69,32 @@ impl CmdChildHandle {
         Ok(())
     }
 
-    pub fn wait_with_output(self) -> Result<Box<dyn Read>> {
+    pub fn wait_with_output(self) -> Result<Vec<u8>> {
         match self {
-            Self::ProcChild(mut p) => {
-                let status = p.child.wait()?;
-                Self::log_stderr(&mut p.child);
-                if !status.success() {
+            Self::ProcChild(p) => {
+                let output = p.child.wait_with_output()?;
+                Self::log_stderr_output(&output.stderr[..]);
+                if !output.status.success() {
                     return Err(Self::status_to_io_error(
-                        status,
+                        output.status,
                         &format!("{} exited with error", p.cmd),
                     ));
-                } else if let Some(out) = p.child.stdout.take() {
-                    return Ok(Box::new(out));
+                } else {
+                    Ok(output.stdout)
                 }
             }
             Self::ThreadChild(t) => {
                 panic!("{} thread should not be waited for output", t.cmd);
             }
-            Self::SyncChild(mut s) => {
-                if let Some(out) = s.output.take() {
-                    return Ok(Box::new(out));
+            Self::SyncChild(s) => {
+                if let Some(mut out) = s.output {
+                    let mut buf = vec![];
+                    out.read_to_end(&mut buf)?;
+                    return Ok(buf);
                 }
+                Ok(vec![])
             }
         }
-        Ok(Box::new(&[][..]))
     }
 
     fn log_stderr(child: &mut Child) {
