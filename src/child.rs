@@ -61,7 +61,7 @@ impl CmdChildHandle {
             Self::SyncChild(s) => {
                 if let Some(mut out) = s.output {
                     let mut buf = vec![];
-                    check_result(out.read_to_end(&mut buf).map(|_|()))?;
+                    check_result(out.read_to_end(&mut buf).map(|_| ()))?;
                     check_result(io::stdout().write_all(&buf[..]))?;
                 }
             }
@@ -69,32 +69,30 @@ impl CmdChildHandle {
         Ok(())
     }
 
-    pub fn wait_with_output(self) -> Result<Vec<u8>> {
+    pub fn wait_with_output(self) -> Result<Box<dyn Read>> {
         match self {
-            Self::ProcChild(p) => {
-                let output = p.child.wait_with_output()?;
-                Self::log_stderr_output(&output.stderr[..]);
-                if !output.status.success() {
+            Self::ProcChild(mut p) => {
+                let status = p.child.wait()?;
+                Self::log_stderr(&mut p.child);
+                if !status.success() {
                     return Err(Self::status_to_io_error(
-                        output.status,
+                        status,
                         &format!("{} exited with error", p.cmd),
                     ));
-                } else {
-                    Ok(output.stdout)
+                } else if let Some(out) = p.child.stdout.take() {
+                    return Ok(Box::new(out));
                 }
             }
             Self::ThreadChild(t) => {
                 panic!("{} thread should not be waited for output", t.cmd);
             }
-            Self::SyncChild(s) => {
-                if let Some(mut out) = s.output {
-                    let mut buf = vec![];
-                    out.read_to_end(&mut buf)?;
-                    return Ok(buf);
+            Self::SyncChild(mut s) => {
+                if let Some(out) = s.output.take() {
+                    return Ok(Box::new(out));
                 }
-                Ok(vec![])
             }
         }
+        Ok(Box::new(&[][..]))
     }
 
     fn log_stderr(child: &mut Child) {
