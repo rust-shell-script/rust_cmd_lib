@@ -1,29 +1,30 @@
-use crate::io::*;
+use crate::child::{CmdChildHandle, CmdProcChild, CmdSyncChild, CmdThreadChild};
+use crate::io::{CmdIn, CmdOut};
 use crate::{builtin_true, CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
-use log::{debug, error, info};
-use os_pipe::*;
+use log::{debug, error};
+use os_pipe::{self, PipeReader, PipeWriter};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Write};
+use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::path::Path;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
 /// Process environment for builtin or custom commands
-pub struct CmdEnv<'a> {
+pub struct CmdEnv {
     stdin: CmdIn,
     stdout: CmdOut,
     stderr: CmdOut,
-    args: &'a [String],
-    vars: &'a HashMap<String, String>,
-    current_dir: &'a str,
+    args: Vec<String>,
+    vars: HashMap<String, String>,
+    current_dir: String,
 }
-impl<'a> CmdEnv<'a> {
+impl CmdEnv {
     pub fn args(&self) -> &[String] {
-        self.args
+        &self.args
     }
 
     pub fn var(&self, key: &str) -> Option<&String> {
@@ -31,7 +32,7 @@ impl<'a> CmdEnv<'a> {
     }
 
     pub fn current_dir(&self) -> &str {
-        self.current_dir
+        &self.current_dir
     }
 
     pub fn stdin(&mut self) -> impl Read + '_ {
@@ -50,17 +51,17 @@ impl<'a> CmdEnv<'a> {
 type FnFun = fn(&mut CmdEnv) -> CmdResult;
 
 lazy_static! {
-    static ref CMD_MAP: Mutex<HashMap<&'static str, FnFun>> = {
+    static ref CMD_MAP: Mutex<HashMap<String, FnFun>> = {
         // needs explicit type, or it won't compile
-        let mut m: HashMap<&'static str, FnFun> = HashMap::new();
-        m.insert("", builtin_true);
+        let mut m: HashMap<String, FnFun> = HashMap::new();
+        m.insert("".into(), builtin_true);
         Mutex::new(m)
     };
 }
 
 #[doc(hidden)]
 pub fn export_cmd(cmd: &'static str, func: FnFun) {
-    CMD_MAP.lock().unwrap().insert(cmd, func);
+    CMD_MAP.lock().unwrap().insert(cmd.to_string(), func);
 }
 
 /// set debug mode or not, false by default
@@ -156,21 +157,22 @@ impl GroupCmds {
 #[doc(hidden)]
 #[derive(Default)]
 pub struct Cmds {
-    cmds: Vec<Cmd>,
+    cmds: Vec<Option<Cmd>>,
+    full_cmds: String,
 }
 
 impl Cmds {
     pub fn pipe(mut self, cmd: Cmd) -> Self {
-        self.cmds.push(cmd.gen_command());
+        if !self.full_cmds.is_empty() {
+            self.full_cmds += " | ";
+        }
+        self.full_cmds += &cmd.debug_str();
+        self.cmds.push(Some(cmd.gen_command()));
         self
     }
 
-    fn get_full_cmds(&self) -> String {
-        self.cmds
-            .iter()
-            .map(|cmd| cmd.debug_str())
-            .collect::<Vec<_>>()
-            .join(" | ")
+    fn get_full_cmds(&self) -> &str {
+        &self.full_cmds
     }
 
     fn spawn(&mut self, current_dir: &mut String, with_output: bool) -> Result<WaitCmd> {
@@ -179,24 +181,21 @@ impl Cmds {
         }
 
         // spawning all the sub-processes
-        let mut children: Vec<(ProcHandle, String)> = Vec::new();
+        let mut children: Vec<CmdChildHandle> = Vec::new();
         let len = self.cmds.len();
-        let mut last_child = None;
         let mut last_pipe_in = None;
-        for (i, cmd) in self.cmds.iter_mut().enumerate() {
-            let is_first = i == 0;
-            let is_last = i == len - 1;
-            // update redirects
-            if !is_last {
+        for (i, cmd_opt) in self.cmds.iter_mut().enumerate() {
+            let mut cmd = cmd_opt.take().unwrap();
+            if i != len - 1 {
+                // not the last, update redirects
                 let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
                 cmd.setup_redirects(&mut last_pipe_in, Some(pipe_writer))?;
                 last_pipe_in = Some(pipe_reader);
             } else {
                 cmd.setup_redirects(&mut last_pipe_in, None)?;
             }
-            let child = cmd.spawn(current_dir, is_first, with_output, &mut last_child)?;
+            let child = cmd.spawn(current_dir, with_output)?;
             children.push(child);
-            last_child = children.last_mut();
         }
 
         Ok(WaitCmd(children))
@@ -211,141 +210,53 @@ impl Cmds {
     }
 }
 
-enum ProcHandle {
-    ProcChild(Option<Child>), // for normal commands
-    ProcBuf(Option<Vec<u8>>), // for builtin/custom commands
-}
-
-pub struct WaitCmd(Vec<(ProcHandle, String)>);
+pub struct WaitCmd(Vec<CmdChildHandle>);
 impl WaitCmd {
     pub fn wait_result(&mut self) -> CmdResult {
-        let full_cmd = self
-            .0
-            .iter()
-            .map(|cmd| cmd.1.to_owned())
-            .collect::<Vec<_>>()
-            .join(" | ");
         let ret = self.wait_result_nolog();
         if let Err(ref err) = ret {
-            error!("Running {} failed, Error: {}", full_cmd, err);
+            error!(
+                "Running {} failed, Error: {}",
+                CmdChildHandle::get_full_cmd(&self.0),
+                err
+            );
         }
         ret
     }
 
     fn wait_result_nolog(&mut self) -> CmdResult {
         // wait last process result
-        let (handle, cmd) = self.0.pop().unwrap();
-        match handle {
-            ProcHandle::ProcChild(child_opt) => {
-                if let Some(mut child) = child_opt {
-                    let status_result = child.wait();
-                    Self::log_stderr(&mut child);
-                    match status_result {
-                        Err(e) => {
-                            let _ = Self::wait_children(&mut self.0);
-                            return Err(e);
-                        }
-                        Ok(status) => {
-                            if !status.success() {
-                                let _ = Self::wait_children(&mut self.0);
-                                return Err(Self::status_to_io_error(
-                                    status,
-                                    &format!("{} exited with error", cmd),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-            ProcHandle::ProcBuf(mut ss) => {
-                if let Some(s) = ss.take() {
-                    let result = std::io::stdout().write_all(&s);
-                    if let Err(e) = result {
-                        let _ = Self::wait_children(&mut self.0);
-                        return Err(e);
-                    }
-                }
-            }
-        }
+        let handle = self.0.pop().unwrap();
+        handle.wait()?;
         Self::wait_children(&mut self.0)
     }
 
-    fn wait_children(children: &mut Vec<(ProcHandle, String)>) -> CmdResult {
+    fn wait_children(children: &mut Vec<CmdChildHandle>) -> CmdResult {
         while !children.is_empty() {
-            let (child_handle, cmd) = children.pop().unwrap();
-            if let ProcHandle::ProcChild(Some(mut child)) = child_handle {
-                let status = child.wait()?;
-                Self::log_stderr(&mut child);
-                if !status.success() && std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into()) {
-                    return Err(Self::status_to_io_error(
-                        status,
-                        &format!("{} exited with error", cmd),
-                    ));
-                }
-            }
+            let child_handle = children.pop().unwrap();
+            child_handle.wait()?;
         }
         Ok(())
     }
-
-    fn log_stderr(child: &mut Child) {
-        if let Some(stderr) = child.stderr.take() {
-            WaitFun::log_stderr_output(stderr);
-        }
-    }
-
-    fn status_to_io_error(status: ExitStatus, command: &str) -> Error {
-        if let Some(code) = status.code() {
-            Error::new(
-                ErrorKind::Other,
-                format!("{}; status code: {}", command, code),
-            )
-        } else {
-            Error::new(
-                ErrorKind::Other,
-                format!("{}; terminated by {}", command, status),
-            )
-        }
-    }
 }
 
-pub struct WaitFun(Vec<(ProcHandle, String)>);
+pub struct WaitFun(Vec<CmdChildHandle>);
 impl WaitFun {
-    fn wait_output(handle: &mut (ProcHandle, String)) -> Result<Vec<u8>> {
-        match handle {
-            (ProcHandle::ProcChild(child_opt), cmd) => {
-                if let Some(child) = child_opt.take() {
-                    let output = child.wait_with_output()?;
-                    Self::log_stderr_output(&output.stderr[..]);
-                    if !output.status.success() {
-                        return Err(WaitCmd::status_to_io_error(
-                            output.status,
-                            &format!("{} exited with error", cmd),
-                        ));
-                    } else {
-                        return Ok(output.stdout);
-                    }
-                }
-            }
-            (ProcHandle::ProcBuf(ss), _) => {
-                if let Some(s) = ss.take() {
-                    return Ok(s);
-                }
-            }
-        }
-        Ok(vec![])
-    }
-
     pub fn wait_raw_result(&mut self) -> Result<Vec<u8>> {
         let ret = self.wait_raw_result_nolog();
         if let Err(ref err) = ret {
-            error!("Running {} failed, Error: {}", self.get_full_cmd(), err);
+            error!(
+                "Running {} failed, Error: {}",
+                CmdChildHandle::get_full_cmd(&self.0),
+                err
+            );
         }
         ret
     }
 
     pub fn wait_raw_result_nolog(&mut self) -> Result<Vec<u8>> {
-        let mut handle = self.0.pop().unwrap();
-        let wait_last = Self::wait_output(&mut handle);
+        let handle = self.0.pop().unwrap();
+        let wait_last = handle.wait_last_with_output();
         match wait_last {
             Err(e) => {
                 let _ = WaitCmd::wait_children(&mut self.0);
@@ -358,26 +269,22 @@ impl WaitFun {
         }
     }
 
-    fn get_full_cmd(&self) -> String {
-        self.0
-            .iter()
-            .map(|cmd| cmd.1.to_owned())
-            .collect::<Vec<_>>()
-            .join(" | ")
-    }
-
     pub fn wait_result(&mut self) -> FunResult {
         let ret = self.wait_result_nolog();
         if let Err(ref err) = ret {
-            error!("Running {} failed, Error: {}", self.get_full_cmd(), err);
+            error!(
+                "Running {} failed, Error: {}",
+                CmdChildHandle::get_full_cmd(&self.0),
+                err
+            );
         }
         ret
     }
 
     pub fn wait_result_nolog(&mut self) -> FunResult {
         // wait last process result
-        let mut handle = self.0.pop().unwrap();
-        let wait_last = Self::wait_output(&mut handle);
+        let handle = self.0.pop().unwrap();
+        let wait_last = handle.wait_last_with_output();
         match wait_last {
             Err(e) => {
                 let _ = WaitCmd::wait_children(&mut self.0);
@@ -392,13 +299,6 @@ impl WaitFun {
                 Ok(ret)
             }
         }
-    }
-
-    fn log_stderr_output(output: impl Read) {
-        BufReader::new(output)
-            .lines()
-            .filter_map(|line| line.ok())
-            .for_each(|line| info!("{}", line));
     }
 }
 
@@ -447,6 +347,7 @@ pub struct Cmd {
     stdin_redirect: Option<CmdIn>,
     stdout_redirect: Option<CmdOut>,
     stderr_redirect: Option<CmdOut>,
+
     stderr_logging: Option<CmdIn>,
 }
 
@@ -492,11 +393,11 @@ impl Cmd {
         self
     }
 
-    fn arg0(&self) -> &str {
+    fn arg0(&self) -> String {
         if self.args.is_empty() {
-            ""
+            "".into()
         } else {
-            &self.args[0]
+            self.args[0].clone()
         }
     }
 
@@ -534,59 +435,66 @@ impl Cmd {
         }
     }
 
-    fn spawn(
-        &mut self,
-        current_dir: &mut String,
-        is_first: bool,
-        with_output: bool,
-        prev_child: &mut Option<&mut (ProcHandle, String)>,
-    ) -> Result<(ProcHandle, String)> {
-        if self.arg0() == "cd" {
+    fn spawn(mut self, current_dir: &mut String, with_output: bool) -> Result<CmdChildHandle> {
+        let arg0 = self.arg0();
+        let full_cmd = self.debug_str();
+        if arg0 == "cd" {
             self.run_cd_cmd(current_dir)?;
-            Ok((ProcHandle::ProcBuf(None), self.debug_str()))
+            Ok(CmdChildHandle::SyncChild(CmdSyncChild {
+                cmd: full_cmd,
+                output: None,
+            }))
         } else if self.in_cmd_map {
-            let mut pipe_out = None;
+            let pipe_out = matches!(self.stdout_redirect, Some(CmdOut::CmdPipe(_)));
+            let mut new_pipe_out = None;
             let mut env = CmdEnv {
-                args: &self.args,
-                vars: &self.vars,
-                current_dir: &current_dir,
+                args: self.args,
+                vars: self.vars,
+                current_dir: current_dir.clone(),
                 stdin: if let Some(redirect_in) = self.stdin_redirect.take() {
                     redirect_in
                 } else {
-                    CmdIn::CmdPipe(dup_stdin()?)
+                    CmdIn::CmdPipe(os_pipe::dup_stdin()?)
                 },
                 stdout: if let Some(redirect_out) = self.stdout_redirect.take() {
                     redirect_out
                 } else if with_output {
                     let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
-                    pipe_out = Some(pipe_reader);
+                    new_pipe_out = Some(pipe_reader);
                     CmdOut::CmdPipe(pipe_writer)
                 } else {
-                    CmdOut::CmdPipe(dup_stdout()?)
+                    CmdOut::CmdPipe(os_pipe::dup_stdout()?)
                 },
                 stderr: if let Some(redirect_err) = self.stderr_redirect.take() {
                     redirect_err
                 } else {
-                    CmdOut::CmdPipe(dup_stderr()?)
+                    CmdOut::CmdPipe(os_pipe::dup_stderr()?)
                 },
             };
 
-            let internal_cmd = CMD_MAP.lock().unwrap()[self.arg0()];
-            internal_cmd(&mut env)?;
-            drop(env);
-
-            // update stderr
-            if let Some(output) = self.stderr_logging.take() {
-                WaitFun::log_stderr_output(output);
-            }
-
-            // setup stdout
-            if let Some(mut output) = pipe_out.take() {
-                let mut buf = vec![];
-                output.read_to_end(&mut buf)?;
-                Ok((ProcHandle::ProcBuf(Some(buf)), self.debug_str()))
+            let internal_cmd = CMD_MAP.lock().unwrap()[&arg0];
+            if pipe_out {
+                let handle = std::thread::spawn(move || {
+                    internal_cmd(&mut env).unwrap();
+                });
+                Ok(CmdChildHandle::ThreadChild(CmdThreadChild {
+                    child: handle,
+                    stderr_logging: self.stderr_logging,
+                    cmd: full_cmd,
+                }))
             } else {
-                Ok((ProcHandle::ProcBuf(None), self.debug_str()))
+                internal_cmd(&mut env)?;
+                drop(env);
+
+                // update stderr
+                if let Some(output) = self.stderr_logging.take() {
+                    CmdChildHandle::log_stderr_output(output);
+                }
+
+                Ok(CmdChildHandle::SyncChild(CmdSyncChild {
+                    cmd: full_cmd,
+                    output: new_pipe_out,
+                }))
             }
         } else {
             let mut cmd = self.std_cmd.take().unwrap();
@@ -614,17 +522,11 @@ impl Cmd {
             }
 
             // spawning process
-            let mut child = cmd.spawn()?;
-            if !is_first {
-                if let Some((ProcHandle::ProcBuf(ss), _)) = prev_child.take() {
-                    if let Some(s) = ss.take() {
-                        if let Some(mut input) = child.stdin.take() {
-                            input.write_all(&s)?;
-                        }
-                    }
-                }
-            }
-            Ok((ProcHandle::ProcChild(Some(child)), self.debug_str()))
+            let child = cmd.spawn()?;
+            Ok(CmdChildHandle::ProcChild(CmdProcChild {
+                cmd: full_cmd,
+                child,
+            }))
         }
     }
 
@@ -697,14 +599,14 @@ impl Cmd {
                     if let Some(ref redirect) = self.stderr_redirect {
                         self.stdout_redirect = Some(redirect.try_clone()?);
                     } else {
-                        self.stdout_redirect = Some(CmdOut::CmdPipe(dup_stdout()?));
+                        self.stdout_redirect = Some(CmdOut::CmdPipe(os_pipe::dup_stdout()?));
                     }
                 }
                 Redirect::StderrToStdout => {
                     if let Some(ref redirect) = self.stdout_redirect {
                         self.stderr_redirect = Some(redirect.try_clone()?);
                     } else {
-                        self.stderr_redirect = Some(CmdOut::CmdPipe(dup_stderr()?));
+                        self.stderr_redirect = Some(CmdOut::CmdPipe(os_pipe::dup_stderr()?));
                     }
                 }
                 Redirect::StdoutToFile(path, append) => {
