@@ -227,14 +227,14 @@ impl WaitCmd {
     fn wait_result_nolog(&mut self) -> CmdResult {
         // wait last process result
         let handle = self.0.pop().unwrap();
-        handle.wait()?;
+        handle.wait(true)?;
         Self::wait_children(&mut self.0)
     }
 
     fn wait_children(children: &mut Vec<CmdChildHandle>) -> CmdResult {
         while !children.is_empty() {
             let child_handle = children.pop().unwrap();
-            child_handle.wait()?;
+            child_handle.wait(false)?;
         }
         Ok(())
     }
@@ -256,7 +256,7 @@ impl WaitFun {
 
     pub fn wait_raw_result_nolog(&mut self) -> Result<Vec<u8>> {
         let handle = self.0.pop().unwrap();
-        let wait_last = handle.wait_last_with_output();
+        let wait_last = handle.wait_with_output();
         match wait_last {
             Err(e) => {
                 let _ = WaitCmd::wait_children(&mut self.0);
@@ -284,7 +284,7 @@ impl WaitFun {
     pub fn wait_result_nolog(&mut self) -> FunResult {
         // wait last process result
         let handle = self.0.pop().unwrap();
-        let wait_last = handle.wait_last_with_output();
+        let wait_last = handle.wait_with_output();
         match wait_last {
             Err(e) => {
                 let _ = WaitCmd::wait_children(&mut self.0);
@@ -474,9 +474,7 @@ impl Cmd {
 
             let internal_cmd = CMD_MAP.lock().unwrap()[&arg0];
             if pipe_out {
-                let handle = std::thread::spawn(move || {
-                    internal_cmd(&mut env).unwrap();
-                });
+                let handle = std::thread::spawn(move || internal_cmd(&mut env));
                 Ok(CmdChildHandle::ThreadChild(CmdThreadChild {
                     child: handle,
                     stderr_logging: self.stderr_logging,
