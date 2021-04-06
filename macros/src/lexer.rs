@@ -100,9 +100,7 @@ pub struct Lexer {
     args: Vec<ParseArg>,
     last_arg_str: TokenStream,
     last_redirect: Option<(RedirectFd, Span)>,
-    seen_stdin_redirect: bool,
-    seen_stdout_redirect: bool,
-    seen_stderr_redirect: bool,
+    seen_redirect: (bool, bool, bool),
 }
 impl Lexer {
     pub fn scan(mut self, input: TokenStream) -> Parser {
@@ -181,26 +179,18 @@ impl Lexer {
         } else if !last_arg_str.is_empty() {
             self.args.push(ParseArg::ParseArgStr(quote!(#last_arg_str)));
         }
-        let mut new_redirect_in = false;
-        let mut new_redirect_out = false;
-        let mut new_redirect_err = false;
+        let mut new_redirect = (false, false, false);
         match token {
-            SepToken::Space => {
-                new_redirect_in = self.seen_stdin_redirect;
-                new_redirect_out = self.seen_stdout_redirect;
-                new_redirect_err = self.seen_stderr_redirect;
-            }
+            SepToken::Space => new_redirect = self.seen_redirect,
             SepToken::SemiColon => self.args.push(ParseArg::ParseSemicolon),
             SepToken::Or => self.args.push(ParseArg::ParseOr),
             SepToken::Pipe => {
-                Self::check_set_redirect(&mut self.seen_stdout_redirect, "stdout", token_span);
+                Self::check_set_redirect(&mut self.seen_redirect.1, "stdout", token_span);
                 self.args.push(ParseArg::ParsePipe);
-                new_redirect_in = true;
+                new_redirect.0 = true;
             }
         }
-        self.seen_stdin_redirect = new_redirect_in;
-        self.seen_stdout_redirect = new_redirect_out;
-        self.seen_stderr_redirect = new_redirect_err;
+        self.seen_redirect = new_redirect;
         self.last_arg_str = TokenStream::new();
     }
 
@@ -223,18 +213,16 @@ impl Lexer {
             abort!(span, "wrong double redirection format");
         }
         match fd {
-            RedirectFd::Stdin => {
-                Self::check_set_redirect(&mut self.seen_stdin_redirect, "stdin", span)
-            }
+            RedirectFd::Stdin => Self::check_set_redirect(&mut self.seen_redirect.0, "stdin", span),
             RedirectFd::Stdout { append: _ } => {
-                Self::check_set_redirect(&mut self.seen_stdout_redirect, "stdout", span)
+                Self::check_set_redirect(&mut self.seen_redirect.1, "stdout", span)
             }
             RedirectFd::Stderr { append: _ } => {
-                Self::check_set_redirect(&mut self.seen_stderr_redirect, "stderr", span)
+                Self::check_set_redirect(&mut self.seen_redirect.2, "stderr", span)
             }
             RedirectFd::StdoutErr { append: _ } => {
-                Self::check_set_redirect(&mut self.seen_stdout_redirect, "stdout", span);
-                Self::check_set_redirect(&mut self.seen_stderr_redirect, "stderr", span);
+                Self::check_set_redirect(&mut self.seen_redirect.1, "stdout", span);
+                Self::check_set_redirect(&mut self.seen_redirect.2, "stderr", span);
             }
         }
         self.last_redirect = Some((fd, span));
@@ -280,7 +268,7 @@ impl Lexer {
                 if let Some(ref redirect) = self.last_redirect {
                     abort!(redirect.1, "invalid '&': found previous redirect");
                 }
-                Self::check_set_redirect(&mut self.seen_stderr_redirect, "stderr", p.span());
+                Self::check_set_redirect(&mut self.seen_redirect.2, "stderr", p.span());
                 self.args.push(ParseArg::ParseRedirectFd(2, 1));
                 iter.next();
             }
