@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use ParseArg::*;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum ParseArg {
     ParsePipe,
     ParseOr,
@@ -95,7 +95,7 @@ impl Parser {
     fn parse_pipe(&mut self, i: &mut usize) -> TokenStream {
         let mut ret = quote!(::cmd_lib::Cmd::default());
         while *i < self.args.len() {
-            match self.args[*i].clone() {
+            match &self.args[*i] {
                 ParseRedirectFd(fd1, fd2) => {
                     if fd1 != fd2 {
                         let mut redirect = quote!(::cmd_lib::Redirect);

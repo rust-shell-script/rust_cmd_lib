@@ -138,7 +138,7 @@ pub fn use_builtin_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream
 #[proc_macro]
 #[proc_macro_error]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::Lexer::default().scan(input.into()).parse();
+    let cmds = lexer::Lexer::new(input.into()).scan().parse();
     quote! ({
         #cmds.run_cmd()
     })
@@ -159,7 +159,7 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro]
 #[proc_macro_error]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::Lexer::default().scan(input.into()).parse();
+    let cmds = lexer::Lexer::new(input.into()).scan().parse();
     quote! ({
         #cmds.run_fun()
     })
@@ -180,7 +180,7 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro]
 #[proc_macro_error]
 pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::Lexer::default().scan(input.into()).parse_for_spawn();
+    let cmds = lexer::Lexer::new(input.into()).scan().parse_for_spawn();
     quote! ({
         #cmds.spawn()
     })
@@ -208,7 +208,7 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro]
 #[proc_macro_error]
 pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::Lexer::default().scan(input.into()).parse_for_spawn();
+    let cmds = lexer::Lexer::new(input.into()).scan().parse_for_spawn();
     quote! ({
         #cmds.spawn_with_output()
     })
