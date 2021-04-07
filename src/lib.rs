@@ -57,7 +57,7 @@
 //!         sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
 //!         | awk r#"/copied/{print $(NF-1) " " $NF}"#
 //!     )
-//!     .unwrap();
+//!     .unwrap_or_else(|e| cmd_die!("thread $i failed, Error: $e"));
 //!     cmd_info!("thread $i bandwidth: $bandwidth");
 //! });
 //! let total_bandwidth =
@@ -72,13 +72,13 @@
 //! ➜  rust_cmd_lib git:(master) ✗ cargo run --example dd_test -- -b 4096 -f /dev/nvme0n1 -t 4
 //!     Finished dev [unoptimized + debuginfo] target(s) in 1.56s
 //!      Running `target/debug/examples/dd_test -b 4096 -f /dev/nvme0n1 -t 4`
-//! Dropping caches at first
-//! Running with thread_num: 4, block_size: 4096
-//! thread 1 bandwidth: 286 MB/s
-//! thread 3 bandwidth: 269 MB/s
-//! thread 2 bandwidth: 267 MB/s
-//! thread 0 bandwidth: 265 MB/s
-//! Total bandwidth: 1.01 GiB/s
+//! INFO - Dropping caches at first
+//! INFO - Running with thread_num: 4, block_size: 4096
+//! INFO - thread 1 bandwidth: 286 MB/s
+//! INFO - thread 3 bandwidth: 269 MB/s
+//! INFO - thread 2 bandwidth: 267 MB/s
+//! INFO - thread 0 bandwidth: 265 MB/s
+//! INFO - Total bandwidth: 1.01 GiB/s
 //! ```
 //!
 //! ## What this library provides

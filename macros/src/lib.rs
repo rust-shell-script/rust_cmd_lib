@@ -290,10 +290,10 @@ pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// should probably define your own macro or functions.
 pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(
+    quote!({
         ::cmd_lib::log::error!("FATAL: {}", #msg);
-        std::process::exit(1);
-    )
+        std::process::exit(1)
+    })
     .into()
 }
 

@@ -353,7 +353,6 @@ pub struct Cmd {
     stdin_redirect: Option<CmdIn>,
     stdout_redirect: Option<CmdOut>,
     stderr_redirect: Option<CmdOut>,
-
     stderr_logging: Option<CmdIn>,
 }
 
