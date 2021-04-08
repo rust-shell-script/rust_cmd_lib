@@ -23,7 +23,7 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
         Self { iter }
     }
 
-    pub fn parse(mut self) -> TokenStream {
+    pub fn parse(mut self, for_spawn: bool) -> TokenStream {
         let mut ret = quote!(::cmd_lib::GroupCmds::default());
         while self.iter.peek().is_some() {
             let cmd = self.parse_cmd();
@@ -31,24 +31,14 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
                 let (cmd0, cmd1) = cmd;
                 if cmd1.is_none() {
                     ret.extend(quote!(.add(#cmd0, None)));
+                } else if for_spawn {
+                    panic!("wrong spawning format: or command not allowed");
                 } else {
                     ret.extend(quote!(.add(#cmd0, Some(#cmd1))));
                 }
-            }
-        }
-        ret
-    }
-
-    pub fn parse_for_spawn(mut self) -> TokenStream {
-        let mut ret = quote!(::cmd_lib::GroupCmds::default());
-        while self.iter.peek().is_some() {
-            let cmd = self.parse_cmd();
-            if !cmd.0.is_empty() {
-                let (cmd0, cmd1) = cmd;
-                if cmd1.is_some() || self.iter.peek().is_some() {
-                    panic!("wrong spawning format");
+                if for_spawn && self.iter.peek().is_some() {
+                    panic!("wrong spawning format: group command not allowed");
                 }
-                ret.extend(quote!(.add(#cmd0, None)));
             }
         }
         ret
