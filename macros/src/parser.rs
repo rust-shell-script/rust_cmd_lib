@@ -61,25 +61,15 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
             while self.iter.peek().is_some() {
                 let cmd = self.parse_pipe();
                 cmds.extend(quote!(.pipe(#cmd)));
-                if self.iter.peek().is_some() {
-                    match self.iter.peek() {
-                        Some(ParsePipe) => {}
-                        _ => break,
-                    }
+                if !matches!(self.iter.peek(), Some(ParsePipe)) {
+                    break;
                 }
                 self.iter.next();
             }
             if j == 0 {
                 ret.0 = cmds;
-                if self.iter.peek().is_some() {
-                    match self.iter.peek() {
-                        Some(ParseOr) => {}
-                        _ => {
-                            self.iter.next();
-                            break;
-                        }
-                    }
-                } else {
+                if !matches!(self.iter.peek(), Some(ParseOr)) {
+                    self.iter.next();
                     break;
                 }
             } else {
