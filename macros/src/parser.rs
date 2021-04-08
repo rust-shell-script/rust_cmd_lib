@@ -82,9 +82,9 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
 
     fn parse_pipe(&mut self) -> TokenStream {
         let mut ret = quote!(::cmd_lib::Cmd::default());
-        while self.iter.peek().is_some() {
-            match self.iter.peek() {
-                Some(ParseRedirectFd(fd1, fd2)) => {
+        while let Some(arg) = self.iter.peek() {
+            match arg {
+                ParseRedirectFd(fd1, fd2) => {
                     if fd1 != fd2 {
                         let mut redirect = quote!(::cmd_lib::Redirect);
                         match (fd1, fd2) {
@@ -95,7 +95,7 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
                         ret.extend(quote!(.add_redirect(#redirect)));
                     }
                 }
-                Some(ParseRedirectFile(fd1, file, append)) => {
+                ParseRedirectFile(fd1, file, append) => {
                     let mut redirect = quote!(::cmd_lib::Redirect);
                     match fd1 {
                         0 => redirect.extend(quote!(::FileToStdin(#file))),
@@ -105,14 +105,14 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
                     }
                     ret.extend(quote!(.add_redirect(#redirect)));
                 }
-                Some(ParseArgStr(opt)) => {
+                ParseArgStr(opt) => {
                     ret.extend(quote!(.add_arg(#opt)));
                 }
-                Some(ParseArgVec(opts)) => {
+                ParseArgVec(opts) => {
                     ret.extend(quote! (.add_args(#opts.iter().map(|s| s.to_string()).collect::<Vec<String>>())));
                 }
-                Some(ParsePipe) | Some(ParseOr) | Some(ParseSemicolon) | None => break,
-            };
+                ParsePipe | ParseOr | ParseSemicolon => break,
+            }
             self.iter.next();
         }
         ret
