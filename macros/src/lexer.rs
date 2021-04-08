@@ -117,7 +117,7 @@ impl Lexer {
         }
     }
 
-    pub fn scan(mut self) -> Parser {
+    pub fn scan(mut self) -> Parser<impl Iterator<Item = ParseArg>> {
         let mut allow_or_token = true;
         while let Some(item) = self.iter.next() {
             match item {
@@ -158,7 +158,7 @@ impl Lexer {
             }
         }
         self.add_arg_with_token(SepToken::Space, self.iter.span());
-        Parser::from_args(self.args)
+        Parser::from(self.args.into_iter().peekable())
     }
 
     fn add_arg_with_token(&mut self, token: SepToken, token_span: Span) {

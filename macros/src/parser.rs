@@ -1,5 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::iter::Peekable;
 use ParseArg::*;
 
 #[derive(Debug)]
@@ -13,21 +14,19 @@ pub enum ParseArg {
     ParseArgVec(TokenStream),
 }
 
-#[derive(Default)]
-pub struct Parser {
-    args: Vec<ParseArg>,
+pub struct Parser<I: Iterator<Item = ParseArg>> {
+    iter: Peekable<I>,
 }
 
-impl Parser {
-    pub fn from_args(args: Vec<ParseArg>) -> Self {
-        Self { args }
+impl<I: Iterator<Item = ParseArg>> Parser<I> {
+    pub fn from(iter: Peekable<I>) -> Self {
+        Self { iter }
     }
 
-    pub fn parse(&mut self) -> TokenStream {
+    pub fn parse(mut self) -> TokenStream {
         let mut ret = quote!(::cmd_lib::GroupCmds::default());
-        let mut i = 0;
-        while i < self.args.len() {
-            let cmd = self.parse_cmd(&mut i);
+        while self.iter.peek().is_some() {
+            let cmd = self.parse_cmd();
             if !cmd.0.is_empty() {
                 let (cmd0, cmd1) = cmd;
                 if cmd1.is_none() {
@@ -40,14 +39,13 @@ impl Parser {
         ret
     }
 
-    pub fn parse_for_spawn(&mut self) -> TokenStream {
+    pub fn parse_for_spawn(mut self) -> TokenStream {
         let mut ret = quote!(::cmd_lib::GroupCmds::default());
-        let mut i = 0;
-        while i < self.args.len() {
-            let cmd = self.parse_cmd(&mut i);
+        while self.iter.peek().is_some() {
+            let cmd = self.parse_cmd();
             if !cmd.0.is_empty() {
                 let (cmd0, cmd1) = cmd;
-                if cmd1.is_some() || i < self.args.len() {
+                if cmd1.is_some() || self.iter.peek().is_some() {
                     panic!("wrong spawning format");
                 }
                 ret.extend(quote!(.add(#cmd0, None)));
@@ -56,28 +54,28 @@ impl Parser {
         ret
     }
 
-    fn parse_cmd(&mut self, i: &mut usize) -> (TokenStream, Option<TokenStream>) {
+    fn parse_cmd(&mut self) -> (TokenStream, Option<TokenStream>) {
         let mut ret = (quote!(Cmds::default()), None);
         for j in 0..2 {
             let mut cmds = quote!(::cmd_lib::Cmds::default());
-            while *i < self.args.len() {
-                let cmd = self.parse_pipe(i);
+            while self.iter.peek().is_some() {
+                let cmd = self.parse_pipe();
                 cmds.extend(quote!(.pipe(#cmd)));
-                if *i < self.args.len() {
-                    match self.args[*i] {
-                        ParsePipe => {}
+                if self.iter.peek().is_some() {
+                    match self.iter.peek() {
+                        Some(ParsePipe) => {}
                         _ => break,
                     }
                 }
-                *i += 1;
+                self.iter.next();
             }
             if j == 0 {
                 ret.0 = cmds;
-                if *i < self.args.len() {
-                    match self.args[*i] {
-                        ParseOr => {}
+                if self.iter.peek().is_some() {
+                    match self.iter.peek() {
+                        Some(ParseOr) => {}
                         _ => {
-                            *i += 1;
+                            self.iter.next();
                             break;
                         }
                     }
@@ -87,16 +85,16 @@ impl Parser {
             } else {
                 ret.1 = Some(quote!(#cmds));
             }
-            *i += 1;
+            self.iter.next();
         }
         ret
     }
 
-    fn parse_pipe(&mut self, i: &mut usize) -> TokenStream {
+    fn parse_pipe(&mut self) -> TokenStream {
         let mut ret = quote!(::cmd_lib::Cmd::default());
-        while *i < self.args.len() {
-            match &self.args[*i] {
-                ParseRedirectFd(fd1, fd2) => {
+        while self.iter.peek().is_some() {
+            match self.iter.peek() {
+                Some(ParseRedirectFd(fd1, fd2)) => {
                     if fd1 != fd2 {
                         let mut redirect = quote!(::cmd_lib::Redirect);
                         match (fd1, fd2) {
@@ -107,7 +105,7 @@ impl Parser {
                         ret.extend(quote!(.add_redirect(#redirect)));
                     }
                 }
-                ParseRedirectFile(fd1, file, append) => {
+                Some(ParseRedirectFile(fd1, file, append)) => {
                     let mut redirect = quote!(::cmd_lib::Redirect);
                     match fd1 {
                         0 => redirect.extend(quote!(::FileToStdin(#file))),
@@ -117,15 +115,15 @@ impl Parser {
                     }
                     ret.extend(quote!(.add_redirect(#redirect)));
                 }
-                ParseArgStr(opt) => {
+                Some(ParseArgStr(opt)) => {
                     ret.extend(quote!(.add_arg(#opt)));
                 }
-                ParseArgVec(opts) => {
+                Some(ParseArgVec(opts)) => {
                     ret.extend(quote! (.add_args(#opts.iter().map(|s| s.to_string()).collect::<Vec<String>>())));
                 }
-                ParsePipe | ParseOr | ParseSemicolon => break,
+                Some(ParsePipe) | Some(ParseOr) | Some(ParseSemicolon) | None => break,
             };
-            *i += 1;
+            self.iter.next();
         }
         ret
     }
