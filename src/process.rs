@@ -1,4 +1,4 @@
-use crate::child::{CmdChildHandle, CmdProcChild, CmdSyncChild, CmdThreadChild};
+use crate::child::CmdChild;
 use crate::io::{CmdIn, CmdOut};
 use crate::{builtin_true, CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
@@ -187,7 +187,7 @@ impl Cmds {
         }
 
         // spawning all the sub-processes
-        let mut children: Vec<CmdChildHandle> = Vec::new();
+        let mut children: Vec<CmdChild> = Vec::new();
         let len = self.cmds.len();
         let mut last_pipe_in = None;
         for (i, cmd_opt) in self.cmds.iter_mut().enumerate() {
@@ -216,14 +216,14 @@ impl Cmds {
     }
 }
 
-pub struct WaitCmd(Vec<CmdChildHandle>);
+pub struct WaitCmd(Vec<CmdChild>);
 impl WaitCmd {
     pub fn wait_result(&mut self) -> CmdResult {
         let ret = self.wait_result_nolog();
         if let Err(ref err) = ret {
             error!(
                 "Running {} failed, Error: {}",
-                CmdChildHandle::get_full_cmd(&self.0),
+                CmdChild::get_full_cmd(&self.0),
                 err
             );
         }
@@ -237,7 +237,7 @@ impl WaitCmd {
         Self::wait_children(&mut self.0)
     }
 
-    fn wait_children(children: &mut Vec<CmdChildHandle>) -> CmdResult {
+    fn wait_children(children: &mut Vec<CmdChild>) -> CmdResult {
         while !children.is_empty() {
             let child_handle = children.pop().unwrap();
             child_handle.wait(false)?;
@@ -246,14 +246,14 @@ impl WaitCmd {
     }
 }
 
-pub struct WaitFun(Vec<CmdChildHandle>);
+pub struct WaitFun(Vec<CmdChild>);
 impl WaitFun {
     pub fn wait_raw_result(&mut self) -> Result<Vec<u8>> {
         let ret = self.wait_raw_result_nolog();
         if let Err(ref err) = ret {
             error!(
                 "Running {} failed, Error: {}",
-                CmdChildHandle::get_full_cmd(&self.0),
+                CmdChild::get_full_cmd(&self.0),
                 err
             );
         }
@@ -280,7 +280,7 @@ impl WaitFun {
         if let Err(ref err) = ret {
             error!(
                 "Running {} failed, Error: {}",
-                CmdChildHandle::get_full_cmd(&self.0),
+                CmdChild::get_full_cmd(&self.0),
                 err
             );
         }
@@ -353,7 +353,7 @@ pub struct Cmd {
     stdin_redirect: Option<CmdIn>,
     stdout_redirect: Option<CmdOut>,
     stderr_redirect: Option<CmdOut>,
-    stderr_logging: Option<CmdIn>,
+    stderr: Option<CmdIn>,
 }
 
 impl Default for Cmd {
@@ -367,7 +367,7 @@ impl Default for Cmd {
             stdin_redirect: None,
             stdout_redirect: None,
             stderr_redirect: None,
-            stderr_logging: None,
+            stderr: None,
         }
     }
 }
@@ -440,15 +440,15 @@ impl Cmd {
         }
     }
 
-    fn spawn(mut self, current_dir: &mut String, with_output: bool) -> Result<CmdChildHandle> {
+    fn spawn(mut self, current_dir: &mut String, with_output: bool) -> Result<CmdChild> {
         let arg0 = self.arg0();
         let full_cmd = self.debug_str();
         if arg0 == "cd" {
             self.run_cd_cmd(current_dir)?;
-            Ok(CmdChildHandle::SyncChild(CmdSyncChild {
+            Ok(CmdChild::SyncChild {
                 cmd: full_cmd,
                 output: None,
-            }))
+            })
         } else if self.in_cmd_map {
             let pipe_out = matches!(self.stdout_redirect, Some(CmdOut::CmdPipe(_)));
             let mut new_pipe_out = None;
@@ -480,24 +480,24 @@ impl Cmd {
             let internal_cmd = CMD_MAP.lock().unwrap()[&arg0];
             if pipe_out {
                 let handle = std::thread::spawn(move || internal_cmd(&mut env));
-                Ok(CmdChildHandle::ThreadChild(CmdThreadChild {
+                Ok(CmdChild::ThreadChild {
                     child: handle,
-                    stderr_logging: self.stderr_logging,
+                    stderr: self.stderr,
                     cmd: full_cmd,
-                }))
+                })
             } else {
                 internal_cmd(&mut env)?;
                 drop(env);
 
                 // update stderr
-                if let Some(output) = self.stderr_logging.take() {
-                    CmdChildHandle::log_stderr_output(output);
+                if let Some(output) = self.stderr.take() {
+                    CmdChild::log_stderr_output(output);
                 }
 
-                Ok(CmdChildHandle::SyncChild(CmdSyncChild {
+                Ok(CmdChild::SyncChild {
                     cmd: full_cmd,
                     output: new_pipe_out,
-                }))
+                })
             }
         } else {
             let mut cmd = self.std_cmd.take().unwrap();
@@ -526,10 +526,10 @@ impl Cmd {
 
             // spawning process
             let child = cmd.spawn()?;
-            Ok(CmdChildHandle::ProcChild(CmdProcChild {
+            Ok(CmdChild::ProcChild {
                 cmd: full_cmd,
                 child,
-            }))
+            })
         }
     }
 
@@ -579,7 +579,7 @@ impl Cmd {
             // set up error pipe
             let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
             self.stderr_redirect = Some(CmdOut::CmdPipe(pipe_writer));
-            self.stderr_logging = Some(CmdIn::CmdPipe(pipe_reader));
+            self.stderr = Some(CmdIn::CmdPipe(pipe_reader));
         }
 
         if let Some(pipe) = pipe_in.take() {
