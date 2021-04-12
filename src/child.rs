@@ -1,4 +1,3 @@
-use crate::io::CmdIn;
 use crate::CmdResult;
 use log::info;
 use os_pipe::PipeReader;
@@ -15,12 +14,12 @@ pub enum CmdChild {
     ThreadChild {
         child: JoinHandle<CmdResult>,
         cmd: String,
-        stderr: Option<CmdIn>,
+        stderr: Option<PipeReader>,
     },
     SyncChild {
         output: Option<PipeReader>,
         cmd: String,
-        stderr: Option<CmdIn>,
+        stderr: Option<PipeReader>,
     },
 }
 

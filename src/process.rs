@@ -353,7 +353,7 @@ pub struct Cmd {
     stdin_redirect: Option<CmdIn>,
     stdout_redirect: Option<CmdOut>,
     stderr_redirect: Option<CmdOut>,
-    stderr_logging: Option<CmdIn>, // for builtin/custom commands
+    stderr_logging: Option<PipeReader>, // for builtin/custom commands
 }
 
 impl Default for Cmd {
@@ -575,7 +575,7 @@ impl Cmd {
             // set up error pipe
             let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
             self.stderr_redirect = Some(CmdOut::CmdPipe(pipe_writer));
-            self.stderr_logging = Some(CmdIn::CmdPipe(pipe_reader));
+            self.stderr_logging = Some(pipe_reader);
         }
 
         if let Some(pipe) = pipe_in.take() {
