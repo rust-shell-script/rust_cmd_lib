@@ -12,7 +12,7 @@ pub enum CmdIn {
 impl Read for CmdIn {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         match self {
-            CmdIn::CmdNull => Ok(buf.len()),
+            CmdIn::CmdNull => Ok(0),
             CmdIn::CmdFile(file) => file.read(buf),
             CmdIn::CmdPipe(pipe) => pipe.read(buf),
         }
