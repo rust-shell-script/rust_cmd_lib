@@ -25,14 +25,6 @@ pub enum CmdChild {
 }
 
 impl CmdChild {
-    pub fn get_cmd(&self) -> String {
-        match self {
-            ProcChild { cmd, .. } => cmd.to_string(),
-            ThreadChild { cmd, .. } => cmd.to_string(),
-            SyncChild { cmd, .. } => cmd.to_string(),
-        }
-    }
-
     pub fn wait(self, is_last: bool) -> CmdResult {
         let pipefail = std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into());
         let check_result = |result| {
@@ -138,7 +130,11 @@ impl CmdChild {
     pub fn get_full_cmd(children: &[Self]) -> String {
         children
             .iter()
-            .map(|cmd| cmd.get_cmd())
+            .map(|child| match child {
+                ProcChild { cmd, .. } => cmd.to_owned(),
+                ThreadChild { cmd, .. } => cmd.to_owned(),
+                SyncChild { cmd, .. } => cmd.to_owned(),
+            })
             .collect::<Vec<_>>()
             .join(" | ")
     }
