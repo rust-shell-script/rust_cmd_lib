@@ -260,7 +260,7 @@ impl WaitFun {
         ret
     }
 
-    pub fn wait_raw_result_nolog(&mut self) -> Result<Vec<u8>> {
+    fn wait_raw_result_nolog(&mut self) -> Result<Vec<u8>> {
         let handle = self.0.pop().unwrap();
         let wait_last = handle.wait_with_output();
         match wait_last {
@@ -287,7 +287,7 @@ impl WaitFun {
         ret
     }
 
-    pub fn wait_result_nolog(&mut self) -> FunResult {
+    fn wait_result_nolog(&mut self) -> FunResult {
         // wait last process result
         let handle = self.0.pop().unwrap();
         let wait_last = handle.wait_with_output();
