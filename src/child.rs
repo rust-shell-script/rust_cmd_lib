@@ -20,6 +20,7 @@ pub enum CmdChild {
     SyncChild {
         output: Option<PipeReader>,
         cmd: String,
+        stderr: Option<CmdIn>,
     },
 }
 
@@ -43,11 +44,9 @@ impl CmdChild {
             Ok(())
         };
         match self {
-            ProcChild { mut child, cmd} => {
+            ProcChild { mut child, cmd } => {
                 let status = child.wait()?;
-                if let Some(stderr) = child.stderr.take() {
-                    Self::log_stderr_output(stderr);
-                }
+                Self::log_stderr_output(child.stderr);
                 if !status.success() && (is_last || pipefail) {
                     return Err(Self::status_to_io_error(
                         status,
@@ -55,15 +54,9 @@ impl CmdChild {
                     ));
                 }
             }
-            ThreadChild {
-                child,
-                cmd,
-                mut stderr,
-            } => {
+            ThreadChild { child, cmd, stderr } => {
                 let status = child.join();
-                if let Some(stderr) = stderr.take() {
-                    Self::log_stderr_output(stderr);
-                }
+                Self::log_stderr_output(stderr);
                 match status {
                     Err(e) => {
                         if is_last || pipefail {
@@ -78,7 +71,8 @@ impl CmdChild {
                     }
                 }
             }
-            SyncChild { output, .. } => {
+            SyncChild { output, stderr, .. } => {
+                Self::log_stderr_output(stderr);
                 if let Some(mut out) = output {
                     let mut buf = vec![];
                     check_result(out.read_to_end(&mut buf).map(|_| ()))?;
@@ -91,9 +85,9 @@ impl CmdChild {
 
     pub fn wait_with_output(self) -> Result<Vec<u8>> {
         match self {
-            ProcChild { child, cmd} => {
+            ProcChild { child, cmd } => {
                 let output = child.wait_with_output()?;
-                Self::log_stderr_output(&output.stderr[..]);
+                Self::log_stderr_output(Some(&output.stderr[..]));
                 if !output.status.success() {
                     return Err(Self::status_to_io_error(
                         output.status,
@@ -106,7 +100,8 @@ impl CmdChild {
             ThreadChild { cmd, .. } => {
                 panic!("{} thread should not be waited for output", cmd);
             }
-            SyncChild { output, .. } => {
+            SyncChild { output, stderr, .. } => {
+                Self::log_stderr_output(stderr);
                 if let Some(mut out) = output {
                     let mut buf = vec![];
                     out.read_to_end(&mut buf)?;
@@ -117,11 +112,13 @@ impl CmdChild {
         }
     }
 
-    pub fn log_stderr_output(output: impl Read) {
-        BufReader::new(output)
-            .lines()
-            .filter_map(|line| line.ok())
-            .for_each(|line| info!("{}", line));
+    fn log_stderr_output(stderr: Option<impl Read>) {
+        if let Some(stderr) = stderr {
+            BufReader::new(stderr)
+                .lines()
+                .filter_map(|line| line.ok())
+                .for_each(|line| info!("{}", line));
+        }
     }
 
     fn status_to_io_error(status: ExitStatus, command: &str) -> Error {

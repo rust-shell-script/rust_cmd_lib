@@ -353,7 +353,7 @@ pub struct Cmd {
     stdin_redirect: Option<CmdIn>,
     stdout_redirect: Option<CmdOut>,
     stderr_redirect: Option<CmdOut>,
-    stderr: Option<CmdIn>,
+    stderr_logging: Option<CmdIn>, // for builtin/custom commands
 }
 
 impl Default for Cmd {
@@ -367,7 +367,7 @@ impl Default for Cmd {
             stdin_redirect: None,
             stdout_redirect: None,
             stderr_redirect: None,
-            stderr: None,
+            stderr_logging: None,
         }
     }
 }
@@ -448,6 +448,7 @@ impl Cmd {
             Ok(CmdChild::SyncChild {
                 cmd: full_cmd,
                 output: None,
+                stderr: None,
             })
         } else if self.in_cmd_map {
             let pipe_out = matches!(self.stdout_redirect, Some(CmdOut::CmdPipe(_)));
@@ -482,21 +483,16 @@ impl Cmd {
                 let handle = std::thread::spawn(move || internal_cmd(&mut env));
                 Ok(CmdChild::ThreadChild {
                     child: handle,
-                    stderr: self.stderr,
+                    stderr: self.stderr_logging,
                     cmd: full_cmd,
                 })
             } else {
                 internal_cmd(&mut env)?;
                 drop(env);
-
-                // update stderr
-                if let Some(output) = self.stderr.take() {
-                    CmdChild::log_stderr_output(output);
-                }
-
                 Ok(CmdChild::SyncChild {
                     cmd: full_cmd,
                     output: new_pipe_out,
+                    stderr: self.stderr_logging,
                 })
             }
         } else {
@@ -579,7 +575,7 @@ impl Cmd {
             // set up error pipe
             let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
             self.stderr_redirect = Some(CmdOut::CmdPipe(pipe_writer));
-            self.stderr = Some(CmdIn::CmdPipe(pipe_reader));
+            self.stderr_logging = Some(CmdIn::CmdPipe(pipe_reader));
         }
 
         if let Some(pipe) = pipe_in.take() {
