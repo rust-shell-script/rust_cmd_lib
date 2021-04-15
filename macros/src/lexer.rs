@@ -20,16 +20,10 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
         .peekable();
     let mut output = quote!("");
     let mut last_part = String::new();
-    fn extend_last_part(last_part: &mut String, ch: char) {
-        if last_part.is_empty() {
-            last_part.push('"'); // start new string literal
-        }
-        last_part.push(ch);
-    }
     fn seal_last_part(last_part: &mut String, output: &mut TokenStream) {
         if !last_part.is_empty() {
-            last_part.push('"'); // seal it
-            let l = syn::parse_str::<Literal>(&last_part).unwrap();
+            let lit_str = format!("\"{}\"", last_part);
+            let l = syn::parse_str::<Literal>(&lit_str).unwrap();
             output.extend(quote!(+ #l));
             last_part.clear();
         }
@@ -39,7 +33,7 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
         if ch == '$' {
             if iter.peek() == Some(&'$') {
                 iter.next();
-                extend_last_part(&mut last_part, '$');
+                last_part.push('$');
                 continue;
             }
 
@@ -74,7 +68,7 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
                 output.extend(quote!(+ "$"));
             }
         } else {
-            extend_last_part(&mut last_part, ch);
+            last_part.push(ch);
         }
     }
     seal_last_part(&mut last_part, &mut output);
