@@ -431,7 +431,6 @@ impl Cmd {
             let cmds: Vec<String> = self.args.to_vec();
             let mut cmd = Command::new(&cmds[0]);
             cmd.args(&cmds[1..]);
-            cmd.stderr(Stdio::piped());
             for (k, v) in self.vars.iter() {
                 cmd.env(k, v);
             }
@@ -524,6 +523,7 @@ impl Cmd {
             let child = cmd.spawn()?;
             Ok(CmdChild::ProcChild {
                 cmd: full_cmd,
+                stderr: self.stderr_logging,
                 child,
             })
         }
@@ -571,12 +571,10 @@ impl Cmd {
         pipe_in: &mut Option<PipeReader>,
         pipe_out: Option<PipeWriter>,
     ) -> CmdResult {
-        if self.in_cmd_map {
-            // set up error pipe
-            let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
-            self.stderr_redirect = Some(CmdOut::CmdPipe(pipe_writer));
-            self.stderr_logging = Some(pipe_reader);
-        }
+        // set up error pipe
+        let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
+        self.stderr_redirect = Some(CmdOut::CmdPipe(pipe_writer));
+        self.stderr_logging = Some(pipe_reader);
 
         if let Some(pipe) = pipe_in.take() {
             self.stdin_redirect = Some(CmdIn::CmdPipe(pipe));
@@ -598,14 +596,14 @@ impl Cmd {
                     if let Some(ref redirect) = self.stderr_redirect {
                         self.stdout_redirect = Some(redirect.try_clone()?);
                     } else {
-                        self.stdout_redirect = Some(CmdOut::CmdPipe(os_pipe::dup_stdout()?));
+                        self.stdout_redirect = Some(CmdOut::CmdPipe(os_pipe::dup_stderr()?));
                     }
                 }
                 Redirect::StderrToStdout => {
                     if let Some(ref redirect) = self.stdout_redirect {
                         self.stderr_redirect = Some(redirect.try_clone()?);
                     } else {
-                        self.stderr_redirect = Some(CmdOut::CmdPipe(os_pipe::dup_stderr()?));
+                        self.stderr_redirect = Some(CmdOut::CmdPipe(os_pipe::dup_stdout()?));
                     }
                 }
                 Redirect::StdoutToFile(path, append) => {

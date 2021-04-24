@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::{Read, Result, Write};
 use std::process::Stdio;
 
+#[derive(Debug)]
 pub enum CmdIn {
     CmdNull,
     CmdFile(File),
@@ -29,6 +30,7 @@ impl From<CmdIn> for Stdio {
     }
 }
 
+#[derive(Debug)]
 pub enum CmdOut {
     CmdNull,
     CmdFile(File),

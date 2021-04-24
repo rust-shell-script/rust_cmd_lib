@@ -6,10 +6,12 @@ use std::process::{Child, ExitStatus};
 use std::thread::JoinHandle;
 use CmdChild::{ProcChild, SyncChild, ThreadChild};
 
+#[derive(Debug)]
 pub enum CmdChild {
     ProcChild {
         child: Child,
         cmd: String,
+        stderr: Option<PipeReader>,
     },
     ThreadChild {
         child: JoinHandle<CmdResult>,
@@ -35,9 +37,13 @@ impl CmdChild {
             Ok(())
         };
         match self {
-            ProcChild { mut child, cmd } => {
+            ProcChild {
+                mut child,
+                stderr,
+                cmd,
+            } => {
+                Self::log_stderr_output(stderr);
                 let status = child.wait()?;
-                Self::log_stderr_output(child.stderr);
                 if !status.success() && (is_last || pipefail) {
                     return Err(Self::status_to_io_error(
                         status,
@@ -76,9 +82,9 @@ impl CmdChild {
 
     pub fn wait_with_output(self) -> Result<Vec<u8>> {
         match self {
-            ProcChild { child, cmd } => {
+            ProcChild { child, cmd, stderr } => {
+                Self::log_stderr_output(stderr);
                 let output = child.wait_with_output()?;
-                Self::log_stderr_output(Some(&output.stderr[..]));
                 if !output.status.success() {
                     return Err(Self::status_to_io_error(
                         output.status,
