@@ -1,7 +1,7 @@
 use crate::CmdResult;
 use log::info;
-use os_pipe::PipeReader;
-use std::io::{self, BufRead, BufReader, Error, ErrorKind, Read, Result, Write};
+use os_pipe::{self, PipeReader};
+use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result};
 use std::process::{Child, ExitStatus};
 use std::thread::JoinHandle;
 use CmdChild::{ProcChild, SyncChild, ThreadChild};
@@ -43,6 +43,12 @@ impl CmdChild {
                 cmd,
             } => {
                 Self::log_stderr_output(stderr);
+                if let Some(stdout) = child.stdout.take() {
+                    BufReader::new(stdout)
+                        .lines()
+                        .filter_map(|line| line.ok())
+                        .for_each(|line| println!("{}", line));
+                }
                 let status = child.wait()?;
                 if !status.success() && (is_last || pipefail) {
                     return Err(Self::status_to_io_error(
@@ -73,7 +79,7 @@ impl CmdChild {
                 if let Some(mut out) = output {
                     let mut buf = vec![];
                     check_result(out.read_to_end(&mut buf).map(|_| ()))?;
-                    check_result(io::stdout().write_all(&buf[..]))?;
+                    println!("{}", String::from_utf8_lossy(&buf));
                 }
             }
         }

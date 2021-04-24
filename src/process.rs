@@ -140,7 +140,7 @@ impl GroupCmds {
     pub fn spawn(mut self) -> Result<WaitCmd> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap().0;
-        let ret = cmds.spawn(&mut self.current_dir, false);
+        let ret = cmds.spawn(&mut self.current_dir);
         if let Err(ref err) = ret {
             error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
         }
@@ -150,7 +150,7 @@ impl GroupCmds {
     pub fn spawn_with_output(mut self) -> Result<WaitFun> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap().0;
-        match cmds.spawn(&mut self.current_dir, true) {
+        match cmds.spawn(&mut self.current_dir) {
             Ok(ret) => Ok(WaitFun(ret.0)),
             Err(err) => {
                 error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
@@ -181,7 +181,7 @@ impl Cmds {
         &self.full_cmds
     }
 
-    fn spawn(&mut self, current_dir: &mut String, with_output: bool) -> Result<WaitCmd> {
+    fn spawn(&mut self, current_dir: &mut String) -> Result<WaitCmd> {
         if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
             debug!("Running {} ...", self.get_full_cmds());
         }
@@ -200,7 +200,7 @@ impl Cmds {
             } else {
                 cmd.setup_redirects(&mut last_pipe_in, None)?;
             }
-            let child = cmd.spawn(current_dir, with_output)?;
+            let child = cmd.spawn(current_dir)?;
             children.push(child);
         }
 
@@ -208,11 +208,11 @@ impl Cmds {
     }
 
     fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
-        self.spawn(current_dir, false)?.wait_result_nolog()
+        self.spawn(current_dir)?.wait_result_nolog()
     }
 
     fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
-        WaitFun(self.spawn(current_dir, true)?.0).wait_result_nolog()
+        WaitFun(self.spawn(current_dir)?.0).wait_result_nolog()
     }
 }
 
@@ -439,7 +439,7 @@ impl Cmd {
         }
     }
 
-    fn spawn(mut self, current_dir: &mut String, with_output: bool) -> Result<CmdChild> {
+    fn spawn(mut self, current_dir: &mut String) -> Result<CmdChild> {
         let arg0 = self.arg0();
         let full_cmd = self.debug_str();
         if arg0 == "cd" {
@@ -463,12 +463,10 @@ impl Cmd {
                 },
                 stdout: if let Some(redirect_out) = self.stdout_redirect.take() {
                     redirect_out
-                } else if with_output {
+                } else {
                     let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
                     new_pipe_out = Some(pipe_reader);
                     CmdOut::CmdPipe(pipe_writer)
-                } else {
-                    CmdOut::CmdPipe(os_pipe::dup_stdout()?)
                 },
                 stderr: if let Some(redirect_err) = self.stderr_redirect.take() {
                     redirect_err
@@ -510,7 +508,7 @@ impl Cmd {
             // update stdout
             if let Some(redirect_out) = self.stdout_redirect.take() {
                 cmd.stdout(redirect_out);
-            } else if with_output {
+            } else {
                 cmd.stdout(Stdio::piped());
             }
 
