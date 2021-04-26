@@ -6,9 +6,13 @@ use std::process::{Child, ExitStatus};
 use std::thread::JoinHandle;
 use CmdChild::{ProcChild, SyncChild, ThreadChild};
 
+/// Representation of running or exited children processes, connected with pipes
+/// optionally.
+///
+/// Calling `spawn!` macro will return `Result<CmdChildren>`
 pub struct CmdChildren(Vec<CmdChild>);
 impl CmdChildren {
-    pub fn from(children: Vec<CmdChild>) -> Self {
+    pub(crate) fn from(children: Vec<CmdChild>) -> Self {
         Self(children)
     }
 
@@ -37,33 +41,6 @@ impl CmdChildren {
             child_handle.wait(false)?;
         }
         Ok(())
-    }
-
-    pub fn wait_raw_result(&mut self) -> Result<Vec<u8>> {
-        let ret = self.wait_raw_result_nolog();
-        if let Err(ref err) = ret {
-            error!(
-                "Running {} failed, Error: {}",
-                CmdChild::get_full_cmd(&self.0),
-                err
-            );
-        }
-        ret
-    }
-
-    fn wait_raw_result_nolog(&mut self) -> Result<Vec<u8>> {
-        let handle = self.0.pop().unwrap();
-        let wait_last = handle.wait_with_output();
-        match wait_last {
-            Err(e) => {
-                let _ = Self::wait_children(&mut self.0);
-                Err(e)
-            }
-            Ok(output) => {
-                Self::wait_children(&mut self.0)?;
-                Ok(output)
-            }
-        }
     }
 
     pub fn wait_fun_result(&mut self) -> FunResult {
@@ -97,6 +74,36 @@ impl CmdChildren {
             }
         }
     }
+
+    pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(PipeReader) -> CmdResult) -> CmdResult {
+        let handle = self.0.pop().unwrap();
+        let mut ret = Ok(());
+        match handle {
+            ProcChild {
+                mut child,
+                stderr,
+                stdout,
+                ..
+            } => {
+                if let Some(stdout) = stdout {
+                    ret = f(stdout);
+                    let _ = child.kill();
+                }
+                CmdChild::log_stderr_output(stderr);
+            }
+            ThreadChild { .. } => {
+                panic!("should not wait pipe on thread");
+            }
+            SyncChild { stderr, stdout, .. } => {
+                CmdChild::log_stderr_output(stderr);
+                if let Some(stdout) = stdout {
+                    ret = f(stdout);
+                }
+            }
+        };
+        let _ = Self::wait_children(&mut self.0);
+        ret
+    }
 }
 
 #[derive(Debug)]
@@ -104,16 +111,18 @@ pub enum CmdChild {
     ProcChild {
         child: Child,
         cmd: String,
+        stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
     },
     ThreadChild {
         child: JoinHandle<CmdResult>,
         cmd: String,
+        stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
     },
     SyncChild {
-        output: Option<PipeReader>,
         cmd: String,
+        stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
     },
 }
@@ -134,6 +143,7 @@ impl CmdChild {
                 mut child,
                 stderr,
                 cmd,
+                ..
             } => {
                 Self::log_stderr_output(stderr);
                 if let Some(stdout) = child.stdout.take() {
@@ -150,7 +160,9 @@ impl CmdChild {
                     ));
                 }
             }
-            ThreadChild { child, cmd, stderr } => {
+            ThreadChild {
+                child, cmd, stderr, ..
+            } => {
                 let status = child.join();
                 Self::log_stderr_output(stderr);
                 match status {
@@ -167,12 +179,12 @@ impl CmdChild {
                     }
                 }
             }
-            SyncChild { output, stderr, .. } => {
+            SyncChild { stdout, stderr, .. } => {
                 Self::log_stderr_output(stderr);
-                if let Some(mut out) = output {
+                if let Some(mut out) = stdout {
                     let mut buf = vec![];
                     check_result(out.read_to_end(&mut buf).map(|_| ()))?;
-                    println!("{}", String::from_utf8_lossy(&buf));
+                    print!("{}", String::from_utf8_lossy(&buf));
                 }
             }
         }
@@ -181,24 +193,32 @@ impl CmdChild {
 
     pub fn wait_with_output(self) -> Result<Vec<u8>> {
         match self {
-            ProcChild { child, cmd, stderr } => {
+            ProcChild {
+                mut child,
+                cmd,
+                stdout,
+                stderr,
+            } => {
+                let mut buf = vec![];
+                if let Some(mut stdout) = stdout {
+                    stdout.read_to_end(&mut buf)?;
+                }
                 Self::log_stderr_output(stderr);
-                let output = child.wait_with_output()?;
-                if !output.status.success() {
+                let status = child.wait()?;
+                if !status.success() {
                     return Err(Self::status_to_io_error(
-                        output.status,
+                        status,
                         &format!("{} exited with error", cmd),
                     ));
-                } else {
-                    Ok(output.stdout)
                 }
+                Ok(buf)
             }
             ThreadChild { cmd, .. } => {
                 panic!("{} thread should not be waited for output", cmd);
             }
-            SyncChild { output, stderr, .. } => {
+            SyncChild { stdout, stderr, .. } => {
                 Self::log_stderr_output(stderr);
-                if let Some(mut out) = output {
+                if let Some(mut out) = stdout {
                     let mut buf = vec![];
                     out.read_to_end(&mut buf)?;
                     return Ok(buf);

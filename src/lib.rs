@@ -331,6 +331,7 @@ pub use builtins::{
     builtin_cat, builtin_debug, builtin_die, builtin_echo, builtin_error, builtin_info,
     builtin_trace, builtin_true, builtin_warn,
 };
+pub use child::CmdChildren;
 #[doc(hidden)]
 pub use log;
 pub use logger::init_builtin_logger;

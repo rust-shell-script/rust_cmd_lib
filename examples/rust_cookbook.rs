@@ -2,7 +2,8 @@
 // Rewrite examples with rust_cmd_lib from
 // https://rust-lang-nursery.github.io/rust-cookbook/os/external.html
 //
-use cmd_lib::{init_builtin_logger, run_cmd, run_fun, CmdResult};
+use cmd_lib::*;
+use std::io::{BufRead, BufReader};
 fn main() -> CmdResult {
     init_builtin_logger();
     cmd_lib::set_pipefail(false); // do not fail due to pipe errors
@@ -26,7 +27,15 @@ fn main() -> CmdResult {
     run_cmd!(rm -f out.txt)?;
 
     // Continuously process child process' outputs
-    run_cmd!(ping -c 5 www.google.com | awk r#"/time/ {print $(NF-3) " " $(NF-1) " " $NF}"#)?;
+    spawn!(journalctl)?.wait_with_pipe(&mut |pipe| {
+        BufReader::new(pipe)
+            .lines()
+            .filter_map(|line| line.ok())
+            .filter(|line| line.find("usb").is_some())
+            .take(10)
+            .for_each(|line| println!("{}", line));
+        Ok(())
+    })?;
 
     Ok(())
 }

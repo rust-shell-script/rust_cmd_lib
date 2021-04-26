@@ -10,7 +10,7 @@ use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::Mutex;
 
 /// Environment for builtin or custom commands
@@ -249,7 +249,8 @@ pub struct Cmd {
     stdin_redirect: Option<CmdIn>,
     stdout_redirect: Option<CmdOut>,
     stderr_redirect: Option<CmdOut>,
-    stderr_logging: Option<PipeReader>, // for builtin/custom commands
+    stdout_logging: Option<PipeReader>,
+    stderr_logging: Option<PipeReader>,
 }
 
 impl Default for Cmd {
@@ -263,6 +264,7 @@ impl Default for Cmd {
             stdin_redirect: None,
             stdout_redirect: None,
             stderr_redirect: None,
+            stdout_logging: None,
             stderr_logging: None,
         }
     }
@@ -342,12 +344,11 @@ impl Cmd {
             self.run_cd_cmd(current_dir)?;
             Ok(CmdChild::SyncChild {
                 cmd: full_cmd,
-                output: None,
+                stdout: None,
                 stderr: None,
             })
         } else if self.in_cmd_map {
-            let pipe_out = matches!(self.stdout_redirect, Some(CmdOut::CmdPipe(_)));
-            let mut new_pipe_out = None;
+            let pipe_out = self.stdout_logging.is_none();
             let mut env = CmdEnv {
                 args: self.args,
                 vars: self.vars,
@@ -360,9 +361,7 @@ impl Cmd {
                 stdout: if let Some(redirect_out) = self.stdout_redirect.take() {
                     redirect_out
                 } else {
-                    let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
-                    new_pipe_out = Some(pipe_reader);
-                    CmdOut::CmdPipe(pipe_writer)
+                    CmdOut::CmdPipe(os_pipe::dup_stdout()?)
                 },
                 stderr: if let Some(redirect_err) = self.stderr_redirect.take() {
                     redirect_err
@@ -376,6 +375,7 @@ impl Cmd {
                 let handle = std::thread::spawn(move || internal_cmd(&mut env));
                 Ok(CmdChild::ThreadChild {
                     child: handle,
+                    stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
                     cmd: full_cmd,
                 })
@@ -384,7 +384,7 @@ impl Cmd {
                 drop(env);
                 Ok(CmdChild::SyncChild {
                     cmd: full_cmd,
-                    output: new_pipe_out,
+                    stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
                 })
             }
@@ -404,8 +404,6 @@ impl Cmd {
             // update stdout
             if let Some(redirect_out) = self.stdout_redirect.take() {
                 cmd.stdout(redirect_out);
-            } else {
-                cmd.stdout(Stdio::piped());
             }
 
             // update stderr
@@ -417,6 +415,7 @@ impl Cmd {
             let child = cmd.spawn()?;
             Ok(CmdChild::ProcChild {
                 cmd: full_cmd,
+                stdout: self.stdout_logging,
                 stderr: self.stderr_logging,
                 child,
             })
@@ -470,11 +469,17 @@ impl Cmd {
         self.stderr_redirect = Some(CmdOut::CmdPipe(pipe_writer));
         self.stderr_logging = Some(pipe_reader);
 
-        if let Some(pipe) = pipe_in.take() {
-            self.stdin_redirect = Some(CmdIn::CmdPipe(pipe));
-        }
         if let Some(pipe) = pipe_out {
             self.stdout_redirect = Some(CmdOut::CmdPipe(pipe));
+        } else {
+            // set up stdout pipe
+            let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
+            self.stdout_redirect = Some(CmdOut::CmdPipe(pipe_writer));
+            self.stdout_logging = Some(pipe_reader);
+        }
+
+        if let Some(pipe) = pipe_in.take() {
+            self.stdin_redirect = Some(CmdIn::CmdPipe(pipe));
         }
 
         for redirect in self.redirects.iter() {
