@@ -254,12 +254,12 @@
 //! `spawn!()` macro executes the whole command as a child process, returning a handle to it. By
 //! default, stdin, stdout and stderr are inherited from the parent.
 //!
-//! To get result, you can call `wait_cmd()` or `wait_fun()` to get CmdResult/FunResult.
+//! To get result, you can call `wait_cmd_result()` or `wait_fun_result()` to get CmdResult/FunResult.
 //!
 //! ```no_run
 //! # use cmd_lib::spawn;
-//! spawn!(ping -c 10 192.168.0.1)?.wait_cmd()?;
-//! let output = spawn!(/bin/cat file.txt | sed s/a/b/)?.wait_fun()?;
+//! spawn!(ping -c 10 192.168.0.1)?.wait_cmd_result()?;
+//! let output = spawn!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result()?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!

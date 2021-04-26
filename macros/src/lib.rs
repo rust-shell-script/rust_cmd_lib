@@ -173,7 +173,7 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// let handle = spawn!(ping -c 10 192.168.0.1)?;
 /// // ...
-/// if handle.wait_cmd().is_err() {
+/// if handle.wait_cmd_result().is_err() {
 ///     // ...
 /// }
 /// # Ok::<(), std::io::Error>(())

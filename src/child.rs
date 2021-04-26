@@ -12,8 +12,8 @@ impl CmdChildren {
         Self(children)
     }
 
-    pub fn wait_cmd(&mut self) -> CmdResult {
-        let ret = self.wait_cmd_nolog();
+    pub fn wait_cmd_result(&mut self) -> CmdResult {
+        let ret = self.wait_cmd_result_nolog();
         if let Err(ref err) = ret {
             error!(
                 "Running {} failed, Error: {}",
@@ -24,7 +24,7 @@ impl CmdChildren {
         ret
     }
 
-    pub(crate) fn wait_cmd_nolog(&mut self) -> CmdResult {
+    pub(crate) fn wait_cmd_result_nolog(&mut self) -> CmdResult {
         // wait last process result
         let handle = self.0.pop().unwrap();
         handle.wait(true)?;
@@ -66,8 +66,8 @@ impl CmdChildren {
         }
     }
 
-    pub fn wait_fun(&mut self) -> FunResult {
-        let ret = self.wait_fun_nolog();
+    pub fn wait_fun_result(&mut self) -> FunResult {
+        let ret = self.wait_fun_result_nolog();
         if let Err(ref err) = ret {
             error!(
                 "Running {} failed, Error: {}",
@@ -78,7 +78,7 @@ impl CmdChildren {
         ret
     }
 
-    pub(crate) fn wait_fun_nolog(&mut self) -> FunResult {
+    pub(crate) fn wait_fun_result_nolog(&mut self) -> FunResult {
         // wait last process result
         let handle = self.0.pop().unwrap();
         let wait_last = handle.wait_with_output();

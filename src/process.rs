@@ -196,11 +196,11 @@ impl Cmds {
     }
 
     fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
-        self.spawn(current_dir)?.wait_cmd_nolog()
+        self.spawn(current_dir)?.wait_cmd_result_nolog()
     }
 
     fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
-        self.spawn(current_dir)?.wait_fun_nolog()
+        self.spawn(current_dir)?.wait_fun_result_nolog()
     }
 }
 
