@@ -1,10 +1,103 @@
-use crate::CmdResult;
-use log::info;
-use os_pipe::{self, PipeReader};
+use crate::{CmdResult, FunResult};
+use log::{error, info};
+use os_pipe::PipeReader;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result};
 use std::process::{Child, ExitStatus};
 use std::thread::JoinHandle;
 use CmdChild::{ProcChild, SyncChild, ThreadChild};
+
+pub struct CmdChildren(Vec<CmdChild>);
+impl CmdChildren {
+    pub fn from(children: Vec<CmdChild>) -> Self {
+        Self(children)
+    }
+
+    pub fn wait_cmd(&mut self) -> CmdResult {
+        let ret = self.wait_cmd_nolog();
+        if let Err(ref err) = ret {
+            error!(
+                "Running {} failed, Error: {}",
+                CmdChild::get_full_cmd(&self.0),
+                err
+            );
+        }
+        ret
+    }
+
+    pub(crate) fn wait_cmd_nolog(&mut self) -> CmdResult {
+        // wait last process result
+        let handle = self.0.pop().unwrap();
+        handle.wait(true)?;
+        Self::wait_children(&mut self.0)
+    }
+
+    fn wait_children(children: &mut Vec<CmdChild>) -> CmdResult {
+        while !children.is_empty() {
+            let child_handle = children.pop().unwrap();
+            child_handle.wait(false)?;
+        }
+        Ok(())
+    }
+
+    pub fn wait_raw_result(&mut self) -> Result<Vec<u8>> {
+        let ret = self.wait_raw_result_nolog();
+        if let Err(ref err) = ret {
+            error!(
+                "Running {} failed, Error: {}",
+                CmdChild::get_full_cmd(&self.0),
+                err
+            );
+        }
+        ret
+    }
+
+    fn wait_raw_result_nolog(&mut self) -> Result<Vec<u8>> {
+        let handle = self.0.pop().unwrap();
+        let wait_last = handle.wait_with_output();
+        match wait_last {
+            Err(e) => {
+                let _ = Self::wait_children(&mut self.0);
+                Err(e)
+            }
+            Ok(output) => {
+                Self::wait_children(&mut self.0)?;
+                Ok(output)
+            }
+        }
+    }
+
+    pub fn wait_fun(&mut self) -> FunResult {
+        let ret = self.wait_fun_nolog();
+        if let Err(ref err) = ret {
+            error!(
+                "Running {} failed, Error: {}",
+                CmdChild::get_full_cmd(&self.0),
+                err
+            );
+        }
+        ret
+    }
+
+    pub(crate) fn wait_fun_nolog(&mut self) -> FunResult {
+        // wait last process result
+        let handle = self.0.pop().unwrap();
+        let wait_last = handle.wait_with_output();
+        match wait_last {
+            Err(e) => {
+                let _ = CmdChildren::wait_children(&mut self.0);
+                Err(e)
+            }
+            Ok(output) => {
+                let mut ret = String::from_utf8_lossy(&output).to_string();
+                if ret.ends_with('\n') {
+                    ret.pop();
+                }
+                CmdChildren::wait_children(&mut self.0)?;
+                Ok(ret)
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum CmdChild {
