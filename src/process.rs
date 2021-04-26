@@ -137,7 +137,7 @@ impl GroupCmds {
         }
     }
 
-    pub fn spawn(mut self) -> Result<WaitCmd> {
+    pub fn spawn(mut self) -> Result<CmdChildren> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap().0;
         let ret = cmds.spawn(&mut self.current_dir);
@@ -145,18 +145,6 @@ impl GroupCmds {
             error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
         }
         ret
-    }
-
-    pub fn spawn_with_output(mut self) -> Result<WaitFun> {
-        assert_eq!(self.group_cmds.len(), 1);
-        let mut cmds = self.group_cmds.pop().unwrap().0;
-        match cmds.spawn(&mut self.current_dir) {
-            Ok(ret) => Ok(WaitFun(ret.0)),
-            Err(err) => {
-                error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
-                Err(err)
-            }
-        }
     }
 }
 
@@ -181,7 +169,7 @@ impl Cmds {
         &self.full_cmds
     }
 
-    fn spawn(&mut self, current_dir: &mut String) -> Result<WaitCmd> {
+    fn spawn(&mut self, current_dir: &mut String) -> Result<CmdChildren> {
         if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
             debug!("Running {} ...", self.get_full_cmds());
         }
@@ -204,22 +192,22 @@ impl Cmds {
             children.push(child);
         }
 
-        Ok(WaitCmd(children))
+        Ok(CmdChildren(children))
     }
 
     fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
-        self.spawn(current_dir)?.wait_result_nolog()
+        self.spawn(current_dir)?.wait_cmd_nolog()
     }
 
     fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
-        WaitFun(self.spawn(current_dir)?.0).wait_result_nolog()
+        self.spawn(current_dir)?.wait_fun_nolog()
     }
 }
 
-pub struct WaitCmd(Vec<CmdChild>);
-impl WaitCmd {
-    pub fn wait_result(&mut self) -> CmdResult {
-        let ret = self.wait_result_nolog();
+pub struct CmdChildren(Vec<CmdChild>);
+impl CmdChildren {
+    pub fn wait_cmd(&mut self) -> CmdResult {
+        let ret = self.wait_cmd_nolog();
         if let Err(ref err) = ret {
             error!(
                 "Running {} failed, Error: {}",
@@ -230,7 +218,7 @@ impl WaitCmd {
         ret
     }
 
-    fn wait_result_nolog(&mut self) -> CmdResult {
+    fn wait_cmd_nolog(&mut self) -> CmdResult {
         // wait last process result
         let handle = self.0.pop().unwrap();
         handle.wait(true)?;
@@ -244,10 +232,7 @@ impl WaitCmd {
         }
         Ok(())
     }
-}
 
-pub struct WaitFun(Vec<CmdChild>);
-impl WaitFun {
     pub fn wait_raw_result(&mut self) -> Result<Vec<u8>> {
         let ret = self.wait_raw_result_nolog();
         if let Err(ref err) = ret {
@@ -265,18 +250,18 @@ impl WaitFun {
         let wait_last = handle.wait_with_output();
         match wait_last {
             Err(e) => {
-                let _ = WaitCmd::wait_children(&mut self.0);
+                let _ = Self::wait_children(&mut self.0);
                 Err(e)
             }
             Ok(output) => {
-                WaitCmd::wait_children(&mut self.0)?;
+                Self::wait_children(&mut self.0)?;
                 Ok(output)
             }
         }
     }
 
-    pub fn wait_result(&mut self) -> FunResult {
-        let ret = self.wait_result_nolog();
+    pub fn wait_fun(&mut self) -> FunResult {
+        let ret = self.wait_fun_nolog();
         if let Err(ref err) = ret {
             error!(
                 "Running {} failed, Error: {}",
@@ -287,13 +272,13 @@ impl WaitFun {
         ret
     }
 
-    fn wait_result_nolog(&mut self) -> FunResult {
+    fn wait_fun_nolog(&mut self) -> FunResult {
         // wait last process result
         let handle = self.0.pop().unwrap();
         let wait_last = handle.wait_with_output();
         match wait_last {
             Err(e) => {
-                let _ = WaitCmd::wait_children(&mut self.0);
+                let _ = CmdChildren::wait_children(&mut self.0);
                 Err(e)
             }
             Ok(output) => {
@@ -301,7 +286,7 @@ impl WaitFun {
                 if ret.ends_with('\n') {
                     ret.pop();
                 }
-                WaitCmd::wait_children(&mut self.0)?;
+                CmdChildren::wait_children(&mut self.0)?;
                 Ok(ret)
             }
         }

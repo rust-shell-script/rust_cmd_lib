@@ -167,13 +167,13 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /// Run commands with/without pipes as a child process, returning a handle to check the final
-/// status
+/// result
 /// ```no_run
 /// # use cmd_lib::*;
 ///
 /// let handle = spawn!(ping -c 10 192.168.0.1)?;
 /// // ...
-/// if handle.wait_result().is_err() {
+/// if handle.wait_cmd().is_err() {
 ///     // ...
 /// }
 /// # Ok::<(), std::io::Error>(())
@@ -183,34 +183,6 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let cmds = lexer::Lexer::new(input.into()).scan().parse(true);
     quote! ({
         #cmds.spawn()
-    })
-    .into()
-}
-
-/// Run commands with/without pipes as a child process, returning a handle to capture the
-/// final output
-/// ```no_run
-/// # use cmd_lib::*;
-/// // from examples/dd_test.rs:
-/// let mut procs = vec![];
-/// for _ in 0..4 {
-///     let proc = spawn_with_output!(
-///         sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
-///     )?;
-/// }
-///
-/// for (i, mut proc) in procs.into_iter().enumerate() {
-///     let output = proc.wait_result()?;
-///     run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
-/// }
-/// # Ok::<(), std::io::Error>(())
-/// ```
-#[proc_macro]
-#[proc_macro_error]
-pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::Lexer::new(input.into()).scan().parse(true);
-    quote! ({
-        #cmds.spawn_with_output()
     })
     .into()
 }
