@@ -323,9 +323,7 @@ impl Cmd {
     }
 
     fn gen_command(mut self) -> Self {
-        if self.in_cmd_map {
-            self
-        } else {
+        if !self.in_cmd_map {
             let cmds: Vec<String> = self.args.to_vec();
             let mut cmd = Command::new(&cmds[0]);
             cmd.args(&cmds[1..]);
@@ -333,8 +331,8 @@ impl Cmd {
                 cmd.env(k, v);
             }
             self.std_cmd = Some(cmd);
-            self
         }
+        self
     }
 
     fn spawn(mut self, current_dir: &mut String) -> Result<CmdChild> {
