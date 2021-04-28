@@ -340,7 +340,7 @@ impl Cmd {
         let full_cmd = self.debug_str();
         if arg0 == "cd" {
             self.run_cd_cmd(current_dir)?;
-            Ok(CmdChild::SyncChild {
+            Ok(CmdChild::SyncFn {
                 cmd: full_cmd,
                 stdout: None,
                 stderr: None,
@@ -371,7 +371,7 @@ impl Cmd {
             let internal_cmd = CMD_MAP.lock().unwrap()[&arg0];
             if pipe_out {
                 let handle = std::thread::spawn(move || internal_cmd(&mut env));
-                Ok(CmdChild::ThreadChild {
+                Ok(CmdChild::ThreadFn {
                     child: handle,
                     stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
@@ -380,7 +380,7 @@ impl Cmd {
             } else {
                 internal_cmd(&mut env)?;
                 drop(env);
-                Ok(CmdChild::SyncChild {
+                Ok(CmdChild::SyncFn {
                     cmd: full_cmd,
                     stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
@@ -413,7 +413,7 @@ impl Cmd {
 
             // spawning process
             let child = cmd.spawn()?;
-            Ok(CmdChild::ProcChild {
+            Ok(CmdChild::Proc {
                 cmd: full_cmd,
                 stderr: self.stderr_logging,
                 child,

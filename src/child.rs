@@ -4,7 +4,6 @@ use os_pipe::PipeReader;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result};
 use std::process::{Child, ExitStatus};
 use std::thread::JoinHandle;
-use CmdChild::{ProcChild, SyncChild, ThreadChild};
 
 /// Representation of running or exited children processes, connected with pipes
 /// optionally.
@@ -79,7 +78,7 @@ impl CmdChildren {
         let handle = self.0.pop().unwrap();
         let mut ret = Ok(());
         match handle {
-            ProcChild {
+            CmdChild::Proc {
                 mut child, stderr, ..
             } => {
                 if let Some(stdout) = child.stdout.take() {
@@ -88,10 +87,10 @@ impl CmdChildren {
                 }
                 CmdChild::log_stderr_output(stderr);
             }
-            ThreadChild { .. } => {
+            CmdChild::ThreadFn { .. } => {
                 panic!("should not wait pipe on thread");
             }
-            SyncChild { stderr, stdout, .. } => {
+            CmdChild::SyncFn { stderr, stdout, .. } => {
                 CmdChild::log_stderr_output(stderr);
                 if let Some(stdout) = stdout {
                     ret = f(Box::new(stdout));
@@ -105,18 +104,18 @@ impl CmdChildren {
 
 #[derive(Debug)]
 pub(crate) enum CmdChild {
-    ProcChild {
+    Proc {
         child: Child,
         cmd: String,
         stderr: Option<PipeReader>,
     },
-    ThreadChild {
+    ThreadFn {
         child: JoinHandle<CmdResult>,
         cmd: String,
         stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
     },
-    SyncChild {
+    SyncFn {
         cmd: String,
         stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
@@ -135,7 +134,7 @@ impl CmdChild {
             Ok(())
         };
         match self {
-            ProcChild {
+            CmdChild::Proc {
                 mut child,
                 stderr,
                 cmd,
@@ -151,7 +150,7 @@ impl CmdChild {
                     ));
                 }
             }
-            ThreadChild {
+            CmdChild::ThreadFn {
                 child, cmd, stderr, ..
             } => {
                 let status = child.join();
@@ -170,7 +169,7 @@ impl CmdChild {
                     }
                 }
             }
-            SyncChild { stdout, stderr, .. } => {
+            CmdChild::SyncFn { stdout, stderr, .. } => {
                 Self::log_stderr_output(stderr);
                 Self::print_stdout_output(stdout);
             }
@@ -180,7 +179,7 @@ impl CmdChild {
 
     fn wait_with_output(self) -> Result<Vec<u8>> {
         match self {
-            ProcChild { child, cmd, stderr } => {
+            CmdChild::Proc { child, cmd, stderr } => {
                 Self::log_stderr_output(stderr);
                 let output = child.wait_with_output()?;
                 if !output.status.success() {
@@ -192,10 +191,10 @@ impl CmdChild {
                     Ok(output.stdout)
                 }
             }
-            ThreadChild { cmd, .. } => {
+            CmdChild::ThreadFn { cmd, .. } => {
                 panic!("{} thread should not be waited for output", cmd);
             }
-            SyncChild { stdout, stderr, .. } => {
+            CmdChild::SyncFn { stdout, stderr, .. } => {
                 Self::log_stderr_output(stderr);
                 if let Some(mut out) = stdout {
                     let mut buf = vec![];
@@ -243,9 +242,9 @@ impl CmdChild {
         children
             .iter()
             .map(|child| match child {
-                ProcChild { cmd, .. } => cmd.to_owned(),
-                ThreadChild { cmd, .. } => cmd.to_owned(),
-                SyncChild { cmd, .. } => cmd.to_owned(),
+                CmdChild::Proc { cmd, .. } => cmd.to_owned(),
+                CmdChild::ThreadFn { cmd, .. } => cmd.to_owned(),
+                CmdChild::SyncFn { cmd, .. } => cmd.to_owned(),
             })
             .collect::<Vec<_>>()
             .join(" | ")
