@@ -104,7 +104,7 @@ impl CmdChildren {
 }
 
 #[derive(Debug)]
-pub enum CmdChild {
+pub(crate) enum CmdChild {
     ProcChild {
         child: Child,
         cmd: String,
@@ -124,7 +124,7 @@ pub enum CmdChild {
 }
 
 impl CmdChild {
-    pub fn wait(self, is_last: bool) -> CmdResult {
+    fn wait(self, is_last: bool) -> CmdResult {
         let pipefail = std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into());
         let check_result = |result| {
             if let Err(e) = result {
@@ -178,7 +178,7 @@ impl CmdChild {
         Ok(())
     }
 
-    pub fn wait_with_output(self) -> Result<Vec<u8>> {
+    fn wait_with_output(self) -> Result<Vec<u8>> {
         match self {
             ProcChild { child, cmd, stderr } => {
                 Self::log_stderr_output(stderr);
@@ -239,7 +239,7 @@ impl CmdChild {
         }
     }
 
-    pub fn get_full_cmd(children: &[Self]) -> String {
+    fn get_full_cmd(children: &[Self]) -> String {
         children
             .iter()
             .map(|child| match child {
