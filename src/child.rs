@@ -75,18 +75,15 @@ impl CmdChildren {
         }
     }
 
-    pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(PipeReader) -> CmdResult) -> CmdResult {
+    pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>) -> CmdResult) -> CmdResult {
         let handle = self.0.pop().unwrap();
         let mut ret = Ok(());
         match handle {
             ProcChild {
-                mut child,
-                stderr,
-                stdout,
-                ..
+                mut child, stderr, ..
             } => {
-                if let Some(stdout) = stdout {
-                    ret = f(stdout);
+                if let Some(stdout) = child.stdout.take() {
+                    ret = f(Box::new(stdout));
                     let _ = child.kill();
                 }
                 CmdChild::log_stderr_output(stderr);
@@ -97,7 +94,7 @@ impl CmdChildren {
             SyncChild { stderr, stdout, .. } => {
                 CmdChild::log_stderr_output(stderr);
                 if let Some(stdout) = stdout {
-                    ret = f(stdout);
+                    ret = f(Box::new(stdout));
                 }
             }
         };
@@ -111,7 +108,6 @@ pub enum CmdChild {
     ProcChild {
         child: Child,
         cmd: String,
-        stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
     },
     ThreadChild {
@@ -146,12 +142,7 @@ impl CmdChild {
                 ..
             } => {
                 Self::log_stderr_output(stderr);
-                if let Some(stdout) = child.stdout.take() {
-                    BufReader::new(stdout)
-                        .lines()
-                        .filter_map(|line| line.ok())
-                        .for_each(|line| println!("{}", line));
-                }
+                Self::print_stdout_output(child.stdout.take());
                 let status = child.wait()?;
                 if !status.success() && (is_last || pipefail) {
                     return Err(Self::status_to_io_error(
@@ -181,11 +172,7 @@ impl CmdChild {
             }
             SyncChild { stdout, stderr, .. } => {
                 Self::log_stderr_output(stderr);
-                if let Some(mut out) = stdout {
-                    let mut buf = vec![];
-                    check_result(out.read_to_end(&mut buf).map(|_| ()))?;
-                    print!("{}", String::from_utf8_lossy(&buf));
-                }
+                Self::print_stdout_output(stdout);
             }
         }
         Ok(())
@@ -193,25 +180,17 @@ impl CmdChild {
 
     pub fn wait_with_output(self) -> Result<Vec<u8>> {
         match self {
-            ProcChild {
-                mut child,
-                cmd,
-                stdout,
-                stderr,
-            } => {
-                let mut buf = vec![];
-                if let Some(mut stdout) = stdout {
-                    stdout.read_to_end(&mut buf)?;
-                }
+            ProcChild { child, cmd, stderr } => {
                 Self::log_stderr_output(stderr);
-                let status = child.wait()?;
-                if !status.success() {
+                let output = child.wait_with_output()?;
+                if !output.status.success() {
                     return Err(Self::status_to_io_error(
-                        status,
+                        output.status,
                         &format!("{} exited with error", cmd),
                     ));
+                } else {
+                    Ok(output.stdout)
                 }
-                Ok(buf)
             }
             ThreadChild { cmd, .. } => {
                 panic!("{} thread should not be waited for output", cmd);
@@ -225,6 +204,15 @@ impl CmdChild {
                 }
                 Ok(vec![])
             }
+        }
+    }
+
+    fn print_stdout_output(stdout: Option<impl Read>) {
+        if let Some(stdout) = stdout {
+            BufReader::new(stdout)
+                .lines()
+                .filter_map(|line| line.ok())
+                .for_each(|line| println!("{}", line));
         }
     }
 
