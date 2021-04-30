@@ -1,6 +1,7 @@
 use crate::{CmdEnv, CmdResult};
 use log::*;
 use std::io::{Read, Write};
+use std::path::PathBuf;
 
 #[doc(hidden)]
 pub fn builtin_true(_env: &mut CmdEnv) -> CmdResult {
@@ -58,9 +59,9 @@ pub fn builtin_cat(env: &mut CmdEnv) -> CmdResult {
         return Ok(());
     }
 
-    let mut file = env.args()[1].clone();
-    if !file.starts_with('/') && !env.current_dir().is_empty() {
-        file = format!("{}/{}", env.current_dir(), file);
+    let mut file = PathBuf::from(env.args()[1].to_owned());
+    if file.is_relative() {
+        file = PathBuf::from(env.current_dir()).join(file);
     }
     env.stdout().write_all(&std::fs::read(file)?)?;
     Ok(())

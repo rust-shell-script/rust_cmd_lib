@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Read, Result, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
@@ -20,7 +20,7 @@ pub struct CmdEnv {
     stderr: CmdOut,
     args: Vec<String>,
     vars: HashMap<String, String>,
-    current_dir: String,
+    current_dir: PathBuf,
 }
 impl CmdEnv {
     /// Returns the arguments for this command
@@ -34,7 +34,7 @@ impl CmdEnv {
     }
 
     /// Returns the current working directory for this command
-    pub fn current_dir(&self) -> &str {
+    pub fn current_dir(&self) -> &Path {
         &self.current_dir
     }
 
@@ -88,7 +88,7 @@ pub fn set_pipefail(enable: bool) {
 #[derive(Default)]
 pub struct GroupCmds {
     group_cmds: Vec<(Cmds, Option<Cmds>)>, // (cmd, orCmd) pairs
-    current_dir: String,
+    current_dir: PathBuf,
 }
 
 impl GroupCmds {
@@ -169,7 +169,7 @@ impl Cmds {
         &self.full_cmds
     }
 
-    fn spawn(&mut self, current_dir: &mut String) -> Result<CmdChildren> {
+    fn spawn(&mut self, current_dir: &mut PathBuf) -> Result<CmdChildren> {
         if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
             debug!("Running {} ...", self.get_full_cmds());
         }
@@ -195,41 +195,41 @@ impl Cmds {
         Ok(CmdChildren::from(children))
     }
 
-    fn run_cmd(&mut self, current_dir: &mut String) -> CmdResult {
+    fn run_cmd(&mut self, current_dir: &mut PathBuf) -> CmdResult {
         self.spawn(current_dir)?.wait_cmd_result_nolog()
     }
 
-    fn run_fun(&mut self, current_dir: &mut String) -> FunResult {
+    fn run_fun(&mut self, current_dir: &mut PathBuf) -> FunResult {
         self.spawn(current_dir)?.wait_fun_result_nolog()
     }
 }
 
 #[doc(hidden)]
 pub enum Redirect {
-    FileToStdin(String),
+    FileToStdin(PathBuf),
     StdoutToStderr,
     StderrToStdout,
-    StdoutToFile(String, bool),
-    StderrToFile(String, bool),
+    StdoutToFile(PathBuf, bool),
+    StderrToFile(PathBuf, bool),
 }
 impl fmt::Debug for Redirect {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Redirect::FileToStdin(path) => f.write_str(&format!("< {}", path)),
+            Redirect::FileToStdin(path) => f.write_str(&format!("< {}", path.display())),
             Redirect::StdoutToStderr => f.write_str(">&2"),
             Redirect::StderrToStdout => f.write_str("2>&1"),
             Redirect::StdoutToFile(path, append) => {
                 if *append {
-                    f.write_str(&format!("1>> {}", path))
+                    f.write_str(&format!("1>> {}", path.display()))
                 } else {
-                    f.write_str(&format!("1> {}", path))
+                    f.write_str(&format!("1> {}", path.display()))
                 }
             }
             Redirect::StderrToFile(path, append) => {
                 if *append {
-                    f.write_str(&format!("2>> {}", path))
+                    f.write_str(&format!("2>> {}", path.display()))
                 } else {
-                    f.write_str(&format!("2> {}", path))
+                    f.write_str(&format!("2> {}", path.display()))
                 }
             }
         }
@@ -335,7 +335,7 @@ impl Cmd {
         self
     }
 
-    fn spawn(mut self, current_dir: &mut String) -> Result<CmdChild> {
+    fn spawn(mut self, current_dir: &mut PathBuf) -> Result<CmdChild> {
         let arg0 = self.arg0();
         let full_cmd = self.debug_str();
         if arg0 == "cd" {
@@ -350,7 +350,11 @@ impl Cmd {
             let mut env = CmdEnv {
                 args: self.args,
                 vars: self.vars,
-                current_dir: current_dir.clone(),
+                current_dir: if current_dir.as_os_str().is_empty() {
+                    std::env::current_dir()?
+                } else {
+                    current_dir.clone()
+                },
                 stdin: if let Some(redirect_in) = self.stdin_redirect.take() {
                     redirect_in
                 } else {
@@ -390,7 +394,7 @@ impl Cmd {
             let mut cmd = self.std_cmd.take().unwrap();
 
             // setup current_dir
-            if !current_dir.is_empty() {
+            if !current_dir.as_os_str().is_empty() {
                 cmd.current_dir(current_dir.clone());
             }
 
@@ -421,7 +425,7 @@ impl Cmd {
         }
     }
 
-    fn run_cd_cmd(&self, current_dir: &mut String) -> CmdResult {
+    fn run_cd_cmd(&self, current_dir: &mut PathBuf) -> CmdResult {
         if self.args.len() == 1 {
             return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
         } else if self.args.len() > 2 {
@@ -441,11 +445,11 @@ impl Cmd {
             return Err(e);
         }
 
-        *current_dir = dir.clone();
+        *current_dir = PathBuf::from(dir);
         Ok(())
     }
 
-    fn open_file(path: &str, read_only: bool, append: bool) -> Result<File> {
+    fn open_file(path: &Path, read_only: bool, append: bool) -> Result<File> {
         if read_only {
             OpenOptions::new().read(true).open(path)
         } else {
@@ -484,7 +488,7 @@ impl Cmd {
         for redirect in self.redirects.iter() {
             match redirect {
                 Redirect::FileToStdin(path) => {
-                    self.stdin_redirect = Some(if path == "/dev/null" {
+                    self.stdin_redirect = Some(if path == Path::new("/dev/null") {
                         CmdIn::CmdNull
                     } else {
                         CmdIn::CmdFile(Self::open_file(path, true, false)?)
@@ -505,14 +509,14 @@ impl Cmd {
                     }
                 }
                 Redirect::StdoutToFile(path, append) => {
-                    self.stdout_redirect = Some(if path == "/dev/null" {
+                    self.stdout_redirect = Some(if path == Path::new("/dev/null") {
                         CmdOut::CmdNull
                     } else {
                         CmdOut::CmdFile(Self::open_file(path, false, *append)?)
                     });
                 }
                 Redirect::StderrToFile(path, append) => {
-                    self.stderr_redirect = Some(if path == "/dev/null" {
+                    self.stderr_redirect = Some(if path == Path::new("/dev/null") {
                         CmdOut::CmdNull
                     } else {
                         CmdOut::CmdFile(Self::open_file(path, false, *append)?)
@@ -530,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_run_piped_cmds() {
-        let mut current_dir = String::new();
+        let mut current_dir = PathBuf::new();
         assert!(Cmds::default()
             .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
             .pipe(Cmd::default().add_args(vec!["wc".into()]))
@@ -540,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_run_piped_funs() {
-        let mut current_dir = String::new();
+        let mut current_dir = PathBuf::new();
         assert_eq!(
             Cmds::default()
                 .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
@@ -562,10 +566,10 @@ mod tests {
 
     #[test]
     fn test_stdout_redirect() {
-        let mut current_dir = String::new();
+        let mut current_dir = PathBuf::new();
         let tmp_file = "/tmp/file_echo_rust";
         let mut write_cmd = Cmd::default().add_args(vec!["echo".into(), "rust".into()]);
-        write_cmd = write_cmd.add_redirect(Redirect::StdoutToFile(tmp_file.to_string(), false));
+        write_cmd = write_cmd.add_redirect(Redirect::StdoutToFile(PathBuf::from(tmp_file), false));
         assert!(Cmds::default()
             .pipe(write_cmd)
             .run_cmd(&mut current_dir)

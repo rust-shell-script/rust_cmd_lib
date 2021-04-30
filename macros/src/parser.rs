@@ -88,9 +88,14 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
                 ParseRedirectFile(fd1, file, append) => {
                     let mut redirect = quote!(::cmd_lib::Redirect);
                     match fd1 {
-                        0 => redirect.extend(quote!(::FileToStdin(#file))),
-                        1 => redirect.extend(quote!(::StdoutToFile(#file, #append))),
-                        2 => redirect.extend(quote!(::StderrToFile(#file, #append))),
+                        0 => redirect
+                            .extend(quote!(::FileToStdin(::std::path::PathBuf::from(#file)))),
+                        1 => redirect.extend(
+                            quote!(::StdoutToFile(::std::path::PathBuf::from(#file), #append)),
+                        ),
+                        2 => redirect.extend(
+                            quote!(::StderrToFile(::std::path::PathBuf::from(#file), #append)),
+                        ),
                         _ => panic!("unsupported fd ({}) redirect to file {}", fd1, file),
                     }
                     ret.extend(quote!(.add_redirect(#redirect)));
