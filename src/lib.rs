@@ -57,7 +57,7 @@
 //!         sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
 //!         | awk r#"/copied/{print $(NF-1) " " $NF}"#
 //!     )
-//!     .unwrap_or_else(|e| cmd_die!("thread $i failed, Error: $e"));
+//!     .unwrap_or_else(|_| cmd_die!("thread $i failed"));
 //!     cmd_info!("thread $i bandwidth: $bandwidth");
 //! });
 //! let total_bandwidth =
@@ -335,7 +335,9 @@ pub use child::CmdChildren;
 #[doc(hidden)]
 pub use log;
 pub use logger::init_builtin_logger;
-pub use process::{export_cmd, set_debug, set_pipefail, Cmd, CmdEnv, Cmds, GroupCmds, Redirect};
+pub use process::{
+    export_cmd, set_debug, set_pipefail, Cmd, CmdEnv, CmdString, Cmds, GroupCmds, Redirect,
+};
 
 mod builtins;
 mod child;

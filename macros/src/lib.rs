@@ -192,7 +192,7 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::cmd_lib::log::error!("{}", #msg)).into()
+    quote!(::cmd_lib::log::error!("{:?}", #msg)).into()
 }
 
 /// Logs a message at the warn level with interpolation support
@@ -200,7 +200,7 @@ pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::cmd_lib::log::warn!("{}", #msg)).into()
+    quote!(::cmd_lib::log::warn!("{:?}", #msg)).into()
 }
 
 /// Print a message to stdout with interpolation support
@@ -208,7 +208,7 @@ pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_echo(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(println!("{}", #msg)).into()
+    quote!(println!("{:?}", #msg)).into()
 }
 
 /// Logs a message at the info level with interpolation support
@@ -225,7 +225,7 @@ pub fn cmd_echo(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::cmd_lib::log::info!("{}", #msg)).into()
+    quote!(::cmd_lib::log::info!("{:?}", #msg)).into()
 }
 
 /// Logs a message at the debug level with interpolation support
@@ -233,7 +233,7 @@ pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::cmd_lib::log::debug!("{}", #msg)).into()
+    quote!(::cmd_lib::log::debug!("{:?}", #msg)).into()
 }
 
 /// Logs a message at the trace level with interpolation support
@@ -241,7 +241,7 @@ pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
-    quote!(::cmd_lib::log::trace!("{}", #msg)).into()
+    quote!(::cmd_lib::log::trace!("{:?}", #msg)).into()
 }
 
 #[proc_macro]
@@ -263,7 +263,7 @@ pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        ::cmd_lib::log::error!("FATAL: {}", #msg);
+        ::cmd_lib::log::error!("FATAL: {:?}", #msg);
         std::process::exit(1)
     })
     .into()
@@ -271,14 +271,14 @@ pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 fn parse_msg(input: TokenStream) -> TokenStream {
     let mut iter = input.into_iter();
-    let mut output = quote!(String::new());
+    let mut output = TokenStream::new();
     let mut valid = false;
     if let Some(ref tt) = iter.next() {
         if let TokenTree::Literal(lit) = tt {
             let s = lit.to_string();
             if s.starts_with('\"') || s.starts_with('r') {
                 let str_lit = lexer::scan_str_lit(&lit);
-                output.extend(quote!(+ #str_lit));
+                output.extend(quote!(#str_lit));
                 valid = true;
             }
         }

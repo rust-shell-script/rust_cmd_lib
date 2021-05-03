@@ -2,6 +2,7 @@ use crate::parser::{ParseArg, Parser};
 use proc_macro2::{token_stream, Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
 use proc_macro_error::abort;
 use quote::quote;
+use std::ffi::OsString;
 use std::iter::Peekable;
 
 // Scan string literal to tokenstream, used by most of the macros
@@ -13,18 +14,18 @@ use std::iter::Peekable;
 pub fn scan_str_lit(lit: &Literal) -> TokenStream {
     let s = lit.to_string();
     if !s.starts_with('\"') {
-        return quote!(#lit);
+        return quote!(::cmd_lib::CmdString::default().append(&#lit.to_owned()));
     }
     let mut iter = s[1..s.len() - 1] // To trim outside ""
         .chars()
         .peekable();
-    let mut output = quote!("");
-    let mut last_part = String::new();
-    fn seal_last_part(last_part: &mut String, output: &mut TokenStream) {
+    let mut output = quote!(::cmd_lib::CmdString::default());
+    let mut last_part = OsString::new();
+    fn seal_last_part(last_part: &mut OsString, output: &mut TokenStream) {
         if !last_part.is_empty() {
-            let lit_str = format!("\"{}\"", last_part);
+            let lit_str = format!("\"{}\"", last_part.to_str().unwrap());
             let l = syn::parse_str::<Literal>(&lit_str).unwrap();
-            output.extend(quote!(+ #l));
+            output.extend(quote!(.append(&#l)));
             last_part.clear();
         }
     }
@@ -33,7 +34,7 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
         if ch == '$' {
             if iter.peek() == Some(&'$') {
                 iter.next();
-                last_part.push('$');
+                last_part.push("$");
                 continue;
             }
 
@@ -63,12 +64,12 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
             }
             if !var.is_empty() {
                 let var = syn::parse_str::<Ident>(&var).unwrap();
-                output.extend(quote!(+ &#var.to_string()));
+                output.extend(quote!(.append(&#var.to_owned())));
             } else {
-                output.extend(quote!(+ "$"));
+                output.extend(quote!(.append(&"$")));
             }
         } else {
-            last_part.push(ch);
+            last_part.push(ch.to_string());
         }
     }
     seal_last_part(&mut last_part, &mut output);
@@ -123,7 +124,7 @@ impl Lexer {
                 }
                 TokenTree::Ident(ident) => {
                     let s = ident.to_string();
-                    self.extend_last_arg(quote!(#s));
+                    self.extend_last_arg(quote!(&#s));
                 }
                 TokenTree::Punct(punct) => {
                     let ch = punct.as_char();
@@ -142,7 +143,7 @@ impl Lexer {
                         self.scan_dollar();
                     } else {
                         let s = ch.to_string();
-                        self.extend_last_arg(quote!(#s));
+                        self.extend_last_arg(quote!(&#s));
                     }
                 }
             }
@@ -200,9 +201,9 @@ impl Lexer {
 
     fn extend_last_arg(&mut self, stream: TokenStream) {
         if self.last_arg_str.is_empty() {
-            self.last_arg_str = quote!(String::new());
+            self.last_arg_str = quote!(::cmd_lib::CmdString::default());
         }
-        self.last_arg_str.extend(quote!(+ #stream));
+        self.last_arg_str.extend(quote!(.append(#stream)));
     }
 
     fn check_set_redirect(redirect: &mut bool, name: &str, span: Span) {
@@ -236,7 +237,8 @@ impl Lexer {
         let s = lit.to_string();
         if s.starts_with('\"') || s.starts_with('r') {
             // string literal
-            self.extend_last_arg(scan_str_lit(&lit));
+            let ss = scan_str_lit(&lit);
+            self.extend_last_arg(quote!(&#ss));
         } else {
             let mut is_redirect = false;
             if s == "1" || s == "2" {
@@ -249,7 +251,7 @@ impl Lexer {
                 }
             }
             if !is_redirect {
-                self.extend_last_arg(quote!(#s));
+                self.extend_last_arg(quote!(&#s));
             }
         }
     }
@@ -363,7 +365,7 @@ impl Lexer {
         let peek_no_gap = self.iter.peek_no_gap().map(|tt| tt.to_owned());
         // let peek_no_gap = None;
         if let Some(TokenTree::Ident(var)) = peek_no_gap {
-            self.extend_last_arg(quote!(&#var.to_string()));
+            self.extend_last_arg(quote!(&#var.to_owned()));
         } else if let Some(TokenTree::Group(g)) = peek_no_gap {
             if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
                 abort!(
@@ -380,7 +382,7 @@ impl Lexer {
                         abort!(span, "more than one variable in grouping");
                     }
                     if g.delimiter() == Delimiter::Brace {
-                        self.extend_last_arg(quote!(&#var.to_string()));
+                        self.extend_last_arg(quote!(&#var.to_owned()));
                     } else {
                         if !self.last_arg_str.is_empty() {
                             abort!(span, "vector variable can only be used alone");

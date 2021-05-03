@@ -88,23 +88,22 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
                 ParseRedirectFile(fd1, file, append) => {
                     let mut redirect = quote!(::cmd_lib::Redirect);
                     match fd1 {
-                        0 => redirect
-                            .extend(quote!(::FileToStdin(::std::path::PathBuf::from(#file)))),
-                        1 => redirect.extend(
-                            quote!(::StdoutToFile(::std::path::PathBuf::from(#file), #append)),
-                        ),
-                        2 => redirect.extend(
-                            quote!(::StderrToFile(::std::path::PathBuf::from(#file), #append)),
-                        ),
+                        0 => redirect.extend(quote!(::FileToStdin(#file.into_path_buf()))),
+                        1 => {
+                            redirect.extend(quote!(::StdoutToFile(#file.into_path_buf(), #append)))
+                        }
+                        2 => {
+                            redirect.extend(quote!(::StderrToFile(#file.into_path_buf(), #append)))
+                        }
                         _ => panic!("unsupported fd ({}) redirect to file {}", fd1, file),
                     }
                     ret.extend(quote!(.add_redirect(#redirect)));
                 }
                 ParseArgStr(opt) => {
-                    ret.extend(quote!(.add_arg(#opt)));
+                    ret.extend(quote!(.add_arg(#opt.into_os_string())));
                 }
                 ParseArgVec(opts) => {
-                    ret.extend(quote! (.add_args(#opts.iter().map(|s| s.to_string()).collect::<Vec<String>>())));
+                    ret.extend(quote! (.add_args(#opts.iter().map(|s| ::std::ffi::OsString::from(s)).collect())));
                 }
                 ParsePipe | ParseOr | ParseSemicolon => break,
             }

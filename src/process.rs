@@ -5,7 +5,9 @@ use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
 use log::{debug, error};
 use os_pipe::{self, PipeReader, PipeWriter};
+use std::any::Any;
 use std::collections::HashMap;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Read, Result, Write};
@@ -57,9 +59,9 @@ impl CmdEnv {
 type FnFun = fn(&mut CmdEnv) -> CmdResult;
 
 lazy_static! {
-    static ref CMD_MAP: Mutex<HashMap<String, FnFun>> = {
+    static ref CMD_MAP: Mutex<HashMap<OsString, FnFun>> = {
         // needs explicit type, or it won't compile
-        let mut m: HashMap<String, FnFun> = HashMap::new();
+        let mut m: HashMap<OsString, FnFun> = HashMap::new();
         m.insert("".into(), builtin_true);
         Mutex::new(m)
     };
@@ -67,7 +69,7 @@ lazy_static! {
 
 #[doc(hidden)]
 pub fn export_cmd(cmd: &'static str, func: FnFun) {
-    CMD_MAP.lock().unwrap().insert(cmd.to_string(), func);
+    CMD_MAP.lock().unwrap().insert(OsString::from(cmd), func);
 }
 
 /// set debug mode or not, false by default
@@ -240,7 +242,7 @@ impl fmt::Debug for Redirect {
 pub struct Cmd {
     // for parsing
     in_cmd_map: bool,
-    args: Vec<String>,
+    args: Vec<OsString>,
     vars: HashMap<String, String>,
     redirects: Vec<Redirect>,
 
@@ -271,20 +273,21 @@ impl Default for Cmd {
 }
 
 impl Cmd {
-    pub fn add_arg(mut self, arg: String) -> Self {
+    pub fn add_arg(mut self, arg: OsString) -> Self {
+        let arg_str = arg.clone().into_string().unwrap();
         if self.args.is_empty() {
-            let v: Vec<&str> = arg.split('=').collect();
+            let v: Vec<&str> = arg_str.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                self.vars.insert(v[0].to_owned(), v[1].to_owned());
+                self.vars.insert(v[0].into(), v[1].into());
                 return self;
             }
-            self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg.as_str());
+            self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(&arg);
         }
         self.args.push(arg);
         self
     }
 
-    pub fn add_args(mut self, args: Vec<String>) -> Self {
+    pub fn add_args(mut self, args: Vec<OsString>) -> Self {
         for arg in args {
             self = self.add_arg(arg);
         }
@@ -296,7 +299,7 @@ impl Cmd {
         self
     }
 
-    fn arg0(&self) -> String {
+    fn arg0(&self) -> OsString {
         if self.args.is_empty() {
             "".into()
         } else {
@@ -324,7 +327,7 @@ impl Cmd {
 
     fn gen_command(mut self) -> Self {
         if !self.in_cmd_map {
-            let cmds: Vec<String> = self.args.to_vec();
+            let cmds: Vec<OsString> = self.args.to_vec();
             let mut cmd = Command::new(&cmds[0]);
             cmd.args(&cmds[1..]);
             for (k, v) in self.vars.iter() {
@@ -348,7 +351,11 @@ impl Cmd {
         } else if self.in_cmd_map {
             let pipe_out = self.stdout_logging.is_none();
             let mut env = CmdEnv {
-                args: self.args,
+                args: self
+                    .args
+                    .into_iter()
+                    .map(|s| s.into_string().unwrap())
+                    .collect(),
                 vars: self.vars,
                 current_dir: if current_dir.as_os_str().is_empty() {
                     std::env::current_dir()?
@@ -435,13 +442,13 @@ impl Cmd {
 
         let dir = &self.args[1];
         if !std::path::Path::new(&dir).is_dir() {
-            let err_msg = format!("cd: {}: No such file or directory", dir);
+            let err_msg = format!("cd: {:?}: No such file or directory", dir);
             error!("{}", err_msg);
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
         if let Err(e) = Path::new(dir).access(AccessMode::EXECUTE) {
-            error!("cd {}: {}", dir, e);
+            error!("cd {:?}: {}", dir, e);
             return Err(e);
         }
 
@@ -525,6 +532,86 @@ impl Cmd {
             }
         }
         Ok(())
+    }
+}
+
+#[doc(hidden)]
+#[derive(Default)]
+pub struct CmdString(OsString);
+impl CmdString {
+    pub fn append<T: Any + fmt::Debug>(mut self, value: &T) -> Self {
+        let value_any = value as &dyn Any;
+
+        if let Some(as_string) = value_any.downcast_ref::<String>() {
+            self.0.push(as_string);
+            return self;
+        }
+
+        if let Some(as_string) = value_any.downcast_ref::<&String>() {
+            self.0.push(as_string);
+            return self;
+        }
+
+        if let Some(as_string) = value_any.downcast_ref::<&str>() {
+            self.0.push(as_string);
+            return self;
+        }
+
+        if let Some(as_os_string) = value_any.downcast_ref::<OsString>() {
+            self.0.push(as_os_string);
+            return self;
+        }
+
+        if let Some(as_os_string) = value_any.downcast_ref::<&OsString>() {
+            self.0.push(as_os_string);
+            return self;
+        }
+
+        if let Some(as_os_string) = value_any.downcast_ref::<&OsStr>() {
+            self.0.push(as_os_string);
+            return self;
+        }
+
+        if let Some(as_path_string) = value_any.downcast_ref::<PathBuf>() {
+            self.0.push(as_path_string);
+            return self;
+        }
+
+        if let Some(as_path_string) = value_any.downcast_ref::<&PathBuf>() {
+            self.0.push(as_path_string);
+            return self;
+        }
+
+        if let Some(as_path_string) = value_any.downcast_ref::<&Path>() {
+            self.0.push(as_path_string);
+            return self;
+        }
+
+        if let Some(as_cmd_string) = value_any.downcast_ref::<Self>() {
+            self.0.push(&as_cmd_string.0);
+            return self;
+        }
+
+        if let Some(as_cmd_string) = value_any.downcast_ref::<&Self>() {
+            self.0.push(&as_cmd_string.0);
+            return self;
+        }
+
+        self.0.push(format!("{:?}", value));
+        self
+    }
+
+    pub fn into_os_string(self) -> OsString {
+        self.0
+    }
+
+    pub fn into_path_buf(self) -> PathBuf {
+        PathBuf::from(self.0)
+    }
+}
+impl fmt::Debug for CmdString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&format!("{:?}", self.0))
     }
 }
 
