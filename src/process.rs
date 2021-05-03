@@ -274,7 +274,7 @@ impl Default for Cmd {
 
 impl Cmd {
     pub fn add_arg(mut self, arg: OsString) -> Self {
-        let arg_str = arg.clone().into_string().unwrap();
+        let arg_str = arg.to_string_lossy().to_string();
         if self.args.is_empty() {
             let v: Vec<&str> = arg_str.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
@@ -354,7 +354,7 @@ impl Cmd {
                 args: self
                     .args
                     .into_iter()
-                    .map(|s| s.into_string().unwrap())
+                    .map(|s| s.to_string_lossy().to_string())
                     .collect(),
                 vars: self.vars,
                 current_dir: if current_dir.as_os_str().is_empty() {
@@ -578,7 +578,7 @@ impl CmdString {
 }
 impl fmt::Display for CmdString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0.to_str().unwrap().to_string())
+        f.write_str(&self.0.to_string_lossy())
     }
 }
 
