@@ -54,8 +54,9 @@ let now = Instant::now();
     .unwrap_or_else(|_| cmd_die!("thread $i failed"));
     cmd_info!("thread $i bandwidth: $bandwidth");
 });
-let total_bandwidth =
-    Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128).get_appropriate_unit(true);
+let total_bandwidth = Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128)
+    .get_appropriate_unit(true)
+    .to_string();
 cmd_info!("Total bandwidth: ${total_bandwidth}/s");
 ```
 
