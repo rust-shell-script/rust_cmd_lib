@@ -536,68 +536,35 @@ impl Cmd {
 }
 
 #[doc(hidden)]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CmdString(OsString);
 impl CmdString {
     pub fn append<T: Any + fmt::Debug>(mut self, value: &T) -> Self {
         let value_any = value as &dyn Any;
-
         if let Some(as_string) = value_any.downcast_ref::<String>() {
             self.0.push(as_string);
-            return self;
-        }
-
-        if let Some(as_string) = value_any.downcast_ref::<&String>() {
+        } else if let Some(as_string) = value_any.downcast_ref::<&String>() {
             self.0.push(as_string);
-            return self;
-        }
-
-        if let Some(as_string) = value_any.downcast_ref::<&str>() {
+        } else if let Some(as_string) = value_any.downcast_ref::<&str>() {
             self.0.push(as_string);
-            return self;
-        }
-
-        if let Some(as_os_string) = value_any.downcast_ref::<OsString>() {
+        } else if let Some(as_os_string) = value_any.downcast_ref::<OsString>() {
             self.0.push(as_os_string);
-            return self;
-        }
-
-        if let Some(as_os_string) = value_any.downcast_ref::<&OsString>() {
+        } else if let Some(as_os_string) = value_any.downcast_ref::<&OsString>() {
             self.0.push(as_os_string);
-            return self;
-        }
-
-        if let Some(as_os_string) = value_any.downcast_ref::<&OsStr>() {
+        } else if let Some(as_os_string) = value_any.downcast_ref::<&OsStr>() {
             self.0.push(as_os_string);
-            return self;
-        }
-
-        if let Some(as_path_string) = value_any.downcast_ref::<PathBuf>() {
+        } else if let Some(as_path_string) = value_any.downcast_ref::<PathBuf>() {
             self.0.push(as_path_string);
-            return self;
-        }
-
-        if let Some(as_path_string) = value_any.downcast_ref::<&PathBuf>() {
+        } else if let Some(as_path_string) = value_any.downcast_ref::<&PathBuf>() {
             self.0.push(as_path_string);
-            return self;
-        }
-
-        if let Some(as_path_string) = value_any.downcast_ref::<&Path>() {
+        } else if let Some(as_path_string) = value_any.downcast_ref::<&Path>() {
             self.0.push(as_path_string);
-            return self;
-        }
-
-        if let Some(as_cmd_string) = value_any.downcast_ref::<Self>() {
+        } else if let Some(as_cmd_string) = value_any.downcast_ref::<Self>() {
             self.0.push(&as_cmd_string.0);
-            return self;
+        } else {
+            self.0.push(format!("{:?}", value));
         }
 
-        if let Some(as_cmd_string) = value_any.downcast_ref::<&Self>() {
-            self.0.push(&as_cmd_string.0);
-            return self;
-        }
-
-        self.0.push(format!("{:?}", value));
         self
     }
 
@@ -609,9 +576,9 @@ impl CmdString {
         PathBuf::from(self.0)
     }
 }
-impl fmt::Debug for CmdString {
+impl fmt::Display for CmdString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!("{:?}", self.0))
+        f.write_str(&self.0.to_str().unwrap().to_string())
     }
 }
 
