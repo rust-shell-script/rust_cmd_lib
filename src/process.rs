@@ -541,7 +541,7 @@ pub trait AsOsStr {
 
 impl<T: ToString> AsOsStr for T {
     fn as_os_str(&self) -> OsString {
-        OsString::from(self.to_string())
+        self.to_string().into()
     }
 }
 
@@ -559,9 +559,16 @@ impl CmdString {
     }
 
     pub fn into_path_buf(self) -> PathBuf {
-        PathBuf::from(self.0)
+        self.0.into()
     }
 }
+
+impl<T: ?Sized + AsRef<OsStr>> From<&T> for CmdString {
+    fn from(s: &T) -> Self {
+        Self(s.as_ref().into())
+    }
+}
+
 impl fmt::Display for CmdString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0.to_string_lossy())

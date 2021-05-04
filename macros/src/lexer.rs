@@ -14,7 +14,7 @@ use std::iter::Peekable;
 pub fn scan_str_lit(lit: &Literal) -> TokenStream {
     let s = lit.to_string();
     if !s.starts_with('\"') {
-        return quote!(::cmd_lib::CmdString::default().append(&#lit));
+        return quote!(::cmd_lib::CmdString::from(&#lit));
     }
     let mut iter = s[1..s.len() - 1] // To trim outside ""
         .chars()
