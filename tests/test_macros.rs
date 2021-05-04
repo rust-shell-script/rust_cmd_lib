@@ -268,6 +268,9 @@ fn test_buitin_stdout_redirect() {
 
 #[test]
 fn test_path_as_var() {
-    let dir = std::path::PathBuf::from("/");
+    let dir = std::path::Path::new("/");
     assert_eq!("/", run_fun!(cd $dir; pwd).unwrap());
+
+    let dir2 = std::path::PathBuf::from("/");
+    assert_eq!("/", run_fun!(cd $dir2; pwd).unwrap());
 }

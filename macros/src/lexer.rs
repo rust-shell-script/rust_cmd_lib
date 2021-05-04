@@ -64,7 +64,7 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
             }
             if !var.is_empty() {
                 let var = syn::parse_str::<Ident>(&var).unwrap();
-                output.extend(quote!(.append(&#var.into_os_string())));
+                output.extend(quote!(.append(#var.as_os_str())));
             } else {
                 output.extend(quote!(.append(&"$")));
             }
@@ -365,7 +365,7 @@ impl Lexer {
         let peek_no_gap = self.iter.peek_no_gap().map(|tt| tt.to_owned());
         // let peek_no_gap = None;
         if let Some(TokenTree::Ident(var)) = peek_no_gap {
-            self.extend_last_arg(quote!(&#var.into_os_string()));
+            self.extend_last_arg(quote!(#var.as_os_str()));
         } else if let Some(TokenTree::Group(g)) = peek_no_gap {
             if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
                 abort!(
@@ -382,7 +382,7 @@ impl Lexer {
                         abort!(span, "more than one variable in grouping");
                     }
                     if g.delimiter() == Delimiter::Brace {
-                        self.extend_last_arg(quote!(&#var.into_os_string()));
+                        self.extend_last_arg(quote!(#var.as_os_str()));
                     } else {
                         if !self.last_arg_str.is_empty() {
                             abort!(span, "vector variable can only be used alone");

@@ -1,4 +1,3 @@
-#![allow(clippy::wrong_self_convention)]
 use crate::child::{CmdChild, CmdChildren};
 use crate::io::{CmdIn, CmdOut};
 use crate::{builtin_true, CmdResult, FunResult};
@@ -536,12 +535,12 @@ impl Cmd {
 }
 
 #[doc(hidden)]
-pub trait IntoOsString {
-    fn into_os_string(&self) -> OsString;
+pub trait AsOsStr {
+    fn as_os_str(&self) -> OsString;
 }
 
-impl<T: ToString> IntoOsString for T {
-    fn into_os_string(&self) -> OsString {
+impl<T: ToString> AsOsStr for T {
+    fn as_os_str(&self) -> OsString {
         OsString::from(self.to_string())
     }
 }

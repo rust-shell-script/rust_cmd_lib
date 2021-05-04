@@ -140,7 +140,7 @@ pub fn use_builtin_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let cmds = lexer::Lexer::new(input.into()).scan().parse(false);
     quote! ({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         #cmds.run_cmd()
     })
     .into()
@@ -162,7 +162,7 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let cmds = lexer::Lexer::new(input.into()).scan().parse(false);
     quote! ({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         #cmds.run_fun()
     })
     .into()
@@ -184,7 +184,7 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let cmds = lexer::Lexer::new(input.into()).scan().parse(true);
     quote! ({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         #cmds.spawn()
     })
     .into()
@@ -196,7 +196,7 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         ::cmd_lib::log::error!("{}", #msg)
     })
     .into()
@@ -208,7 +208,7 @@ pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         ::cmd_lib::log::warn!("{}", #msg)
     })
     .into()
@@ -220,7 +220,7 @@ pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_echo(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         println!("{}", #msg)
     })
     .into()
@@ -241,7 +241,7 @@ pub fn cmd_echo(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         ::cmd_lib::log::info!("{}", #msg)
     })
     .into()
@@ -253,7 +253,7 @@ pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         ::cmd_lib::log::debug!("{}", #msg)
     })
     .into()
@@ -265,7 +265,7 @@ pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         ::cmd_lib::log::trace!("{}", #msg)
     })
     .into()
@@ -290,7 +290,7 @@ pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        use ::cmd_lib::IntoOsString;
+        use ::cmd_lib::AsOsStr;
         ::cmd_lib::log::error!("FATAL: {}", #msg);
         std::process::exit(1)
     })
