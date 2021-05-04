@@ -337,7 +337,8 @@ pub use child::CmdChildren;
 pub use log;
 pub use logger::init_builtin_logger;
 pub use process::{
-    export_cmd, set_debug, set_pipefail, Cmd, CmdEnv, CmdString, Cmds, GroupCmds, Redirect,
+    export_cmd, set_debug, set_pipefail, Cmd, CmdEnv, CmdString, Cmds, GroupCmds, IntoOsString,
+    Redirect,
 };
 
 mod builtins;

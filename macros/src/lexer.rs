@@ -14,7 +14,7 @@ use std::iter::Peekable;
 pub fn scan_str_lit(lit: &Literal) -> TokenStream {
     let s = lit.to_string();
     if !s.starts_with('\"') {
-        return quote!(::cmd_lib::CmdString::default().append(&#lit.to_owned()));
+        return quote!(::cmd_lib::CmdString::default().append(&#lit));
     }
     let mut iter = s[1..s.len() - 1] // To trim outside ""
         .chars()
@@ -64,7 +64,7 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
             }
             if !var.is_empty() {
                 let var = syn::parse_str::<Ident>(&var).unwrap();
-                output.extend(quote!(.append(&#var.to_owned())));
+                output.extend(quote!(.append(&#var.into_os_string())));
             } else {
                 output.extend(quote!(.append(&"$")));
             }
@@ -238,7 +238,7 @@ impl Lexer {
         if s.starts_with('\"') || s.starts_with('r') {
             // string literal
             let ss = scan_str_lit(&lit);
-            self.extend_last_arg(quote!(&#ss));
+            self.extend_last_arg(quote!(&#ss.into_os_string()));
         } else {
             let mut is_redirect = false;
             if s == "1" || s == "2" {
@@ -365,7 +365,7 @@ impl Lexer {
         let peek_no_gap = self.iter.peek_no_gap().map(|tt| tt.to_owned());
         // let peek_no_gap = None;
         if let Some(TokenTree::Ident(var)) = peek_no_gap {
-            self.extend_last_arg(quote!(&#var.to_owned()));
+            self.extend_last_arg(quote!(&#var.into_os_string()));
         } else if let Some(TokenTree::Group(g)) = peek_no_gap {
             if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Bracket {
                 abort!(
@@ -382,7 +382,7 @@ impl Lexer {
                         abort!(span, "more than one variable in grouping");
                     }
                     if g.delimiter() == Delimiter::Brace {
-                        self.extend_last_arg(quote!(&#var.to_owned()));
+                        self.extend_last_arg(quote!(&#var.into_os_string()));
                     } else {
                         if !self.last_arg_str.is_empty() {
                             abort!(span, "vector variable can only be used alone");

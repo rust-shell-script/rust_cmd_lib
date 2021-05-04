@@ -1,3 +1,4 @@
+#![allow(clippy::wrong_self_convention)]
 use crate::child::{CmdChild, CmdChildren};
 use crate::io::{CmdIn, CmdOut};
 use crate::{builtin_true, CmdResult, FunResult};
@@ -5,7 +6,6 @@ use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
 use log::{debug, error};
 use os_pipe::{self, PipeReader, PipeWriter};
-use std::any::Any;
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
@@ -536,35 +536,22 @@ impl Cmd {
 }
 
 #[doc(hidden)]
+pub trait IntoOsString {
+    fn into_os_string(&self) -> OsString;
+}
+
+impl<T: ToString> IntoOsString for T {
+    fn into_os_string(&self) -> OsString {
+        OsString::from(self.to_string())
+    }
+}
+
+#[doc(hidden)]
 #[derive(Default, Debug)]
 pub struct CmdString(OsString);
 impl CmdString {
-    pub fn append<T: Any + fmt::Debug>(mut self, value: &T) -> Self {
-        let value_any = value as &dyn Any;
-        if let Some(as_string) = value_any.downcast_ref::<String>() {
-            self.0.push(as_string);
-        } else if let Some(as_string) = value_any.downcast_ref::<&String>() {
-            self.0.push(as_string);
-        } else if let Some(as_string) = value_any.downcast_ref::<&str>() {
-            self.0.push(as_string);
-        } else if let Some(as_os_string) = value_any.downcast_ref::<OsString>() {
-            self.0.push(as_os_string);
-        } else if let Some(as_os_string) = value_any.downcast_ref::<&OsString>() {
-            self.0.push(as_os_string);
-        } else if let Some(as_os_string) = value_any.downcast_ref::<&OsStr>() {
-            self.0.push(as_os_string);
-        } else if let Some(as_path_string) = value_any.downcast_ref::<PathBuf>() {
-            self.0.push(as_path_string);
-        } else if let Some(as_path_string) = value_any.downcast_ref::<&PathBuf>() {
-            self.0.push(as_path_string);
-        } else if let Some(as_path_string) = value_any.downcast_ref::<&Path>() {
-            self.0.push(as_path_string);
-        } else if let Some(as_cmd_string) = value_any.downcast_ref::<Self>() {
-            self.0.push(&as_cmd_string.0);
-        } else {
-            self.0.push(format!("{:?}", value));
-        }
-
+    pub fn append<T: AsRef<OsStr>>(mut self, value: T) -> Self {
+        self.0.push(value);
         self
     }
 
