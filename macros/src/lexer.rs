@@ -14,7 +14,7 @@ use std::iter::Peekable;
 pub fn scan_str_lit(lit: &Literal) -> TokenStream {
     let s = lit.to_string();
     if !s.starts_with('\"') {
-        return quote!(::cmd_lib::CmdString::from(&#lit));
+        return quote!(::cmd_lib::CmdString::from(#lit));
     }
     let mut iter = s[1..s.len() - 1] // To trim outside ""
         .chars()
@@ -25,7 +25,7 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
         if !last_part.is_empty() {
             let lit_str = format!("\"{}\"", last_part.to_str().unwrap());
             let l = syn::parse_str::<Literal>(&lit_str).unwrap();
-            output.extend(quote!(.append(&#l)));
+            output.extend(quote!(.append(#l)));
             last_part.clear();
         }
     }
@@ -66,7 +66,7 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
                 let var = syn::parse_str::<Ident>(&var).unwrap();
                 output.extend(quote!(.append(#var.as_os_str())));
             } else {
-                output.extend(quote!(.append(&"$")));
+                output.extend(quote!(.append("$")));
             }
         } else {
             last_part.push(ch.to_string());
@@ -124,7 +124,7 @@ impl Lexer {
                 }
                 TokenTree::Ident(ident) => {
                     let s = ident.to_string();
-                    self.extend_last_arg(quote!(&#s));
+                    self.extend_last_arg(quote!(#s));
                 }
                 TokenTree::Punct(punct) => {
                     let ch = punct.as_char();
@@ -143,7 +143,7 @@ impl Lexer {
                         self.scan_dollar();
                     } else {
                         let s = ch.to_string();
-                        self.extend_last_arg(quote!(&#s));
+                        self.extend_last_arg(quote!(#s));
                     }
                 }
             }
@@ -238,7 +238,7 @@ impl Lexer {
         if s.starts_with('\"') || s.starts_with('r') {
             // string literal
             let ss = scan_str_lit(&lit);
-            self.extend_last_arg(quote!(&#ss.into_os_string()));
+            self.extend_last_arg(quote!(#ss.into_os_string()));
         } else {
             let mut is_redirect = false;
             if s == "1" || s == "2" {
@@ -251,7 +251,7 @@ impl Lexer {
                 }
             }
             if !is_redirect {
-                self.extend_last_arg(quote!(&#s));
+                self.extend_last_arg(quote!(#s));
             }
         }
     }
