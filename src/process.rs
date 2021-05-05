@@ -439,19 +439,19 @@ impl Cmd {
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
-        let dir = &self.args[1];
-        if !std::path::Path::new(&dir).is_dir() {
-            let err_msg = format!("cd: {:?}: No such file or directory", dir);
+        let dir = PathBuf::from(&self.args[1]);
+        if !dir.is_dir() {
+            let err_msg = format!("cd {}: No such file or directory", dir.display());
             error!("{}", err_msg);
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
-        if let Err(e) = Path::new(dir).access(AccessMode::EXECUTE) {
-            error!("cd {:?}: {}", dir, e);
+        if let Err(e) = dir.access(AccessMode::EXECUTE) {
+            error!("cd {}: {}", dir.display(), e);
             return Err(e);
         }
 
-        *current_dir = PathBuf::from(dir);
+        *current_dir = dir;
         Ok(())
     }
 
