@@ -148,23 +148,20 @@ fn test_tls_set() {
 }
 
 #[test]
-fn test_pipe_fail() {
-    assert!(run_cmd!(false | wc).is_err());
-    assert!(run_cmd!(echo xx | false | wc | wc | wc).is_err());
-}
-
-#[test]
 /// ```compile_fail
 /// run_cmd!(ls | |).unwrap();
 /// run_cmd!(ls | ||).unwrap();
 /// ```
-fn test_pipe_ok() {
+fn test_pipe() {
     use_builtin_cmd!(echo);
     assert!(run_cmd!(echo "xx").is_ok());
     assert_eq!(run_fun!(echo "xx").unwrap(), "xx");
     assert!(run_cmd!(echo xx | wc).is_ok());
     assert!(run_cmd!(echo xx | wc | wc | wc | wc).is_ok());
     assert!(run_cmd!(seq 1 10000000 | head -1).is_err());
+
+    assert!(run_cmd!(false | wc).is_err());
+    assert!(run_cmd!(echo xx | false | wc | wc | wc).is_err());
 
     set_pipefail(false);
     assert!(run_cmd!(du -ah . | sort -hr | head -n 10).is_ok());
