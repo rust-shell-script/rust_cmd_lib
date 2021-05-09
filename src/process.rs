@@ -389,7 +389,6 @@ impl Cmd {
                 })
             } else {
                 internal_cmd(&mut env)?;
-                drop(env);
                 Ok(CmdChild::SyncFn {
                     cmd: full_cmd,
                     stdout: self.stdout_logging,
