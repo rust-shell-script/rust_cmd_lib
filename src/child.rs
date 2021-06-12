@@ -8,7 +8,7 @@ use std::thread::JoinHandle;
 /// Representation of running or exited children processes, connected with pipes
 /// optionally.
 ///
-/// Calling `spawn!` macro will return `Result<CmdChildren>`
+/// Calling `spawn!` or `spawn_with_output!` macro will return `Result<CmdChildren>`
 pub struct CmdChildren(Vec<CmdChild>);
 impl CmdChildren {
     pub(crate) fn from(children: Vec<CmdChild>) -> Self {

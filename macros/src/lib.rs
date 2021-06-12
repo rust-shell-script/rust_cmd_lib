@@ -110,7 +110,7 @@ pub fn use_builtin_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream
 }
 
 /// Run commands, returning result handle to check status
-/// ```no_run
+/// ```
 /// # use cmd_lib::run_cmd;
 /// let msg = "I love rust";
 /// run_cmd!(echo $msg)?;
@@ -170,7 +170,7 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /// Run commands with/without pipes as a child process, returning a handle to check the final
 /// result
-/// ```no_run
+/// ```
 /// # use cmd_lib::*;
 ///
 /// let handle = spawn!(ping -c 10 192.168.0.1)?;
@@ -192,18 +192,19 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /// Run commands with/without pipes as a child process, returning a handle to capture the
 /// final output
-/// ```no_run
+/// ```
 /// # use cmd_lib::*;
-/// // from examples/dd_test.rs:
 /// let mut procs = vec![];
 /// for _ in 0..4 {
 ///     let proc = spawn_with_output!(
 ///         sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
+///         | awk r#"/copied/{print $(NF-1) " " $NF}"#
 ///     )?;
+///     procs.push(proc);
 /// }
 ///
 /// for (i, mut proc) in procs.into_iter().enumerate() {
-///     let output = proc.wait_fun_result()?;
+///     let bandwidth = proc.wait_fun_result()?;
 ///     run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
 /// }
 /// # Ok::<(), std::io::Error>(())
@@ -305,7 +306,7 @@ pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// Logs a fatal message at the error level, and exit process
 ///
 /// e.g:
-/// ```no_run
+/// ```
 /// # use cmd_lib::cmd_die;
 /// let file = "bad_file";
 /// cmd_die!("could not open file: $file");
