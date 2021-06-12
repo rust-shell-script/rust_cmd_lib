@@ -198,6 +198,10 @@ exits the scope.
 Use `std::env::set_current_dir` if you want to change the current
 working directory for the whole program.
 
+##### ignore
+
+Ignore errors for command execution.
+
 ##### true
 
 Just return true without launching any processes.

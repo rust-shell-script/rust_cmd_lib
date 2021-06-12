@@ -108,12 +108,14 @@ pub(crate) enum CmdChild {
         child: Child,
         cmd: String,
         stderr: Option<PipeReader>,
+        ignore_error: bool,
     },
     ThreadFn {
         child: JoinHandle<CmdResult>,
         cmd: String,
         stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
+        ignore_error: bool,
     },
     SyncFn {
         cmd: String,
@@ -138,12 +140,12 @@ impl CmdChild {
                 mut child,
                 stderr,
                 cmd,
-                ..
+                ignore_error,
             } => {
+                let status = child.wait()?;
                 Self::log_stderr_output(stderr);
                 Self::print_stdout_output(child.stdout.take());
-                let status = child.wait()?;
-                if !status.success() && (is_last || pipefail) {
+                if !ignore_error && !status.success() && (is_last || pipefail) {
                     return Err(Self::status_to_io_error(
                         status,
                         &format!("{} exited with error", cmd),
@@ -151,10 +153,17 @@ impl CmdChild {
                 }
             }
             CmdChild::ThreadFn {
-                child, cmd, stderr, ..
+                child,
+                cmd,
+                stderr,
+                ignore_error,
+                ..
             } => {
                 let status = child.join();
                 Self::log_stderr_output(stderr);
+                if ignore_error {
+                    return Ok(());
+                }
                 match status {
                     Err(e) => {
                         if is_last || pipefail {
@@ -179,10 +188,15 @@ impl CmdChild {
 
     fn wait_with_output(self) -> Result<Vec<u8>> {
         match self {
-            CmdChild::Proc { child, cmd, stderr } => {
-                Self::log_stderr_output(stderr);
+            CmdChild::Proc {
+                child,
+                cmd,
+                stderr,
+                ignore_error,
+            } => {
                 let output = child.wait_with_output()?;
-                if !output.status.success() {
+                Self::log_stderr_output(stderr);
+                if !ignore_error && !output.status.success() {
                     return Err(Self::status_to_io_error(
                         output.status,
                         &format!("{} exited with error", cmd),

@@ -244,6 +244,7 @@ pub struct Cmd {
     args: Vec<OsString>,
     vars: HashMap<String, String>,
     redirects: Vec<Redirect>,
+    ignore_error: bool,
 
     // for running
     std_cmd: Option<Command>,
@@ -261,6 +262,7 @@ impl Default for Cmd {
             args: vec![],
             vars: HashMap::new(),
             redirects: vec![],
+            ignore_error: false,
             std_cmd: None,
             stdin_redirect: None,
             stdout_redirect: None,
@@ -275,6 +277,10 @@ impl Cmd {
     pub fn add_arg(mut self, arg: OsString) -> Self {
         let arg_str = arg.to_string_lossy().to_string();
         if self.args.is_empty() {
+            if arg_str == "ignore" {
+                self.ignore_error = true;
+                return self;
+            }
             let v: Vec<&str> = arg_str.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 self.vars.insert(v[0].into(), v[1].into());
@@ -386,6 +392,7 @@ impl Cmd {
                     stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
                     cmd: full_cmd,
+                    ignore_error: self.ignore_error,
                 })
             } else {
                 internal_cmd(&mut env)?;
@@ -425,6 +432,7 @@ impl Cmd {
             Ok(CmdChild::Proc {
                 cmd: full_cmd,
                 stderr: self.stderr_logging,
+                ignore_error: self.ignore_error,
                 child,
             })
         }
