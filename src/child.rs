@@ -74,15 +74,14 @@ impl CmdChildren {
         }
     }
 
-    pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>) -> CmdResult) -> CmdResult {
+    pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) {
         let handle = self.0.pop().unwrap();
-        let mut ret = Ok(());
         match handle {
             CmdChild::Proc {
                 mut child, stderr, ..
             } => {
                 if let Some(stdout) = child.stdout.take() {
-                    ret = f(Box::new(stdout));
+                    f(Box::new(stdout));
                     let _ = child.kill();
                 }
                 CmdChild::log_stderr_output(stderr);
@@ -93,12 +92,11 @@ impl CmdChildren {
             CmdChild::SyncFn { stderr, stdout, .. } => {
                 CmdChild::log_stderr_output(stderr);
                 if let Some(stdout) = stdout {
-                    ret = f(Box::new(stdout));
+                    f(Box::new(stdout));
                 }
             }
         };
         let _ = Self::wait_children(&mut self.0);
-        ret
     }
 }
 
