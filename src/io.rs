@@ -5,17 +5,17 @@ use std::process::Stdio;
 
 #[derive(Debug)]
 pub enum CmdIn {
-    CmdNull,
-    CmdFile(File),
-    CmdPipe(PipeReader),
+    Null,
+    File(File),
+    Pipe(PipeReader),
 }
 
 impl Read for CmdIn {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         match self {
-            CmdIn::CmdNull => Ok(0),
-            CmdIn::CmdFile(file) => file.read(buf),
-            CmdIn::CmdPipe(pipe) => pipe.read(buf),
+            CmdIn::Null => Ok(0),
+            CmdIn::File(file) => file.read(buf),
+            CmdIn::Pipe(pipe) => pipe.read(buf),
         }
     }
 }
@@ -23,34 +23,34 @@ impl Read for CmdIn {
 impl From<CmdIn> for Stdio {
     fn from(cmd_in: CmdIn) -> Stdio {
         match cmd_in {
-            CmdIn::CmdNull => Stdio::null(),
-            CmdIn::CmdFile(file) => Stdio::from(file),
-            CmdIn::CmdPipe(pipe) => Stdio::from(pipe),
+            CmdIn::Null => Stdio::null(),
+            CmdIn::File(file) => Stdio::from(file),
+            CmdIn::Pipe(pipe) => Stdio::from(pipe),
         }
     }
 }
 
 #[derive(Debug)]
 pub enum CmdOut {
-    CmdNull,
-    CmdFile(File),
-    CmdPipe(PipeWriter),
+    Null,
+    File(File),
+    Pipe(PipeWriter),
 }
 
 impl Write for CmdOut {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         match self {
-            CmdOut::CmdNull => Ok(buf.len()),
-            CmdOut::CmdFile(file) => file.write(buf),
-            CmdOut::CmdPipe(pipe) => pipe.write(buf),
+            CmdOut::Null => Ok(buf.len()),
+            CmdOut::File(file) => file.write(buf),
+            CmdOut::Pipe(pipe) => pipe.write(buf),
         }
     }
 
     fn flush(&mut self) -> Result<()> {
         match self {
-            CmdOut::CmdNull => Ok(()),
-            CmdOut::CmdFile(file) => file.flush(),
-            CmdOut::CmdPipe(pipe) => pipe.flush(),
+            CmdOut::Null => Ok(()),
+            CmdOut::File(file) => file.flush(),
+            CmdOut::Pipe(pipe) => pipe.flush(),
         }
     }
 }
@@ -58,9 +58,9 @@ impl Write for CmdOut {
 impl CmdOut {
     pub fn try_clone(&self) -> Result<Self> {
         match self {
-            CmdOut::CmdNull => Ok(CmdOut::CmdNull),
-            CmdOut::CmdFile(file) => file.try_clone().map(CmdOut::CmdFile),
-            CmdOut::CmdPipe(pipe) => pipe.try_clone().map(CmdOut::CmdPipe),
+            CmdOut::Null => Ok(CmdOut::Null),
+            CmdOut::File(file) => file.try_clone().map(CmdOut::File),
+            CmdOut::Pipe(pipe) => pipe.try_clone().map(CmdOut::Pipe),
         }
     }
 }
@@ -68,9 +68,9 @@ impl CmdOut {
 impl From<CmdOut> for Stdio {
     fn from(cmd_out: CmdOut) -> Stdio {
         match cmd_out {
-            CmdOut::CmdNull => Stdio::null(),
-            CmdOut::CmdFile(file) => Stdio::from(file),
-            CmdOut::CmdPipe(pipe) => Stdio::from(pipe),
+            CmdOut::Null => Stdio::null(),
+            CmdOut::File(file) => Stdio::from(file),
+            CmdOut::Pipe(pipe) => Stdio::from(pipe),
         }
     }
 }

@@ -170,24 +170,21 @@ impl Lexer {
                     (1, append)
                 }
             };
-            self.args.push(ParseArg::ParseRedirectFile(
-                fd,
-                quote!(#last_arg_str),
-                append,
-            ));
+            self.args
+                .push(ParseArg::RedirectFile(fd, quote!(#last_arg_str), append));
             if stdouterr {
-                self.args.push(ParseArg::ParseRedirectFd(2, 1));
+                self.args.push(ParseArg::RedirectFd(2, 1));
             }
         } else if !last_arg_str.is_empty() {
-            self.args.push(ParseArg::ParseArgStr(quote!(#last_arg_str)));
+            self.args.push(ParseArg::ArgStr(quote!(#last_arg_str)));
         }
         let mut new_redirect = (false, false, false);
         match token {
             SepToken::Space => new_redirect = self.seen_redirect,
-            SepToken::SemiColon => self.args.push(ParseArg::ParseSemicolon),
+            SepToken::SemiColon => self.args.push(ParseArg::Semicolon),
             SepToken::Pipe => {
                 Self::check_set_redirect(&mut self.seen_redirect.1, "stdout", token_span);
-                self.args.push(ParseArg::ParsePipe);
+                self.args.push(ParseArg::Pipe);
                 new_redirect.0 = true;
             }
         }
@@ -259,7 +256,7 @@ impl Lexer {
                     abort!(redirect.1, "invalid '&': found previous redirect");
                 }
                 Self::check_set_redirect(&mut self.seen_redirect.2, "stderr", p.span());
-                self.args.push(ParseArg::ParseRedirectFd(2, 1));
+                self.args.push(ParseArg::RedirectFd(2, 1));
                 self.iter.next();
             }
         }
@@ -301,9 +298,9 @@ impl Lexer {
                         abort!(lit.span(), "invalid literal string after &");
                     }
                     if &s == "1" {
-                        self.args.push(ParseArg::ParseRedirectFd(fd, 1));
+                        self.args.push(ParseArg::RedirectFd(fd, 1));
                     } else if &s == "2" {
-                        self.args.push(ParseArg::ParseRedirectFd(fd, 2));
+                        self.args.push(ParseArg::RedirectFd(fd, 2));
                     } else {
                         abort!(lit.span(), "Only &1 or &2 is supported");
                     }
@@ -368,7 +365,7 @@ impl Lexer {
                         if !self.last_arg_str.is_empty() {
                             abort!(span, "vector variable can only be used alone");
                         }
-                        self.args.push(ParseArg::ParseArgVec(quote!(#var)));
+                        self.args.push(ParseArg::ArgVec(quote!(#var)));
                     }
                     found_var = true;
                 } else {

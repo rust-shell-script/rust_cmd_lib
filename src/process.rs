@@ -353,17 +353,17 @@ impl Cmd {
                 stdin: if let Some(redirect_in) = self.stdin_redirect.take() {
                     redirect_in
                 } else {
-                    CmdIn::CmdPipe(os_pipe::dup_stdin()?)
+                    CmdIn::Pipe(os_pipe::dup_stdin()?)
                 },
                 stdout: if let Some(redirect_out) = self.stdout_redirect.take() {
                     redirect_out
                 } else {
-                    CmdOut::CmdPipe(os_pipe::dup_stdout()?)
+                    CmdOut::Pipe(os_pipe::dup_stdout()?)
                 },
                 stderr: if let Some(redirect_err) = self.stderr_redirect.take() {
                     redirect_err
                 } else {
-                    CmdOut::CmdPipe(os_pipe::dup_stderr()?)
+                    CmdOut::Pipe(os_pipe::dup_stderr()?)
                 },
             };
 
@@ -465,57 +465,57 @@ impl Cmd {
     ) -> CmdResult {
         // set up error pipe
         let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
-        self.stderr_redirect = Some(CmdOut::CmdPipe(pipe_writer));
+        self.stderr_redirect = Some(CmdOut::Pipe(pipe_writer));
         self.stderr_logging = Some(pipe_reader);
 
         if let Some(pipe) = pipe_out {
-            self.stdout_redirect = Some(CmdOut::CmdPipe(pipe));
+            self.stdout_redirect = Some(CmdOut::Pipe(pipe));
         } else if self.in_cmd_map {
             // set up stdout pipe
             let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
-            self.stdout_redirect = Some(CmdOut::CmdPipe(pipe_writer));
+            self.stdout_redirect = Some(CmdOut::Pipe(pipe_writer));
             self.stdout_logging = Some(pipe_reader);
         }
 
         if let Some(pipe) = pipe_in.take() {
-            self.stdin_redirect = Some(CmdIn::CmdPipe(pipe));
+            self.stdin_redirect = Some(CmdIn::Pipe(pipe));
         }
 
         for redirect in self.redirects.iter() {
             match redirect {
                 Redirect::FileToStdin(path) => {
                     self.stdin_redirect = Some(if path == Path::new("/dev/null") {
-                        CmdIn::CmdNull
+                        CmdIn::Null
                     } else {
-                        CmdIn::CmdFile(Self::open_file(path, true, false)?)
+                        CmdIn::File(Self::open_file(path, true, false)?)
                     });
                 }
                 Redirect::StdoutToStderr => {
                     if let Some(ref redirect) = self.stderr_redirect {
                         self.stdout_redirect = Some(redirect.try_clone()?);
                     } else {
-                        self.stdout_redirect = Some(CmdOut::CmdPipe(os_pipe::dup_stderr()?));
+                        self.stdout_redirect = Some(CmdOut::Pipe(os_pipe::dup_stderr()?));
                     }
                 }
                 Redirect::StderrToStdout => {
                     if let Some(ref redirect) = self.stdout_redirect {
                         self.stderr_redirect = Some(redirect.try_clone()?);
                     } else {
-                        self.stderr_redirect = Some(CmdOut::CmdPipe(os_pipe::dup_stdout()?));
+                        self.stderr_redirect = Some(CmdOut::Pipe(os_pipe::dup_stdout()?));
                     }
                 }
                 Redirect::StdoutToFile(path, append) => {
                     self.stdout_redirect = Some(if path == Path::new("/dev/null") {
-                        CmdOut::CmdNull
+                        CmdOut::Null
                     } else {
-                        CmdOut::CmdFile(Self::open_file(path, false, *append)?)
+                        CmdOut::File(Self::open_file(path, false, *append)?)
                     });
                 }
                 Redirect::StderrToFile(path, append) => {
                     self.stderr_redirect = Some(if path == Path::new("/dev/null") {
-                        CmdOut::CmdNull
+                        CmdOut::Null
                     } else {
-                        CmdOut::CmdFile(Self::open_file(path, false, *append)?)
+                        CmdOut::File(Self::open_file(path, false, *append)?)
                     });
                 }
             }

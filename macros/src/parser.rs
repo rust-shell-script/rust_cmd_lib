@@ -1,16 +1,15 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::iter::Peekable;
-use ParseArg::*;
 
 #[derive(Debug)]
 pub enum ParseArg {
-    ParsePipe,
-    ParseSemicolon,
-    ParseRedirectFd(i32, i32),                 // fd1, fd2
-    ParseRedirectFile(i32, TokenStream, bool), // fd1, file, append?
-    ParseArgStr(TokenStream),
-    ParseArgVec(TokenStream),
+    Pipe,
+    Semicolon,
+    RedirectFd(i32, i32),                 // fd1, fd2
+    RedirectFile(i32, TokenStream, bool), // fd1, file, append?
+    ArgStr(TokenStream),
+    ArgVec(TokenStream),
 }
 
 pub struct Parser<I: Iterator<Item = ParseArg>> {
@@ -41,7 +40,7 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
         while self.iter.peek().is_some() {
             let cmd = self.parse_pipe();
             cmds.extend(quote!(.pipe(#cmd)));
-            if !matches!(self.iter.peek(), Some(ParsePipe)) {
+            if !matches!(self.iter.peek(), Some(ParseArg::Pipe)) {
                 self.iter.next();
                 break;
             }
@@ -54,7 +53,7 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
         let mut ret = quote!(::cmd_lib::Cmd::default());
         while let Some(arg) = self.iter.peek() {
             match arg {
-                ParseRedirectFd(fd1, fd2) => {
+                ParseArg::RedirectFd(fd1, fd2) => {
                     if fd1 != fd2 {
                         let mut redirect = quote!(::cmd_lib::Redirect);
                         match (fd1, fd2) {
@@ -65,7 +64,7 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
                         ret.extend(quote!(.add_redirect(#redirect)));
                     }
                 }
-                ParseRedirectFile(fd1, file, append) => {
+                ParseArg::RedirectFile(fd1, file, append) => {
                     let mut redirect = quote!(::cmd_lib::Redirect);
                     match fd1 {
                         0 => redirect.extend(quote!(::FileToStdin(#file.into_path_buf()))),
@@ -79,13 +78,13 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
                     }
                     ret.extend(quote!(.add_redirect(#redirect)));
                 }
-                ParseArgStr(opt) => {
+                ParseArg::ArgStr(opt) => {
                     ret.extend(quote!(.add_arg(#opt.into_os_string())));
                 }
-                ParseArgVec(opts) => {
+                ParseArg::ArgVec(opts) => {
                     ret.extend(quote! (.add_args(#opts.iter().map(|s| ::std::ffi::OsString::from(s)).collect())));
                 }
-                ParsePipe | ParseSemicolon => break,
+                ParseArg::Pipe | ParseArg::Semicolon => break,
             }
             self.iter.next();
         }
