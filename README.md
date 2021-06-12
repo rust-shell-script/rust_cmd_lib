@@ -230,11 +230,11 @@ println!("get result: {}", run_fun!(my_cmd)?);
 `spawn!()` macro executes the whole command as a child process, returning a handle to it. By
 default, stdin, stdout and stderr are inherited from the parent.
 
-To get result, you can call `wait_cmd_result()` or `wait_fun_result()` to get CmdResult/FunResult.
+With `spawn_with_output!()` you can get output result by calling `wait_fun_result()`.
 
 ```rust
 spawn!(ping -c 10 192.168.0.1)?.wait_cmd_result()?;
-let output = spawn!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result()?;
+let output = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result()?;
 ```
 
 

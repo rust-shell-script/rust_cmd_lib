@@ -255,12 +255,12 @@
 //! `spawn!()` macro executes the whole command as a child process, returning a handle to it. By
 //! default, stdin, stdout and stderr are inherited from the parent.
 //!
-//! To get result, you can call `wait_cmd_result()` or `wait_fun_result()` to get CmdResult/FunResult.
+//! With `spawn_with_output!()` you can get output result by calling `wait_fun_result()`.
 //!
 //! ```no_run
-//! # use cmd_lib::spawn;
+//! # use cmd_lib::*;
 //! spawn!(ping -c 10 192.168.0.1)?.wait_cmd_result()?;
-//! let output = spawn!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result()?;
+//! let output = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result()?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -322,7 +322,7 @@
 
 pub use cmd_lib_macros::{
     cmd_debug, cmd_die, cmd_echo, cmd_error, cmd_info, cmd_trace, cmd_warn, export_cmd, run_cmd,
-    run_fun, spawn, use_builtin_cmd, use_custom_cmd,
+    run_fun, spawn, spawn_with_output, use_builtin_cmd, use_custom_cmd,
 };
 /// Return type for run_fun!() macro
 pub type FunResult = std::io::Result<String>;

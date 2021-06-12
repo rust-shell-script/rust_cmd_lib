@@ -27,7 +27,7 @@ fn main() -> CmdResult {
     run_cmd!(rm -f out.txt)?;
 
     // Continuously process child process' outputs
-    spawn!(journalctl)?.wait_with_pipe(&mut |pipe| {
+    spawn_with_output!(journalctl)?.wait_with_pipe(&mut |pipe| {
         BufReader::new(pipe)
             .lines()
             .filter_map(|line| line.ok())

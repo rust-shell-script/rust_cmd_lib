@@ -138,10 +138,10 @@ impl GroupCmds {
         }
     }
 
-    pub fn spawn(mut self) -> Result<CmdChildren> {
+    pub fn spawn(mut self, with_output: bool) -> Result<CmdChildren> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap().0;
-        let ret = cmds.spawn(&mut self.current_dir);
+        let ret = cmds.spawn(&mut self.current_dir, with_output);
         if let Err(ref err) = ret {
             error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
         }
@@ -170,7 +170,7 @@ impl Cmds {
         &self.full_cmds
     }
 
-    fn spawn(&mut self, current_dir: &mut PathBuf) -> Result<CmdChildren> {
+    fn spawn(&mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChildren> {
         if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
             debug!("Running {} ...", self.get_full_cmds());
         }
@@ -189,7 +189,7 @@ impl Cmds {
             } else {
                 cmd.setup_redirects(&mut last_pipe_in, None)?;
             }
-            let child = cmd.spawn(current_dir)?;
+            let child = cmd.spawn(current_dir, with_output)?;
             children.push(child);
         }
 
@@ -197,11 +197,11 @@ impl Cmds {
     }
 
     fn run_cmd(&mut self, current_dir: &mut PathBuf) -> CmdResult {
-        self.spawn(current_dir)?.wait_cmd_result_nolog()
+        self.spawn(current_dir, false)?.wait_cmd_result_nolog()
     }
 
     fn run_fun(&mut self, current_dir: &mut PathBuf) -> FunResult {
-        self.spawn(current_dir)?.wait_fun_result_nolog()
+        self.spawn(current_dir, true)?.wait_fun_result_nolog()
     }
 }
 
@@ -337,7 +337,7 @@ impl Cmd {
         self
     }
 
-    fn spawn(mut self, current_dir: &mut PathBuf) -> Result<CmdChild> {
+    fn spawn(mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChild> {
         let arg0 = self.arg0();
         let full_cmd = self.debug_str();
         if arg0 == "cd" {
@@ -411,7 +411,7 @@ impl Cmd {
             // update stdout
             if let Some(redirect_out) = self.stdout_redirect.take() {
                 cmd.stdout(redirect_out);
-            } else {
+            } else if with_output {
                 cmd.stdout(Stdio::piped());
             }
 
