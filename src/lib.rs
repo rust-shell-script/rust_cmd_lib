@@ -103,7 +103,7 @@
 //! if run_cmd! {
 //!     cat ${file} | grep ${keyword};
 //!     echo "bad cmd" >&2;
-//!     ls /nofile || true;
+//!     ignore ls /nofile;
 //!     date;
 //!     ls oops;
 //!     cat oops;
@@ -202,7 +202,7 @@
 //!
 //! ### Builtin commands
 //! #### cd
-//! cd: set process current directory, which is always enabled
+//! cd: set process current directory, which is always enabled.
 //! ```no_run
 //! # use cmd_lib::run_cmd;
 //! run_cmd! (
@@ -220,17 +220,13 @@
 //!
 //! #### ignore
 //!
-//! Ignore errors for command execution.
-//!
-//! #### true
-//!
-//! Just return true without launching any processes.
+//! Ignore errors for command executiona, which is always enabled.
 //!
 //! #### echo
 //!
 //! ```
 //! # use cmd_lib::{run_cmd, use_builtin_cmd};
-//! use_builtin_cmd!(true, echo); // find more builtin commands in src/builtins.rs
+//! use_builtin_cmd!(echo); // find more builtin commands in src/builtins.rs
 //! run_cmd!(echo "This is from builtin command!")?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
@@ -334,7 +330,7 @@ pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use builtins::{
     builtin_cat, builtin_debug, builtin_die, builtin_echo, builtin_error, builtin_info,
-    builtin_trace, builtin_true, builtin_warn,
+    builtin_trace, builtin_warn,
 };
 pub use child::CmdChildren;
 #[doc(hidden)]

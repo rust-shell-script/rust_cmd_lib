@@ -95,7 +95,7 @@ let keyword = "rust";
 if run_cmd! {
     cat ${file} | grep ${keyword};
     echo "bad cmd" >&2;
-    ls /nofile || true;
+    ignore ls /nofile;
     date;
     ls oops;
     cat oops;
@@ -184,7 +184,7 @@ implementation.
 
 #### Builtin commands
 ##### cd
-cd: set process current directory, which is always enabled
+cd: set process current directory, which is always enabled.
 ```rust
 run_cmd! (
     cd /tmp;
@@ -200,16 +200,12 @@ working directory for the whole program.
 
 ##### ignore
 
-Ignore errors for command execution.
-
-##### true
-
-Just return true without launching any processes.
+Ignore errors for command executiona, which is always enabled.
 
 ##### echo
 
 ```rust
-use_builtin_cmd!(true, echo); // find more builtin commands in src/builtins.rs
+use_builtin_cmd!(echo); // find more builtin commands in src/builtins.rs
 run_cmd!(echo "This is from builtin command!")?;
 ```
 

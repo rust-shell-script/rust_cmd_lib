@@ -84,7 +84,7 @@ pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
 /// ```
 /// # use cmd_lib::*;
 /// use_builtin_cmd!(info); // import only one builtin command
-/// use_builtin_cmd!(true, echo, info, warn, err, die, cat); // import all the builtins
+/// use_builtin_cmd!(echo, info, warn, err, die, cat); // import all the builtins
 /// ```
 /// `cd` builtin command is always enabled without importing it.
 #[proc_macro]
@@ -126,7 +126,7 @@ pub fn use_builtin_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream
 /// if run_cmd! {
 ///     cat ${file} | grep ${keyword};
 ///     echo "bad cmd" >&2;
-///     ls /nofile || true;
+///     ignore ls /nofile;
 ///     date;
 ///     ls oops;
 ///     cat oops;

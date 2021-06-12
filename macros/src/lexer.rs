@@ -79,7 +79,6 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
 enum SepToken {
     Space,
     SemiColon,
-    Or,
     Pipe,
 }
 
@@ -113,7 +112,6 @@ impl Lexer {
     }
 
     pub fn scan(mut self) -> Parser<impl Iterator<Item = ParseArg>> {
-        let mut allow_or_token = true;
         while let Some(item) = self.iter.next() {
             match item {
                 TokenTree::Group(_) => {
@@ -130,9 +128,8 @@ impl Lexer {
                     let ch = punct.as_char();
                     if ch == ';' {
                         self.add_arg_with_token(SepToken::SemiColon, self.iter.span());
-                        allow_or_token = true;
                     } else if ch == '|' {
-                        self.scan_pipe_or(&mut allow_or_token);
+                        self.scan_pipe();
                     } else if ch == '<' {
                         self.set_redirect(self.iter.span(), RedirectFd::Stdin);
                     } else if ch == '>' {
@@ -188,7 +185,6 @@ impl Lexer {
         match token {
             SepToken::Space => new_redirect = self.seen_redirect,
             SepToken::SemiColon => self.args.push(ParseArg::ParseSemicolon),
-            SepToken::Or => self.args.push(ParseArg::ParseOr),
             SepToken::Pipe => {
                 Self::check_set_redirect(&mut self.seen_redirect.1, "stdout", token_span);
                 self.args.push(ParseArg::ParsePipe);
@@ -256,13 +252,9 @@ impl Lexer {
         }
     }
 
-    fn scan_pipe_or(&mut self, allow_or_token: &mut bool) {
-        let mut is_pipe = true;
+    fn scan_pipe(&mut self) {
         if let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap() {
-            if p.as_char() == '|' {
-                is_pipe = false;
-                self.iter.next();
-            } else if p.as_char() == '&' {
+            if p.as_char() == '&' {
                 if let Some(ref redirect) = self.last_redirect {
                     abort!(redirect.1, "invalid '&': found previous redirect");
                 }
@@ -284,18 +276,7 @@ impl Lexer {
             }
             _ => {}
         }
-        self.add_arg_with_token(
-            if is_pipe {
-                SepToken::Pipe
-            } else {
-                if !*allow_or_token {
-                    abort!(self.iter.span(), "only one || is allowed");
-                }
-                *allow_or_token = false;
-                SepToken::Or
-            },
-            self.iter.span(),
-        );
+        self.add_arg_with_token(SepToken::Pipe, self.iter.span());
     }
 
     fn scan_redirect_out(&mut self, fd: i32) {

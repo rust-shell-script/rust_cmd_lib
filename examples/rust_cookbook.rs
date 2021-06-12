@@ -23,7 +23,7 @@ fn main() -> CmdResult {
     );
 
     // Redirect both stdout and stderr of child process to the same file
-    run_cmd!(ls . oops &>out.txt || true)?;
+    run_cmd!(ignore ls . oops &>out.txt)?;
     run_cmd!(rm -f out.txt)?;
 
     // Continuously process child process' outputs

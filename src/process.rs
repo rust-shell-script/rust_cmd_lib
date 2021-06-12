@@ -1,6 +1,6 @@
 use crate::child::{CmdChild, CmdChildren};
 use crate::io::{CmdIn, CmdOut};
-use crate::{builtin_true, CmdResult, FunResult};
+use crate::{CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
 use log::{debug, error};
@@ -60,8 +60,7 @@ type FnFun = fn(&mut CmdEnv) -> CmdResult;
 lazy_static! {
     static ref CMD_MAP: Mutex<HashMap<OsString, FnFun>> = {
         // needs explicit type, or it won't compile
-        let mut m: HashMap<OsString, FnFun> = HashMap::new();
-        m.insert("".into(), builtin_true);
+        let m: HashMap<OsString, FnFun> = HashMap::new();
         Mutex::new(m)
     };
 }
@@ -88,29 +87,21 @@ pub fn set_pipefail(enable: bool) {
 #[doc(hidden)]
 #[derive(Default)]
 pub struct GroupCmds {
-    group_cmds: Vec<(Cmds, Option<Cmds>)>, // (cmd, orCmd) pairs
+    group_cmds: Vec<Cmds>,
     current_dir: PathBuf,
 }
 
 impl GroupCmds {
-    pub fn add(mut self, cmds: Cmds, or_cmds: Option<Cmds>) -> Self {
-        self.group_cmds.push((cmds, or_cmds));
+    pub fn append(mut self, cmds: Cmds) -> Self {
+        self.group_cmds.push(cmds);
         self
     }
 
     pub fn run_cmd(&mut self) -> CmdResult {
         for cmds in self.group_cmds.iter_mut() {
-            if let Err(err) = cmds.0.run_cmd(&mut self.current_dir) {
-                if let Some(or_cmds) = &mut cmds.1 {
-                    let ret = or_cmds.run_cmd(&mut self.current_dir);
-                    if let Err(err) = ret {
-                        error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
-                        return Err(err);
-                    }
-                } else {
-                    error!("Running {} failed, Error: {}", cmds.0.get_full_cmds(), err);
-                    return Err(err);
-                }
+            if let Err(err) = cmds.run_cmd(&mut self.current_dir) {
+                error!("Running {} failed, Error: {}", cmds.get_full_cmds(), err);
+                return Err(err);
             }
         }
         Ok(())
@@ -120,19 +111,11 @@ impl GroupCmds {
         let mut last_cmd = self.group_cmds.pop().unwrap();
         self.run_cmd()?;
         // run last function command
-        let ret = last_cmd.0.run_fun(&mut self.current_dir);
+        let ret = last_cmd.run_fun(&mut self.current_dir);
         if let Err(e) = ret {
-            if let Some(or_cmds) = &mut last_cmd.1 {
-                let or_ret = or_cmds.run_fun(&mut self.current_dir);
-                if let Err(ref err) = or_ret {
-                    error!("Running {} failed, Error: {}", or_cmds.get_full_cmds(), err);
-                }
-                or_ret
-            } else {
-                let full_cmds = last_cmd.0.get_full_cmds();
-                error!("Running {} failed, Error: {}", full_cmds, e);
-                Err(e)
-            }
+            let full_cmds = last_cmd.get_full_cmds();
+            error!("Running {} failed, Error: {}", full_cmds, e);
+            Err(e)
         } else {
             ret
         }
@@ -140,7 +123,7 @@ impl GroupCmds {
 
     pub fn spawn(mut self, with_output: bool) -> Result<CmdChildren> {
         assert_eq!(self.group_cmds.len(), 1);
-        let mut cmds = self.group_cmds.pop().unwrap().0;
+        let mut cmds = self.group_cmds.pop().unwrap();
         let ret = cmds.spawn(&mut self.current_dir, with_output);
         if let Err(ref err) = ret {
             error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);

@@ -4,11 +4,6 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 #[doc(hidden)]
-pub fn builtin_true(_env: &mut CmdEnv) -> CmdResult {
-    Ok(())
-}
-
-#[doc(hidden)]
 pub fn builtin_echo(env: &mut CmdEnv) -> CmdResult {
     let msg = env.args()[1..].join(" ");
     writeln!(env.stdout(), "{}", msg)

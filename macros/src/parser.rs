@@ -6,7 +6,6 @@ use ParseArg::*;
 #[derive(Debug)]
 pub enum ParseArg {
     ParsePipe,
-    ParseOr,
     ParseSemicolon,
     ParseRedirectFd(i32, i32),                 // fd1, fd2
     ParseRedirectFile(i32, TokenStream, bool), // fd1, file, append?
@@ -27,15 +26,8 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
         let mut ret = quote!(::cmd_lib::GroupCmds::default());
         while self.iter.peek().is_some() {
             let cmd = self.parse_cmd();
-            if !cmd.0.is_empty() {
-                let (cmd0, cmd1) = cmd;
-                if cmd1.is_none() {
-                    ret.extend(quote!(.add(#cmd0, None)));
-                } else if for_spawn {
-                    panic!("wrong spawning format: or command not allowed");
-                } else {
-                    ret.extend(quote!(.add(#cmd0, Some(#cmd1))));
-                }
+            if !cmd.is_empty() {
+                ret.extend(quote!(.append(#cmd)));
                 if for_spawn && self.iter.peek().is_some() {
                     panic!("wrong spawning format: group command not allowed");
                 }
@@ -44,30 +36,18 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
         ret
     }
 
-    fn parse_cmd(&mut self) -> (TokenStream, Option<TokenStream>) {
-        let mut ret = (quote!(Cmds::default()), None);
-        for j in 0..2 {
-            let mut cmds = quote!(::cmd_lib::Cmds::default());
-            while self.iter.peek().is_some() {
-                let cmd = self.parse_pipe();
-                cmds.extend(quote!(.pipe(#cmd)));
-                if !matches!(self.iter.peek(), Some(ParsePipe)) {
-                    break;
-                }
+    fn parse_cmd(&mut self) -> TokenStream {
+        let mut cmds = quote!(::cmd_lib::Cmds::default());
+        while self.iter.peek().is_some() {
+            let cmd = self.parse_pipe();
+            cmds.extend(quote!(.pipe(#cmd)));
+            if !matches!(self.iter.peek(), Some(ParsePipe)) {
                 self.iter.next();
-            }
-            if j == 0 {
-                ret.0 = cmds;
-                if !matches!(self.iter.peek(), Some(ParseOr)) {
-                    self.iter.next();
-                    break;
-                }
-            } else {
-                ret.1 = Some(quote!(#cmds));
+                break;
             }
             self.iter.next();
         }
-        ret
+        cmds
     }
 
     fn parse_pipe(&mut self) -> TokenStream {
@@ -105,7 +85,7 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
                 ParseArgVec(opts) => {
                     ret.extend(quote! (.add_args(#opts.iter().map(|s| ::std::ffi::OsString::from(s)).collect())));
                 }
-                ParsePipe | ParseOr | ParseSemicolon => break,
+                ParsePipe | ParseSemicolon => break,
             }
             self.iter.next();
         }

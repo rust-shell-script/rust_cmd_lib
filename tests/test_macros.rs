@@ -25,20 +25,6 @@ fn test_cd_fails() {
 }
 
 #[test]
-/// ```compile_fail
-/// run_cmd!(ls || true || true).unwrap();
-/// run_cmd!(ls || true | wc).unwrap();
-/// ```
-fn test_or_cmd() {
-    assert!(run_cmd! {
-        ls /nofile || true;
-        echo "continue";
-    }
-    .is_ok());
-    assert!(run_cmd!(false || ls | wc).is_ok());
-}
-
-#[test]
 fn test_run_cmds() {
     assert!(run_cmd! {
         cd /tmp;
@@ -148,10 +134,6 @@ fn test_tls_set() {
 }
 
 #[test]
-/// ```compile_fail
-/// run_cmd!(ls | |).unwrap();
-/// run_cmd!(ls | ||).unwrap();
-/// ```
 fn test_pipe() {
     use_builtin_cmd!(echo);
     assert!(run_cmd!(echo "xx").is_ok());
@@ -181,14 +163,14 @@ fn test_redirect() {
     assert!(run_cmd!(echo xxxx > /tmp/f).is_ok());
     assert!(run_cmd!(echo yyyy >> /tmp/f).is_ok());
     assert!(run_cmd!(
-        ls /x 2>/tmp/lsx.log || true;
+        ignore ls /x 2>/tmp/lsx.log;
         echo "dump file:";
         cat /tmp/lsx.log;
         rm /tmp/lsx.log;
     )
     .is_ok());
-    assert!(run_cmd!(ls /x 2>/dev/null || true).is_ok());
-    assert!(run_cmd!(ls /x &>/tmp/f || true).is_ok());
+    assert!(run_cmd!(ignore ls /x 2>/dev/null).is_ok());
+    assert!(run_cmd!(ignore ls /x &>/tmp/f).is_ok());
     assert!(run_cmd!(wc -w < /tmp/f).is_ok());
     assert!(run_cmd!(ls 1>&1).is_ok());
     assert!(run_cmd!(ls 2>&2).is_ok());
@@ -247,9 +229,6 @@ fn test_current_dir() {
 /// run_cmd!(ls / /x &> > /tmp/f).unwrap();
 /// run_cmd!(ls / /x > > /tmp/f).unwrap();
 /// run_cmd!(ls / /x >> > /tmp/f).unwrap();
-/// run_cmd!(ls &< dirlist || true).unwrap();
-/// run_cmd!(ls & < dirlist || true).unwrap();
-/// run_cmd!(ls & dirlist || true).unwrap();
 /// ```
 fn test_redirect_fail() {}
 
