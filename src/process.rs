@@ -99,34 +99,32 @@ impl GroupCmds {
 
     pub fn run_cmd(&mut self) -> CmdResult {
         for cmds in self.group_cmds.iter_mut() {
-            if let Err(err) = cmds.run_cmd(&mut self.current_dir) {
-                error!("Running {} failed, Error: {}", cmds.get_full_cmds(), err);
-                return Err(err);
+            if let Err(e) = cmds.run_cmd(&mut self.current_dir) {
+                error!("Running {} failed, Error: {}", cmds.get_full_cmds(), e);
+                return Err(e);
             }
         }
         Ok(())
     }
 
     pub fn run_fun(&mut self) -> FunResult {
+        // run previous commands
         let mut last_cmd = self.group_cmds.pop().unwrap();
         self.run_cmd()?;
         // run last function command
         let ret = last_cmd.run_fun(&mut self.current_dir);
-        if let Err(e) = ret {
-            let full_cmds = last_cmd.get_full_cmds();
-            error!("Running {} failed, Error: {}", full_cmds, e);
-            Err(e)
-        } else {
-            ret
+        if let Err(ref e) = ret {
+            error!("Running {} failed, Error: {}", last_cmd.get_full_cmds(), e);
         }
+        ret
     }
 
     pub fn spawn(mut self, with_output: bool) -> Result<CmdChildren> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap();
         let ret = cmds.spawn(&mut self.current_dir, with_output);
-        if let Err(ref err) = ret {
-            error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), err);
+        if let Err(ref e) = ret {
+            error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), e);
         }
         ret
     }

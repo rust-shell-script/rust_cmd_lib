@@ -182,7 +182,7 @@
 //! Right now piping and stdin, stdout, stderr redirection are supported. Most parts are the same as in
 //! [bash scripts](https://www.gnu.org/software/bash/manual/html_node/Redirections.html#Redirections).
 //!
-//! ### logging
+//! ### Logging
 //!
 //! This library provides convenient macros and builtin commands for logging. It also automatically logs
 //! command execution failures, along with messages which were printed to stderr originally.
@@ -220,7 +220,7 @@
 //!
 //! #### ignore
 //!
-//! Ignore errors for command executiona, which is always enabled.
+//! Ignore errors for command execution, which is always enabled.
 //!
 //! #### echo
 //!
