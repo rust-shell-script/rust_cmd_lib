@@ -115,7 +115,6 @@ pub(crate) enum CmdChild {
     ThreadFn {
         child: JoinHandle<CmdResult>,
         cmd: String,
-        stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
         ignore_error: bool,
     },

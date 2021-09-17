@@ -370,7 +370,6 @@ impl Cmd {
                 let handle = std::thread::spawn(move || internal_cmd(&mut env));
                 Ok(CmdChild::ThreadFn {
                     child: handle,
-                    stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
                     cmd: full_cmd,
                     ignore_error: self.ignore_error,
