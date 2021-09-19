@@ -171,6 +171,8 @@ This library provides convenient macros and builtin commands for logging. It als
 command execution failures, along with messages which were printed to stderr originally.
 
 ```rust
+// this code snppit is using a builtin simple logger, you can replace it with a real logger
+init_builtin_logger();
 let dir: &str = "folder with spaces";
 assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir).is_ok());
 assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
@@ -179,12 +181,13 @@ assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err())
 // ERROR - Running ["mkdir", "/tmp/folder with spaces"] failed, Error: ["mkdir", "/tmp/folder with spaces"] exited with error; status code: 1
 ```
 
-It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite logging
-implementation.
+It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite
+logging implementation. Notice that if you don't provide any logger, the stdout and stderr
+output will be discarded.
 
 #### Builtin commands
 ##### cd
-cd: set process current directory, which is always enabled.
+cd: set process current directory, which can be used without importing.
 ```rust
 run_cmd! (
     cd /tmp;
@@ -200,9 +203,11 @@ working directory for the whole program.
 
 ##### ignore
 
-Ignore errors for command execution, which is always enabled.
+Ignore errors for command execution, which can be used without importing.
 
 ##### echo
+
+Print messages to stdout, which needs to be imported with `use_builtin_cmd!()` macro.
 
 ```rust
 use_builtin_cmd!(echo); // find more builtin commands in src/builtins.rs
@@ -228,13 +233,22 @@ println!("get result: {}", run_fun!(my_cmd)?);
 #### Low-level process spawning macros
 
 `spawn!()` macro executes the whole command as a child process, returning a handle to it. By
-default, stdin, stdout and stderr are inherited from the parent.
+default, stdin, stdout and stderr are inherited from the parent. The process will run in the
+background, so you can run other stuff concurrently. You can call `wait_cmd_result()` to wait
+for the process to finish.
 
 With `spawn_with_output!()` you can get output result by calling `wait_fun_result()`.
 
 ```rust
-spawn!(ping -c 10 192.168.0.1)?.wait_cmd_result()?;
-let output = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?.wait_fun_result()?;
+let mut proc = spawn!(ping -c 10 192.168.0.1)?;
+// do other stuff
+// ...
+proc.wait_cmd_result()?;
+
+let mut proc = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?;
+// do other stuff
+// ...
+let output = proc.wait_fun_result()?;
 ```
 
 
@@ -271,7 +285,7 @@ run_cmd!(FOO=100 /tmp/test_run_cmd_lib.sh)?;
 Using macros can actually avoid command injection, since we do parsing before variable substitution.
 For example, below code is fine even without any quotes:
 ```rust
-fn cleanup_uploaded_file(file: &str) -> CmdResult {
+fn cleanup_uploaded_file(file: &Path) -> CmdResult {
     run_cmd!(/bin/rm -f /var/upload/$file)
 }
 ```
