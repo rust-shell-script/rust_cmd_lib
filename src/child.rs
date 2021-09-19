@@ -111,6 +111,7 @@ pub(crate) enum CmdChild {
     ThreadFn {
         child: JoinHandle<CmdResult>,
         cmd: String,
+        stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
         ignore_error: bool,
     },
@@ -140,7 +141,6 @@ impl CmdChild {
                 ignore_error,
             } => {
                 let polling_stderr = Self::log_stderr_output(stderr);
-                Self::print_stdout_output(&mut child.stdout);
                 let status = child.wait()?;
                 let _ = polling_stderr.join();
                 Self::print_stdout_output(&mut child.stdout);
@@ -208,8 +208,24 @@ impl CmdChild {
                     Ok(output.stdout)
                 }
             }
-            CmdChild::ThreadFn { cmd, .. } => {
-                panic!("{} thread should not be waited for output", cmd);
+            CmdChild::ThreadFn {
+                stdout,
+                stderr,
+                child,
+                ..
+            } => {
+                let polling_stderr = Self::log_stderr_output(stderr);
+                // simulate process's wait_with_output() API
+                let buf = if let Some(mut out) = stdout {
+                    let mut buf = vec![];
+                    out.read_to_end(&mut buf)?;
+                    buf
+                } else {
+                    vec![]
+                };
+                child.join().unwrap()?;
+                let _ = polling_stderr.join();
+                Ok(buf)
             }
             CmdChild::SyncFn { stdout, stderr, .. } => {
                 let _ = Self::log_stderr_output(stderr).join();

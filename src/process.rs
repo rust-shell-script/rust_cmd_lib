@@ -159,16 +159,16 @@ impl Cmds {
         // spawning all the sub-processes
         let mut children: Vec<CmdChild> = Vec::new();
         let len = self.cmds.len();
-        let mut last_pipe_in = None;
+        let mut prev_pipe_in = None;
         for (i, cmd_opt) in self.cmds.iter_mut().enumerate() {
             let mut cmd = cmd_opt.take().unwrap();
             if i != len - 1 {
                 // not the last, update redirects
                 let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
-                cmd.setup_redirects(&mut last_pipe_in, Some(pipe_writer))?;
-                last_pipe_in = Some(pipe_reader);
+                cmd.setup_redirects(&mut prev_pipe_in, Some(pipe_writer))?;
+                prev_pipe_in = Some(pipe_reader);
             } else {
-                cmd.setup_redirects(&mut last_pipe_in, None)?;
+                cmd.setup_redirects(&mut prev_pipe_in, None)?;
             }
             let child = cmd.spawn(current_dir, with_output)?;
             children.push(child);
@@ -366,10 +366,11 @@ impl Cmd {
             };
 
             let internal_cmd = CMD_MAP.lock().unwrap()[&arg0];
-            if pipe_out {
+            if pipe_out || with_output {
                 let handle = std::thread::spawn(move || internal_cmd(&mut env));
                 Ok(CmdChild::ThreadFn {
                     child: handle,
+                    stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
                     cmd: full_cmd,
                     ignore_error: self.ignore_error,
