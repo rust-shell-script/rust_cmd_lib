@@ -78,23 +78,19 @@ impl CmdChildren {
         let handle = self.0.pop().unwrap();
         match handle {
             CmdChild::Proc {
-                mut child,
-                mut stderr,
-                ..
+                mut child, stderr, ..
             } => {
                 if let Some(stdout) = child.stdout.take() {
                     f(Box::new(stdout));
                     let _ = child.kill();
                 }
-                CmdChild::log_stderr_output(&mut stderr);
+                let _ = CmdChild::log_stderr_output(stderr).join();
             }
             CmdChild::ThreadFn { .. } => {
                 panic!("should not wait pipe on thread");
             }
-            CmdChild::SyncFn {
-                mut stderr, stdout, ..
-            } => {
-                CmdChild::log_stderr_output(&mut stderr);
+            CmdChild::SyncFn { stderr, stdout, .. } => {
+                let _ = CmdChild::log_stderr_output(stderr).join();
                 if let Some(stdout) = stdout {
                     f(Box::new(stdout));
                 }
@@ -139,14 +135,14 @@ impl CmdChild {
         match self {
             CmdChild::Proc {
                 mut child,
-                mut stderr,
+                stderr,
                 cmd,
                 ignore_error,
             } => {
-                Self::log_stderr_output(&mut stderr);
+                let polling_stderr = Self::log_stderr_output(stderr);
                 Self::print_stdout_output(&mut child.stdout);
                 let status = child.wait()?;
-                Self::log_stderr_output(&mut stderr);
+                let _ = polling_stderr.join();
                 Self::print_stdout_output(&mut child.stdout);
                 if !ignore_error && !status.success() && (is_last || pipefail) {
                     return Err(Self::status_to_io_error(
@@ -158,13 +154,13 @@ impl CmdChild {
             CmdChild::ThreadFn {
                 child,
                 cmd,
-                mut stderr,
+                stderr,
                 ignore_error,
                 ..
             } => {
-                Self::log_stderr_output(&mut stderr);
+                let polling_stderr = Self::log_stderr_output(stderr);
                 let status = child.join();
-                Self::log_stderr_output(&mut stderr);
+                let _ = polling_stderr.join();
                 if ignore_error {
                     return Ok(());
                 }
@@ -183,11 +179,9 @@ impl CmdChild {
                 }
             }
             CmdChild::SyncFn {
-                mut stdout,
-                mut stderr,
-                ..
+                mut stdout, stderr, ..
             } => {
-                Self::log_stderr_output(&mut stderr);
+                let _ = Self::log_stderr_output(stderr).join();
                 Self::print_stdout_output(&mut stdout);
             }
         }
@@ -199,12 +193,12 @@ impl CmdChild {
             CmdChild::Proc {
                 child,
                 cmd,
-                mut stderr,
+                stderr,
                 ignore_error,
             } => {
-                Self::log_stderr_output(&mut stderr);
+                let polling_stderr = Self::log_stderr_output(stderr);
                 let output = child.wait_with_output()?;
-                Self::log_stderr_output(&mut stderr);
+                let _ = polling_stderr.join();
                 if !ignore_error && !output.status.success() {
                     return Err(Self::status_to_io_error(
                         output.status,
@@ -217,10 +211,8 @@ impl CmdChild {
             CmdChild::ThreadFn { cmd, .. } => {
                 panic!("{} thread should not be waited for output", cmd);
             }
-            CmdChild::SyncFn {
-                stdout, mut stderr, ..
-            } => {
-                Self::log_stderr_output(&mut stderr);
+            CmdChild::SyncFn { stdout, stderr, .. } => {
+                let _ = Self::log_stderr_output(stderr).join();
                 if let Some(mut out) = stdout {
                     let mut buf = vec![];
                     out.read_to_end(&mut buf)?;
@@ -240,13 +232,15 @@ impl CmdChild {
         }
     }
 
-    fn log_stderr_output(stderr: &mut Option<impl Read>) {
-        if let Some(stderr) = stderr {
-            BufReader::new(stderr)
-                .lines()
-                .filter_map(|line| line.ok())
-                .for_each(|line| info!("{}", line));
-        }
+    fn log_stderr_output(stderr: Option<PipeReader>) -> JoinHandle<()> {
+        std::thread::spawn(move || {
+            if let Some(stderr) = stderr {
+                BufReader::new(stderr)
+                    .lines()
+                    .filter_map(|line| line.ok())
+                    .for_each(|line| info!("{}", line))
+            }
+        })
     }
 
     fn status_to_io_error(status: ExitStatus, command: &str) -> Error {
