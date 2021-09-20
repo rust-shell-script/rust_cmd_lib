@@ -170,16 +170,15 @@ impl CmdChild {
                 if let Some(polling_stderr) = polling_stderr {
                     Self::wait_logging_thread(&cmd, polling_stderr);
                 }
-                if ignore_error {
-                    return Ok(());
-                }
                 match status {
                     Err(e) => {
-                        if is_last || pipefail {
+                        if !ignore_error && (is_last || pipefail) {
                             return Err(Error::new(
                                 ErrorKind::Other,
-                                format!("{} thread exited with error: {:?}", cmd, e),
+                                format!("{} thread joined with error: {:?}", cmd, e),
                             ));
+                        } else {
+                            warn!("{} thread joined with error: {:?}", cmd, e);
                         }
                     }
                     Ok(result) => {
@@ -221,20 +220,24 @@ impl CmdChild {
                 if let Some(polling_stderr) = polling_stderr {
                     Self::wait_logging_thread(&cmd, polling_stderr);
                 }
-                if !ignore_error && !output.status.success() {
-                    return Err(Self::status_to_io_error(
-                        output.status,
-                        &format!("{} exited with error", cmd),
-                    ));
-                } else {
-                    Ok(output.stdout)
+                if !output.status.success() {
+                    if ignore_error {
+                        warn!("{} exited with error: {}", cmd, output.status);
+                    } else {
+                        return Err(Self::status_to_io_error(
+                            output.status,
+                            &format!("{} exited with error", cmd),
+                        ));
+                    }
                 }
+                Ok(output.stdout)
             }
             CmdChild::ThreadFn {
                 cmd,
                 stdout,
                 stderr,
                 child,
+                ignore_error,
                 ..
             } => {
                 let polling_stderr = stderr.map(CmdChild::log_stderr_output);
@@ -246,9 +249,30 @@ impl CmdChild {
                 } else {
                     vec![]
                 };
-                child.join().unwrap()?;
+                let status = child.join();
                 if let Some(polling_stderr) = polling_stderr {
                     Self::wait_logging_thread(&cmd, polling_stderr);
+                }
+                match status {
+                    Err(e) => {
+                        if ignore_error {
+                            warn!("{} thread joined with error: {:?}", cmd, e);
+                        } else {
+                            return Err(Error::new(
+                                ErrorKind::Other,
+                                format!("{} thread joined with error: {:?}", cmd, e),
+                            ));
+                        }
+                    }
+                    Ok(result) => {
+                        if let Err(e) = result {
+                            if ignore_error {
+                                warn!("{} exited with error: {:?}", cmd, e);
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    }
                 }
                 Ok(buf)
             }

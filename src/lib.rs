@@ -200,8 +200,7 @@
 //! ```
 //!
 //! It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite
-//! logging implementation. Notice that if you don't provide any logger, the stdout and stderr
-//! output will be discarded.
+//! logging implementation. Notice that if you don't provide any logger, the stderr output will be discarded.
 //!
 //! ### Builtin commands
 //! #### cd
