@@ -80,17 +80,22 @@ impl CmdChildren {
             CmdChild::Proc {
                 mut child, stderr, ..
             } => {
+                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
                 if let Some(stdout) = child.stdout.take() {
                     f(Box::new(stdout));
                     let _ = child.kill();
                 }
-                let _ = CmdChild::log_stderr_output(stderr).join();
+                if let Some(polling_stderr) = polling_stderr {
+                    let _ = polling_stderr.join();
+                }
             }
             CmdChild::ThreadFn { .. } => {
                 panic!("should not wait pipe on thread");
             }
             CmdChild::SyncFn { stderr, stdout, .. } => {
-                let _ = CmdChild::log_stderr_output(stderr).join();
+                if let Some(stderr) = stderr {
+                    let _ = CmdChild::log_stderr_output(stderr).join();
+                }
                 if let Some(stdout) = stdout {
                     f(Box::new(stdout));
                 }
@@ -140,9 +145,11 @@ impl CmdChild {
                 cmd,
                 ignore_error,
             } => {
-                let polling_stderr = Self::log_stderr_output(stderr);
+                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
                 let status = child.wait()?;
-                let _ = polling_stderr.join();
+                if let Some(polling_stderr) = polling_stderr {
+                    Self::wait_stderr_thread(&cmd, polling_stderr)?;
+                }
                 Self::print_stdout_output(&mut child.stdout);
                 if !ignore_error && !status.success() && (is_last || pipefail) {
                     return Err(Self::status_to_io_error(
@@ -158,9 +165,13 @@ impl CmdChild {
                 ignore_error,
                 ..
             } => {
-                let polling_stderr = Self::log_stderr_output(stderr);
+                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
                 let status = child.join();
-                let _ = polling_stderr.join();
+                let polling_ret = if let Some(polling_stderr) = polling_stderr {
+                    Self::wait_stderr_thread(&cmd, polling_stderr)
+                } else {
+                    Ok(())
+                };
                 if ignore_error {
                     return Ok(());
                 }
@@ -175,17 +186,37 @@ impl CmdChild {
                     }
                     Ok(result) => {
                         check_result(result)?;
+                        if is_last || pipefail {
+                            return polling_ret;
+                        }
                     }
                 }
             }
             CmdChild::SyncFn {
-                mut stdout, stderr, ..
+                mut stdout,
+                stderr,
+                cmd,
+                ..
             } => {
-                let _ = Self::log_stderr_output(stderr).join();
+                if let Some(stderr) = stderr {
+                    Self::wait_stderr_thread(&cmd, Self::log_stderr_output(stderr))?;
+                }
                 Self::print_stdout_output(&mut stdout);
             }
         }
         Ok(())
+    }
+
+    fn wait_stderr_thread(cmd: &str, thread: JoinHandle<()>) -> CmdResult {
+        let join_ret = thread.join();
+        if let Err(e) = join_ret {
+            Err(Error::new(
+                ErrorKind::Other,
+                format!("{} stderr polling thread exited with error: {:?}", cmd, e),
+            ))
+        } else {
+            Ok(())
+        }
     }
 
     fn wait_with_output(self) -> Result<Vec<u8>> {
@@ -196,9 +227,11 @@ impl CmdChild {
                 stderr,
                 ignore_error,
             } => {
-                let polling_stderr = Self::log_stderr_output(stderr);
+                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
                 let output = child.wait_with_output()?;
-                let _ = polling_stderr.join();
+                if let Some(polling_stderr) = polling_stderr {
+                    Self::wait_stderr_thread(&cmd, polling_stderr)?;
+                }
                 if !ignore_error && !output.status.success() {
                     return Err(Self::status_to_io_error(
                         output.status,
@@ -209,12 +242,13 @@ impl CmdChild {
                 }
             }
             CmdChild::ThreadFn {
+                cmd,
                 stdout,
                 stderr,
                 child,
                 ..
             } => {
-                let polling_stderr = Self::log_stderr_output(stderr);
+                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
                 // simulate process's wait_with_output() API
                 let buf = if let Some(mut out) = stdout {
                     let mut buf = vec![];
@@ -224,11 +258,20 @@ impl CmdChild {
                     vec![]
                 };
                 child.join().unwrap()?;
-                let _ = polling_stderr.join();
+                if let Some(polling_stderr) = polling_stderr {
+                    Self::wait_stderr_thread(&cmd, polling_stderr)?;
+                }
                 Ok(buf)
             }
-            CmdChild::SyncFn { stdout, stderr, .. } => {
-                let _ = Self::log_stderr_output(stderr).join();
+            CmdChild::SyncFn {
+                cmd,
+                stdout,
+                stderr,
+                ..
+            } => {
+                if let Some(stderr) = stderr {
+                    Self::wait_stderr_thread(&cmd, Self::log_stderr_output(stderr))?;
+                }
                 if let Some(mut out) = stdout {
                     let mut buf = vec![];
                     out.read_to_end(&mut buf)?;
@@ -248,14 +291,12 @@ impl CmdChild {
         }
     }
 
-    fn log_stderr_output(stderr: Option<PipeReader>) -> JoinHandle<()> {
+    fn log_stderr_output(stderr: PipeReader) -> JoinHandle<()> {
         std::thread::spawn(move || {
-            if let Some(stderr) = stderr {
-                BufReader::new(stderr)
-                    .lines()
-                    .filter_map(|line| line.ok())
-                    .for_each(|line| info!("{}", line))
-            }
+            BufReader::new(stderr)
+                .lines()
+                .filter_map(|line| line.ok())
+                .for_each(|line| info!("{}", line))
         })
     }
 
