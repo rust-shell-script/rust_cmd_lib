@@ -1,4 +1,4 @@
-use crate::{CmdResult, FunResult};
+use crate::{process, CmdResult, FunResult};
 use log::{error, info, warn};
 use os_pipe::PipeReader;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result};
@@ -129,7 +129,6 @@ pub(crate) enum CmdChild {
 
 impl CmdChild {
     fn wait(self, is_last: bool) -> CmdResult {
-        let pipefail = std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into());
         match self {
             CmdChild::Proc {
                 mut child,
@@ -144,12 +143,12 @@ impl CmdChild {
                 }
                 Self::print_stdout_output(&mut child.stdout);
                 if !status.success() {
-                    if !ignore_error && (is_last || pipefail) {
+                    if !ignore_error && (is_last || process::pipefail_enabled()) {
                         return Err(Self::status_to_io_error(
                             status,
                             &format!("{} exited with error", cmd),
                         ));
-                    } else {
+                    } else if process::debug_enabled() {
                         warn!("{} exited with error: {}", cmd, status);
                     }
                 }
@@ -175,9 +174,9 @@ impl CmdChild {
                     }
                     Ok(result) => {
                         if let Err(e) = result {
-                            if !ignore_error && (is_last || pipefail) {
+                            if !ignore_error && (is_last || process::pipefail_enabled()) {
                                 return Err(e);
-                            } else {
+                            } else if process::debug_enabled() {
                                 warn!("{} exited with error: {:?}", cmd, e);
                             }
                         }
@@ -219,13 +218,13 @@ impl CmdChild {
                     Self::wait_logging_thread(&cmd, polling_stderr);
                 }
                 if !output.status.success() {
-                    if ignore_error {
-                        warn!("{} exited with error: {}", cmd, output.status);
-                    } else {
+                    if !ignore_error {
                         return Err(Self::status_to_io_error(
                             output.status,
                             &format!("{} exited with error", cmd),
                         ));
+                    } else if process::debug_enabled() {
+                        warn!("{} exited with error: {}", cmd, output.status);
                     }
                 }
                 Ok(output.stdout)
@@ -260,10 +259,10 @@ impl CmdChild {
                     }
                     Ok(result) => {
                         if let Err(e) = result {
-                            if ignore_error {
-                                warn!("{} exited with error: {:?}", cmd, e);
-                            } else {
+                            if !ignore_error {
                                 return Err(e);
+                            } else if process::debug_enabled() {
+                                warn!("{} exited with error: {:?}", cmd, e);
                             }
                         }
                     }

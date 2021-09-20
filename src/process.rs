@@ -84,6 +84,14 @@ pub fn set_pipefail(enable: bool) {
     std::env::set_var("CMD_LIB_PIPEFAIL", if enable { "1" } else { "0" });
 }
 
+pub(crate) fn debug_enabled() -> bool {
+    std::env::var("CMD_LIB_DEBUG") == Ok("1".into())
+}
+
+pub(crate) fn pipefail_enabled() -> bool {
+    std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into())
+}
+
 #[doc(hidden)]
 #[derive(Default)]
 pub struct GroupCmds {
@@ -152,7 +160,7 @@ impl Cmds {
     }
 
     fn spawn(&mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChildren> {
-        if std::env::var("CMD_LIB_DEBUG") == Ok("1".into()) {
+        if debug_enabled() {
             debug!("Running {} ...", self.get_full_cmds());
         }
 
