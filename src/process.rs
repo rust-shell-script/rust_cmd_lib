@@ -165,10 +165,10 @@ impl Cmds {
             if i != len - 1 {
                 // not the last, update redirects
                 let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
-                cmd.setup_redirects(&mut prev_pipe_in, Some(pipe_writer))?;
+                cmd.setup_redirects(&mut prev_pipe_in, Some(pipe_writer), with_output)?;
                 prev_pipe_in = Some(pipe_reader);
             } else {
-                cmd.setup_redirects(&mut prev_pipe_in, None)?;
+                cmd.setup_redirects(&mut prev_pipe_in, None, with_output)?;
             }
             let child = cmd.spawn(current_dir, with_output)?;
             children.push(child);
@@ -460,6 +460,7 @@ impl Cmd {
         &mut self,
         pipe_in: &mut Option<PipeReader>,
         pipe_out: Option<PipeWriter>,
+        with_output: bool,
     ) -> CmdResult {
         // set up error pipe
         let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
@@ -468,7 +469,7 @@ impl Cmd {
 
         if let Some(pipe) = pipe_out {
             self.stdout_redirect = Some(CmdOut::Pipe(pipe));
-        } else if self.in_cmd_map {
+        } else if self.in_cmd_map && with_output {
             // set up stdout pipe
             let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
             self.stdout_redirect = Some(CmdOut::Pipe(pipe_writer));

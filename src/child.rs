@@ -1,5 +1,5 @@
 use crate::{CmdResult, FunResult};
-use log::{error, info};
+use log::{error, info, warn};
 use os_pipe::PipeReader;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result};
 use std::process::{Child, ExitStatus};
@@ -148,7 +148,7 @@ impl CmdChild {
                 let polling_stderr = stderr.map(CmdChild::log_stderr_output);
                 let status = child.wait()?;
                 if let Some(polling_stderr) = polling_stderr {
-                    Self::wait_stderr_thread(&cmd, polling_stderr)?;
+                    Self::wait_logging_thread(&cmd, polling_stderr);
                 }
                 Self::print_stdout_output(&mut child.stdout);
                 if !ignore_error && !status.success() && (is_last || pipefail) {
@@ -167,11 +167,9 @@ impl CmdChild {
             } => {
                 let polling_stderr = stderr.map(CmdChild::log_stderr_output);
                 let status = child.join();
-                let polling_ret = if let Some(polling_stderr) = polling_stderr {
-                    Self::wait_stderr_thread(&cmd, polling_stderr)
-                } else {
-                    Ok(())
-                };
+                if let Some(polling_stderr) = polling_stderr {
+                    Self::wait_logging_thread(&cmd, polling_stderr);
+                }
                 if ignore_error {
                     return Ok(());
                 }
@@ -186,9 +184,6 @@ impl CmdChild {
                     }
                     Ok(result) => {
                         check_result(result)?;
-                        if is_last || pipefail {
-                            return polling_ret;
-                        }
                     }
                 }
             }
@@ -199,7 +194,7 @@ impl CmdChild {
                 ..
             } => {
                 if let Some(stderr) = stderr {
-                    Self::wait_stderr_thread(&cmd, Self::log_stderr_output(stderr))?;
+                    Self::wait_logging_thread(&cmd, Self::log_stderr_output(stderr));
                 }
                 Self::print_stdout_output(&mut stdout);
             }
@@ -207,15 +202,9 @@ impl CmdChild {
         Ok(())
     }
 
-    fn wait_stderr_thread(cmd: &str, thread: JoinHandle<()>) -> CmdResult {
-        let join_ret = thread.join();
-        if let Err(e) = join_ret {
-            Err(Error::new(
-                ErrorKind::Other,
-                format!("{} stderr polling thread exited with error: {:?}", cmd, e),
-            ))
-        } else {
-            Ok(())
+    fn wait_logging_thread(cmd: &str, thread: JoinHandle<()>) {
+        if let Err(e) = thread.join() {
+            warn!("{} logging thread exited with error: {:?}", cmd, e);
         }
     }
 
@@ -230,7 +219,7 @@ impl CmdChild {
                 let polling_stderr = stderr.map(CmdChild::log_stderr_output);
                 let output = child.wait_with_output()?;
                 if let Some(polling_stderr) = polling_stderr {
-                    Self::wait_stderr_thread(&cmd, polling_stderr)?;
+                    Self::wait_logging_thread(&cmd, polling_stderr);
                 }
                 if !ignore_error && !output.status.success() {
                     return Err(Self::status_to_io_error(
@@ -259,7 +248,7 @@ impl CmdChild {
                 };
                 child.join().unwrap()?;
                 if let Some(polling_stderr) = polling_stderr {
-                    Self::wait_stderr_thread(&cmd, polling_stderr)?;
+                    Self::wait_logging_thread(&cmd, polling_stderr);
                 }
                 Ok(buf)
             }
@@ -270,7 +259,7 @@ impl CmdChild {
                 ..
             } => {
                 if let Some(stderr) = stderr {
-                    Self::wait_stderr_thread(&cmd, Self::log_stderr_output(stderr))?;
+                    Self::wait_logging_thread(&cmd, Self::log_stderr_output(stderr));
                 }
                 if let Some(mut out) = stdout {
                     let mut buf = vec![];
