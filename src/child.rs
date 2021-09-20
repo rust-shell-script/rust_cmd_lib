@@ -130,14 +130,6 @@ pub(crate) enum CmdChild {
 impl CmdChild {
     fn wait(self, is_last: bool) -> CmdResult {
         let pipefail = std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into());
-        let check_result = |result| {
-            if let Err(e) = result {
-                if is_last || pipefail {
-                    return Err(e);
-                }
-            }
-            Ok(())
-        };
         match self {
             CmdChild::Proc {
                 mut child,
@@ -151,11 +143,15 @@ impl CmdChild {
                     Self::wait_logging_thread(&cmd, polling_stderr);
                 }
                 Self::print_stdout_output(&mut child.stdout);
-                if !ignore_error && !status.success() && (is_last || pipefail) {
-                    return Err(Self::status_to_io_error(
-                        status,
-                        &format!("{} exited with error", cmd),
-                    ));
+                if !status.success() {
+                    if !ignore_error && (is_last || pipefail) {
+                        return Err(Self::status_to_io_error(
+                            status,
+                            &format!("{} exited with error", cmd),
+                        ));
+                    } else {
+                        warn!("{} exited with error: {}", cmd, status);
+                    }
                 }
             }
             CmdChild::ThreadFn {
@@ -172,17 +168,19 @@ impl CmdChild {
                 }
                 match status {
                     Err(e) => {
-                        if !ignore_error && (is_last || pipefail) {
-                            return Err(Error::new(
-                                ErrorKind::Other,
-                                format!("{} thread joined with error: {:?}", cmd, e),
-                            ));
-                        } else {
-                            warn!("{} thread joined with error: {:?}", cmd, e);
-                        }
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            format!("{} thread joined with error: {:?}", cmd, e),
+                        ));
                     }
                     Ok(result) => {
-                        check_result(result)?;
+                        if let Err(e) = result {
+                            if !ignore_error && (is_last || pipefail) {
+                                return Err(e);
+                            } else {
+                                warn!("{} exited with error: {:?}", cmd, e);
+                            }
+                        }
                     }
                 }
             }
@@ -255,14 +253,10 @@ impl CmdChild {
                 }
                 match status {
                     Err(e) => {
-                        if ignore_error {
-                            warn!("{} thread joined with error: {:?}", cmd, e);
-                        } else {
-                            return Err(Error::new(
-                                ErrorKind::Other,
-                                format!("{} thread joined with error: {:?}", cmd, e),
-                            ));
-                        }
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            format!("{} thread joined with error: {:?}", cmd, e),
+                        ));
                     }
                     Ok(result) => {
                         if let Err(e) = result {
