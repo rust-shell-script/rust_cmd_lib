@@ -94,7 +94,8 @@
 //! run_cmd!(echo "This is the message: $msg")?;
 //!
 //! // pipe commands are also supported
-//! run_cmd!(du -ah . | sort -hr | head -n 10)?;
+//! let dir = "/var/log";
+//! run_cmd!(du -ah $dir | sort -hr | head -n 10)?;
 //!
 //! // or a group of commands
 //! // if any command fails, just return Err(...)
@@ -140,7 +141,7 @@
 //! When passing parameters to `run_cmd!` and `run_fun!` macros, if they are not part to rust
 //! [String literals](https://doc.rust-lang.org/reference/tokens.html#string-literals), they will be
 //! converted to string as an atomic component, so you don't need to quote them. The parameters will be
-//! like $a or ${a} in `run_cmd!` or `run_fun!` macros.
+//! like `$a` or `${a}` in `run_cmd!` or `run_fun!` macros.
 //!
 //! ```
 //! # use cmd_lib::run_cmd;
@@ -168,7 +169,7 @@
 //! ```
 //! Notice here `$awk_opts` will be treated as single option passing to awk command.
 //!
-//! If you want to use dynamic parameters, you can use $[] to access vector variable:
+//! If you want to use dynamic parameters, you can use `$[]` to access vector variable:
 //! ```no_run
 //! # use cmd_lib::run_cmd;
 //! let gopts = vec![vec!["-l", "-a", "/"], vec!["-a", "/var"]];
@@ -226,17 +227,18 @@
 //!
 //! #### echo
 //!
-//! Print messages to stdout, which needs to be imported with `use_builtin_cmd!()` macro.
+//! Print messages to stdout, which needs to be imported with `use_builtin_cmd!` macro.
 //!
 //! ```
 //! # use cmd_lib::{run_cmd, use_builtin_cmd};
-//! use_builtin_cmd!(echo); // find more builtin commands in src/builtins.rs
+//! use_builtin_cmd!(echo, warn); // find more builtin commands in src/builtins.rs
 //! run_cmd!(echo "This is from builtin command!")?;
+//! run_cmd!(warn "This is from builtin command!")?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
 //! ### Macros to register your own commands
-//! Declare your function with `export_cmd` attribute, and import it with `use_custom_cmd` macro:
+//! Declare your function with `#[export_cmd(..)]` attribute, and import it with `use_custom_cmd!` macro:
 //!
 //! ```
 //! # use cmd_lib::*;
@@ -256,12 +258,12 @@
 //!
 //! ### Low-level process spawning macros
 //!
-//! `spawn!()` macro executes the whole command as a child process, returning a handle to it. By
+//! `spawn!` macro executes the whole command as a child process, returning a handle to it. By
 //! default, stdin, stdout and stderr are inherited from the parent. The process will run in the
 //! background, so you can run other stuff concurrently. You can call `wait_cmd_result()` to wait
 //! for the process to finish.
 //!
-//! With `spawn_with_output!()` you can get output result by calling `wait_fun_result()`.
+//! With `spawn_with_output!` you can get output result by calling `wait_fun_result()`.
 //!
 //! ```no_run
 //! # use cmd_lib::*;
