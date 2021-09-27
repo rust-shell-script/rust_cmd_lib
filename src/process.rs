@@ -11,7 +11,7 @@ use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::Mutex;
 
 /// Environment for builtin or custom commands
@@ -407,8 +407,6 @@ impl Cmd {
             // update stdout
             if let Some(redirect_out) = self.stdout_redirect.take() {
                 cmd.stdout(redirect_out);
-            } else if with_output {
-                cmd.stdout(Stdio::piped());
             }
 
             // update stderr
@@ -420,6 +418,7 @@ impl Cmd {
             let child = cmd.spawn()?;
             Ok(CmdChild::Proc {
                 cmd: full_cmd,
+                stdout: self.stdout_logging,
                 stderr: self.stderr_logging,
                 ignore_error: self.ignore_error,
                 child,
@@ -477,7 +476,7 @@ impl Cmd {
 
         if let Some(pipe) = pipe_out {
             self.stdout_redirect = Some(CmdOut::Pipe(pipe));
-        } else if self.in_cmd_map && with_output {
+        } else if with_output {
             // set up stdout pipe
             let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
             self.stdout_redirect = Some(CmdOut::Pipe(pipe_writer));
