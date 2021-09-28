@@ -9,58 +9,81 @@ use std::thread::JoinHandle;
 /// optionally.
 ///
 /// Calling `spawn!` or `spawn_with_output!` macro will return `Result<CmdChildren>`
-pub struct CmdChildren(Vec<CmdChild>);
+pub struct CmdChildren {
+    children: Vec<CmdChild>,
+    ignore_error: bool,
+}
+
 impl CmdChildren {
-    pub(crate) fn from(children: Vec<CmdChild>) -> Self {
-        Self(children)
+    pub(crate) fn from(children: Vec<CmdChild>, ignore_error: bool) -> Self {
+        Self {
+            children,
+            ignore_error,
+        }
     }
 
     pub fn wait_cmd_result(&mut self) -> CmdResult {
         let ret = self.wait_cmd_result_nolog();
         if let Err(ref err) = ret {
-            error!(
-                "Running {} failed, Error: {}",
-                CmdChild::get_full_cmd(&self.0),
-                err
-            );
+            if self.ignore_error {
+                return Ok(());
+            } else {
+                error!(
+                    "Running {} failed, Error: {}",
+                    CmdChild::get_full_cmd(&self.children),
+                    err
+                );
+            }
         }
         ret
     }
 
     pub(crate) fn wait_cmd_result_nolog(&mut self) -> CmdResult {
         // wait last process result
-        let handle = self.0.pop().unwrap();
-        handle.wait(true)?;
-        Self::wait_children(&mut self.0)
+        let handle = self.children.pop().unwrap();
+        if let Err(e) = handle.wait(true, self.ignore_error) {
+            if !self.ignore_error {
+                let _ = Self::wait_children(&mut self.children, self.ignore_error);
+                return Err(e);
+            }
+        }
+        Self::wait_children(&mut self.children, self.ignore_error)
     }
 
-    fn wait_children(children: &mut Vec<CmdChild>) -> CmdResult {
+    fn wait_children(children: &mut Vec<CmdChild>, ignore_error: bool) -> CmdResult {
+        let mut ret = Ok(());
         while !children.is_empty() {
             let child_handle = children.pop().unwrap();
-            child_handle.wait(false)?;
+            if let Err(e) = child_handle.wait(false, ignore_error) {
+                ret = Err(e);
+            }
         }
-        Ok(())
+        ret
     }
 
     pub fn wait_fun_result(&mut self) -> FunResult {
         let ret = self.wait_fun_result_nolog();
         if let Err(ref err) = ret {
-            error!(
-                "Running {} failed, Error: {}",
-                CmdChild::get_full_cmd(&self.0),
-                err
-            );
+            if self.ignore_error {
+                return Ok("".into());
+            } else {
+                error!(
+                    "Running {} failed, Error: {}",
+                    CmdChild::get_full_cmd(&self.children),
+                    err
+                );
+            }
         }
         ret
     }
 
     pub(crate) fn wait_fun_result_nolog(&mut self) -> FunResult {
         // wait last process result
-        let handle = self.0.pop().unwrap();
-        let wait_last = handle.wait_with_output();
+        let handle = self.children.pop().unwrap();
+        let wait_last = handle.wait_with_output(self.ignore_error);
         match wait_last {
             Err(e) => {
-                let _ = CmdChildren::wait_children(&mut self.0);
+                let _ = CmdChildren::wait_children(&mut self.children, self.ignore_error);
                 Err(e)
             }
             Ok(output) => {
@@ -68,14 +91,14 @@ impl CmdChildren {
                 if ret.ends_with('\n') {
                     ret.pop();
                 }
-                CmdChildren::wait_children(&mut self.0)?;
+                CmdChildren::wait_children(&mut self.children, self.ignore_error)?;
                 Ok(ret)
             }
         }
     }
 
     pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) {
-        let handle = self.0.pop().unwrap();
+        let handle = self.children.pop().unwrap();
         match handle {
             CmdChild::Proc {
                 mut child,
@@ -116,7 +139,7 @@ impl CmdChildren {
                 CmdChild::wait_logging_thread(&cmd, polling_stderr);
             }
         };
-        let _ = Self::wait_children(&mut self.0);
+        let _ = Self::wait_children(&mut self.children, self.ignore_error);
     }
 }
 
@@ -127,14 +150,12 @@ pub(crate) enum CmdChild {
         cmd: String,
         stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
-        ignore_error: bool,
     },
     ThreadFn {
         child: JoinHandle<CmdResult>,
         cmd: String,
         stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
-        ignore_error: bool,
     },
     SyncFn {
         cmd: String,
@@ -144,13 +165,12 @@ pub(crate) enum CmdChild {
 }
 
 impl CmdChild {
-    fn wait(self, is_last: bool) -> CmdResult {
+    fn wait(self, is_last: bool, ignore_error: bool) -> CmdResult {
         match self {
             CmdChild::Proc {
                 mut child,
                 stderr,
                 cmd,
-                ignore_error,
                 ..
             } => {
                 let polling_stderr = stderr.map(CmdChild::log_stderr_output);
@@ -168,11 +188,7 @@ impl CmdChild {
                 }
             }
             CmdChild::ThreadFn {
-                child,
-                cmd,
-                stderr,
-                ignore_error,
-                ..
+                child, cmd, stderr, ..
             } => {
                 let polling_stderr = stderr.map(CmdChild::log_stderr_output);
                 let status = child.join();
@@ -202,7 +218,7 @@ impl CmdChild {
         Ok(())
     }
 
-    fn wait_with_output(self) -> Result<Vec<u8>> {
+    fn wait_with_output(self, ignore_error: bool) -> Result<Vec<u8>> {
         let read_to_buf = |stdout: Option<PipeReader>| -> Result<Vec<u8>> {
             if let Some(mut out) = stdout {
                 let mut buf = vec![];
@@ -218,7 +234,6 @@ impl CmdChild {
                 cmd,
                 stdout,
                 stderr,
-                ignore_error,
             } => {
                 drop(child.stdin.take());
                 let polling_stderr = stderr.map(CmdChild::log_stderr_output);
@@ -240,7 +255,6 @@ impl CmdChild {
                 stdout,
                 stderr,
                 child,
-                ignore_error,
                 ..
             } => {
                 let polling_stderr = stderr.map(CmdChild::log_stderr_output);

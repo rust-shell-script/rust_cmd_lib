@@ -3,7 +3,7 @@ use crate::io::{CmdIn, CmdOut};
 use crate::{CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
-use log::{debug, error};
+use log::{debug, error, warn};
 use os_pipe::{self, PipeReader, PipeWriter};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
@@ -143,15 +143,24 @@ impl GroupCmds {
 pub struct Cmds {
     cmds: Vec<Option<Cmd>>,
     full_cmds: String,
+    ignore_error: bool,
 }
 
 impl Cmds {
     pub fn pipe(mut self, cmd: Cmd) -> Self {
+        let mut ignore_error = false;
         if !self.full_cmds.is_empty() {
             self.full_cmds += " | ";
         }
         self.full_cmds += &cmd.debug_str();
-        self.cmds.push(Some(cmd.gen_command()));
+        self.cmds.push(Some(cmd.gen_command(&mut ignore_error)));
+        if ignore_error {
+            if self.cmds.len() == 1 {
+                self.ignore_error = true;
+            } else {
+                warn!("Builtin \"ignore\" command at wrong position");
+            }
+        }
         self
     }
 
@@ -182,7 +191,7 @@ impl Cmds {
             children.push(child);
         }
 
-        Ok(CmdChildren::from(children))
+        Ok(CmdChildren::from(children, self.ignore_error))
     }
 
     fn run_cmd(&mut self, current_dir: &mut PathBuf) -> CmdResult {
@@ -233,7 +242,6 @@ pub struct Cmd {
     args: Vec<OsString>,
     vars: HashMap<String, String>,
     redirects: Vec<Redirect>,
-    ignore_error: bool,
 
     // for running
     std_cmd: Option<Command>,
@@ -251,7 +259,6 @@ impl Default for Cmd {
             args: vec![],
             vars: HashMap::new(),
             redirects: vec![],
-            ignore_error: false,
             std_cmd: None,
             stdin_redirect: None,
             stdout_redirect: None,
@@ -266,10 +273,6 @@ impl Cmd {
     pub fn add_arg(mut self, arg: OsString) -> Self {
         let arg_str = arg.to_string_lossy().to_string();
         if self.args.is_empty() {
-            if arg_str == "ignore" {
-                self.ignore_error = true;
-                return self;
-            }
             let v: Vec<&str> = arg_str.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 self.vars.insert(v[0].into(), v[1].into());
@@ -319,11 +322,15 @@ impl Cmd {
         ret
     }
 
-    fn gen_command(mut self) -> Self {
+    fn gen_command(mut self, ignore_error: &mut bool) -> Self {
         if !self.in_cmd_map {
-            let cmds: Vec<OsString> = self.args.to_vec();
-            let mut cmd = Command::new(&cmds[0]);
-            cmd.args(&cmds[1..]);
+            let mut start = 0;
+            if self.args[0] == "ignore" {
+                start = 1;
+                *ignore_error = true;
+            }
+            let mut cmd = Command::new(&self.args[start]);
+            cmd.args(&self.args[start + 1..]);
             for (k, v) in self.vars.iter() {
                 cmd.env(k, v);
             }
@@ -381,7 +388,6 @@ impl Cmd {
                     stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
                     cmd: full_cmd,
-                    ignore_error: self.ignore_error,
                 })
             } else {
                 internal_cmd(&mut env)?;
@@ -420,7 +426,6 @@ impl Cmd {
                 cmd: full_cmd,
                 stdout: self.stdout_logging,
                 stderr: self.stderr_logging,
-                ignore_error: self.ignore_error,
                 child,
             })
         }
@@ -469,23 +474,22 @@ impl Cmd {
         pipe_out: Option<PipeWriter>,
         with_output: bool,
     ) -> CmdResult {
-        // set up error pipe
-        let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
-        self.stderr_redirect = Some(CmdOut::Pipe(pipe_writer));
-        self.stderr_logging = Some(pipe_reader);
-
+        // set up stdin pipe
+        if let Some(pipe) = pipe_in.take() {
+            self.stdin_redirect = Some(CmdIn::Pipe(pipe));
+        }
+        // set up stdout pipe
         if let Some(pipe) = pipe_out {
             self.stdout_redirect = Some(CmdOut::Pipe(pipe));
         } else if with_output {
-            // set up stdout pipe
             let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
             self.stdout_redirect = Some(CmdOut::Pipe(pipe_writer));
             self.stdout_logging = Some(pipe_reader);
         }
-
-        if let Some(pipe) = pipe_in.take() {
-            self.stdin_redirect = Some(CmdIn::Pipe(pipe));
-        }
+        // set up stderr pipe
+        let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
+        self.stderr_redirect = Some(CmdOut::Pipe(pipe_writer));
+        self.stderr_logging = Some(pipe_reader);
 
         for redirect in self.redirects.iter() {
             match redirect {
