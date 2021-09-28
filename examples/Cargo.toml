@@ -13,15 +13,3 @@ byte-unit = "4.0"
 [[example]]
 name = "dd_test"
 path = "dd_test.rs"
-
-[[example]]
-name = "pipes"
-path = "pipes.rs"
-
-[[example]]
-name = "tetris"
-path = "tetris.rs"
-
-[[example]]
-name = "rust_cookbook"
-path = "rust_cookbook.rs"
