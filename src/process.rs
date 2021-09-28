@@ -111,8 +111,13 @@ impl GroupCmds {
     pub fn run_cmd(&mut self) -> CmdResult {
         for cmds in self.group_cmds.iter_mut() {
             if let Err(e) = cmds.run_cmd(&mut self.current_dir) {
-                error!("Running {} failed, Error: {}", cmds.get_full_cmds(), e);
-                return Err(e);
+                let msg = format!("Running {} failed, Error: {}", cmds.get_full_cmds(), e);
+                if cmds.ignore_error {
+                    warn!("{}", msg);
+                } else {
+                    error!("{}", msg);
+                    return Err(e);
+                }
             }
         }
         Ok(())
@@ -123,9 +128,15 @@ impl GroupCmds {
         let mut last_cmd = self.group_cmds.pop().unwrap();
         self.run_cmd()?;
         // run last function command
-        let ret = last_cmd.run_fun(&mut self.current_dir);
+        let mut ret = last_cmd.run_fun(&mut self.current_dir);
         if let Err(ref e) = ret {
-            error!("Running {} failed, Error: {}", last_cmd.get_full_cmds(), e);
+            let msg = format!("Running {} failed, Error: {}", last_cmd.get_full_cmds(), e);
+            if last_cmd.ignore_error {
+                warn!("{}", msg);
+                ret = Ok("".into());
+            } else {
+                error!("{}", msg);
+            }
         }
         ret
     }
@@ -151,20 +162,20 @@ pub struct Cmds {
 
 impl Cmds {
     pub fn pipe(mut self, cmd: Cmd) -> Self {
-        let mut ignore_error = false;
         if !self.full_cmds.is_empty() {
             self.full_cmds += " | ";
         }
         self.full_cmds += &cmd.debug_str();
-        self.cmds.push(Some(cmd.gen_command(&mut ignore_error)));
+        let (ignore_error, cmd) = cmd.gen_command();
         if ignore_error {
-            if self.cmds.len() == 1 {
-                // first command
+            if self.cmds.is_empty() {
+                // first command in the pipe
                 self.ignore_error = true;
             } else {
                 warn!("Builtin \"ignore\" command at wrong position");
             }
         }
+        self.cmds.push(Some(cmd));
         self
     }
 
@@ -276,14 +287,7 @@ impl Default for Cmd {
 impl Cmd {
     pub fn add_arg(mut self, arg: OsString) -> Self {
         let arg_str = arg.to_string_lossy().to_string();
-        if arg_str != IGNORE_CMD
-            && self
-                .args
-                .iter()
-                .skip_while(|cmd| *cmd == IGNORE_CMD)
-                .count()
-                == 0
-        {
+        if arg_str != IGNORE_CMD && !self.args.iter().any(|cmd| *cmd != IGNORE_CMD) {
             let v: Vec<&str> = arg_str.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 self.vars.insert(v[0].into(), v[1].into());
@@ -333,16 +337,13 @@ impl Cmd {
         ret
     }
 
-    fn gen_command(mut self, ignore_error: &mut bool) -> Self {
+    fn gen_command(mut self) -> (bool, Self) {
         let args: Vec<OsString> = self
             .args
             .iter()
             .skip_while(|cmd| *cmd == IGNORE_CMD)
             .map(|s| s.into())
             .collect();
-        if self.args.len() > args.len() {
-            *ignore_error = true;
-        }
         if !self.in_cmd_map {
             let mut cmd = Command::new(&args[0]);
             cmd.args(&args[1..]);
@@ -351,7 +352,7 @@ impl Cmd {
             }
             self.std_cmd = Some(cmd);
         }
-        self
+        (self.args.len() > args.len(), self)
     }
 
     fn spawn(mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChild> {
