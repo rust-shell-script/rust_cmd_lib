@@ -14,6 +14,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 
+const CD_CMD: &str = "cd";
+const IGNORE_CMD: &str = "ignore";
+
 /// Environment for builtin or custom commands
 pub struct CmdEnv {
     stdin: CmdIn,
@@ -156,6 +159,7 @@ impl Cmds {
         self.cmds.push(Some(cmd.gen_command(&mut ignore_error)));
         if ignore_error {
             if self.cmds.len() == 1 {
+                // first command
                 self.ignore_error = true;
             } else {
                 warn!("Builtin \"ignore\" command at wrong position");
@@ -272,7 +276,14 @@ impl Default for Cmd {
 impl Cmd {
     pub fn add_arg(mut self, arg: OsString) -> Self {
         let arg_str = arg.to_string_lossy().to_string();
-        if self.args.is_empty() {
+        if arg_str != IGNORE_CMD
+            && self
+                .args
+                .iter()
+                .skip_while(|cmd| *cmd == IGNORE_CMD)
+                .count()
+                == 0
+        {
             let v: Vec<&str> = arg_str.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 self.vars.insert(v[0].into(), v[1].into());
@@ -297,11 +308,11 @@ impl Cmd {
     }
 
     fn arg0(&self) -> OsString {
-        if self.args.is_empty() {
-            "".into()
-        } else {
-            self.args[0].clone()
+        let mut args = self.args.iter().skip_while(|cmd| *cmd == IGNORE_CMD);
+        if let Some(arg) = args.next() {
+            return arg.into();
         }
+        "".into()
     }
 
     fn debug_str(&self) -> String {
@@ -323,14 +334,18 @@ impl Cmd {
     }
 
     fn gen_command(mut self, ignore_error: &mut bool) -> Self {
+        let args: Vec<OsString> = self
+            .args
+            .iter()
+            .skip_while(|cmd| *cmd == IGNORE_CMD)
+            .map(|s| s.into())
+            .collect();
+        if self.args.len() > args.len() {
+            *ignore_error = true;
+        }
         if !self.in_cmd_map {
-            let mut start = 0;
-            if self.args[0] == "ignore" {
-                start = 1;
-                *ignore_error = true;
-            }
-            let mut cmd = Command::new(&self.args[start]);
-            cmd.args(&self.args[start + 1..]);
+            let mut cmd = Command::new(&args[0]);
+            cmd.args(&args[1..]);
             for (k, v) in self.vars.iter() {
                 cmd.env(k, v);
             }
@@ -342,7 +357,7 @@ impl Cmd {
     fn spawn(mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChild> {
         let arg0 = self.arg0();
         let full_cmd = self.debug_str();
-        if arg0 == "cd" {
+        if arg0 == CD_CMD {
             self.run_cd_cmd(current_dir)?;
             Ok(CmdChild::SyncFn {
                 cmd: full_cmd,
@@ -355,6 +370,7 @@ impl Cmd {
                 args: self
                     .args
                     .into_iter()
+                    .skip_while(|cmd| *cmd == IGNORE_CMD)
                     .map(|s| s.to_string_lossy().to_string())
                     .collect(),
                 vars: self.vars,
