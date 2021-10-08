@@ -87,12 +87,23 @@ pub fn set_pipefail(enable: bool) {
     std::env::set_var("CMD_LIB_PIPEFAIL", if enable { "1" } else { "0" });
 }
 
+/// set flag to log command error or not, true by default
+///
+/// Setting environment variable CMD_LIB_LOG_ERROR=0|1 has the same effect
+pub fn set_log_cmd_error(enable: bool) {
+    std::env::set_var("CMD_LIB_LOG_ERROR", if enable { "1" } else { "0" });
+}
+
 pub(crate) fn debug_enabled() -> bool {
     std::env::var("CMD_LIB_DEBUG") == Ok("1".into())
 }
 
 pub(crate) fn pipefail_enabled() -> bool {
     std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into())
+}
+
+pub(crate) fn log_cmd_error_enabled() -> bool {
+    std::env::var("CMD_LIB_LOG_ERROR") != Ok("0".into())
 }
 
 #[doc(hidden)]
@@ -112,12 +123,7 @@ impl GroupCmds {
         for cmds in self.group_cmds.iter_mut() {
             if let Err(e) = cmds.run_cmd(&mut self.current_dir) {
                 let msg = format!("Running {} failed, Error: {}", cmds.get_full_cmds(), e);
-                if cmds.ignore_error {
-                    warn!("{}", msg);
-                } else {
-                    error!("{}", msg);
-                    return Err(e);
-                }
+                Self::report_error(e, &msg, cmds.ignore_error)?;
             }
         }
         Ok(())
@@ -129,14 +135,10 @@ impl GroupCmds {
         self.run_cmd()?;
         // run last function command
         let mut ret = last_cmd.run_fun(&mut self.current_dir);
-        if let Err(ref e) = ret {
+        if let Err(e) = ret {
             let msg = format!("Running {} failed, Error: {}", last_cmd.get_full_cmds(), e);
-            if last_cmd.ignore_error {
-                warn!("{}", msg);
-                ret = Ok("".into());
-            } else {
-                error!("{}", msg);
-            }
+            Self::report_error(e, &msg, last_cmd.ignore_error)?;
+            ret = Ok("".into());
         }
         ret
     }
@@ -146,9 +148,25 @@ impl GroupCmds {
         let mut cmds = self.group_cmds.pop().unwrap();
         let ret = cmds.spawn(&mut self.current_dir, with_output);
         if let Err(ref e) = ret {
-            error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), e);
+            if log_cmd_error_enabled() {
+                error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), e);
+            }
         }
         ret
+    }
+
+    fn report_error(e: Error, msg: &str, ignore_error: bool) -> CmdResult {
+        if ignore_error {
+            if log_cmd_error_enabled() {
+                warn!("{}", msg);
+            }
+        } else {
+            if log_cmd_error_enabled() {
+                error!("{}", msg);
+            }
+            return Err(e);
+        }
+        Ok(())
     }
 }
 
