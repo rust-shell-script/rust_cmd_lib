@@ -185,8 +185,9 @@
 //!
 //! ### Logging
 //!
-//! This library provides convenient macros and builtin commands for logging. It also automatically logs
-//! command execution failures, along with messages which were printed to stderr originally.
+//! This library provides convenient macros and builtin commands for logging. All messages which
+//! are printed to stderr will be logged. Since it is returning result type, you can also log the
+//! errors if command execution fails.
 //!
 //! ```no_run
 //! # use cmd_lib::*;
@@ -197,7 +198,6 @@
 //! assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
 //! // output:
 //! // INFO - mkdir: cannot create directory ‘/tmp/folder with spaces’: File exists
-//! // ERROR - Running ["mkdir", "/tmp/folder with spaces"] failed, Error: ["mkdir", "/tmp/folder with spaces"] exited with error; status code: 1
 //! ```
 //!
 //! It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite
@@ -353,8 +353,7 @@ pub use child::CmdChildren;
 pub use log;
 pub use logger::init_builtin_logger;
 pub use process::{
-    export_cmd, set_debug, set_log_cmd_error, set_pipefail, AsOsStr, Cmd, CmdEnv, CmdString, Cmds,
-    GroupCmds, Redirect,
+    export_cmd, set_debug, set_pipefail, AsOsStr, Cmd, CmdEnv, CmdString, Cmds, GroupCmds, Redirect,
 };
 
 mod builtins;

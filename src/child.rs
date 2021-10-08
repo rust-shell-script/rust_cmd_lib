@@ -1,5 +1,5 @@
 use crate::{process, CmdResult, FunResult};
-use log::{error, info, warn};
+use log::{info, warn};
 use os_pipe::PipeReader;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result};
 use std::process::{Child, ExitStatus};
@@ -11,50 +11,28 @@ use std::thread::JoinHandle;
 /// Calling `spawn!` or `spawn_with_output!` macro will return `Result<CmdChildren>`
 pub struct CmdChildren {
     children: Vec<CmdChild>,
-    ignore_error: bool,
 }
 
 impl CmdChildren {
-    pub(crate) fn from(children: Vec<CmdChild>, ignore_error: bool) -> Self {
-        Self {
-            children,
-            ignore_error,
-        }
+    pub(crate) fn from(children: Vec<CmdChild>) -> Self {
+        Self { children }
     }
 
     pub fn wait_cmd_result(&mut self) -> CmdResult {
-        let ret = self.wait_cmd_result_nolog();
-        if let Err(ref err) = ret {
-            if self.ignore_error {
-                return Ok(());
-            } else {
-                error!(
-                    "Running {} failed, Error: {}",
-                    CmdChild::get_full_cmd(&self.children),
-                    err
-                );
-            }
-        }
-        ret
-    }
-
-    pub(crate) fn wait_cmd_result_nolog(&mut self) -> CmdResult {
-        // wait last process result
+        // wait for the last child result
         let handle = self.children.pop().unwrap();
-        if let Err(e) = handle.wait(true, self.ignore_error) {
-            if !self.ignore_error {
-                let _ = Self::wait_children(&mut self.children, self.ignore_error);
-                return Err(e);
-            }
+        if let Err(e) = handle.wait(true) {
+            let _ = Self::wait_children(&mut self.children);
+            return Err(e);
         }
-        Self::wait_children(&mut self.children, self.ignore_error)
+        Self::wait_children(&mut self.children)
     }
 
-    fn wait_children(children: &mut Vec<CmdChild>, ignore_error: bool) -> CmdResult {
+    fn wait_children(children: &mut Vec<CmdChild>) -> CmdResult {
         let mut ret = Ok(());
         while !children.is_empty() {
             let child_handle = children.pop().unwrap();
-            if let Err(e) = child_handle.wait(false, ignore_error) {
+            if let Err(e) = child_handle.wait(false) {
                 ret = Err(e);
             }
         }
@@ -62,28 +40,12 @@ impl CmdChildren {
     }
 
     pub fn wait_fun_result(&mut self) -> FunResult {
-        let ret = self.wait_fun_result_nolog();
-        if let Err(ref err) = ret {
-            if self.ignore_error {
-                return Ok("".into());
-            } else {
-                error!(
-                    "Running {} failed, Error: {}",
-                    CmdChild::get_full_cmd(&self.children),
-                    err
-                );
-            }
-        }
-        ret
-    }
-
-    pub(crate) fn wait_fun_result_nolog(&mut self) -> FunResult {
-        // wait last process result
+        // wait for the last child result
         let handle = self.children.pop().unwrap();
-        let wait_last = handle.wait_with_output(self.ignore_error);
+        let wait_last = handle.wait_with_output();
         match wait_last {
             Err(e) => {
-                let _ = CmdChildren::wait_children(&mut self.children, self.ignore_error);
+                let _ = CmdChildren::wait_children(&mut self.children);
                 Err(e)
             }
             Ok(output) => {
@@ -91,134 +53,101 @@ impl CmdChildren {
                 if ret.ends_with('\n') {
                     ret.pop();
                 }
-                CmdChildren::wait_children(&mut self.children, self.ignore_error)?;
+                CmdChildren::wait_children(&mut self.children)?;
                 Ok(ret)
             }
         }
     }
 
-    pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) {
-        let handle = self.children.pop().unwrap();
-        match handle {
-            CmdChild::Proc {
-                mut child,
-                stdout,
-                stderr,
-                cmd,
-                ..
-            } => {
-                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
-                if let Some(stdout) = stdout {
+    pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) -> CmdResult {
+        let child = self.children.pop().unwrap();
+        match child.handle {
+            CmdChildHandle::Proc(proc) => {
+                let polling_stderr = child.stderr.map(CmdChild::log_stderr_output);
+                if let Some(stdout) = child.stdout {
                     f(Box::new(stdout));
-                    let _ = child.kill();
+                    let _ = proc?.kill();
                 }
-                CmdChild::wait_logging_thread(&cmd, polling_stderr);
+                CmdChild::wait_logging_thread(&child.cmd, polling_stderr);
             }
-            CmdChild::ThreadFn {
-                stderr,
-                stdout,
-                cmd,
-                ..
-            } => {
-                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
-                if let Some(stdout) = stdout {
+            CmdChildHandle::Thread(thread) => {
+                let _ = thread?;
+                let polling_stderr = child.stderr.map(CmdChild::log_stderr_output);
+                if let Some(stdout) = child.stdout {
                     f(Box::new(stdout));
                 }
-                CmdChild::wait_logging_thread(&cmd, polling_stderr);
+                CmdChild::wait_logging_thread(&child.cmd, polling_stderr);
             }
-            CmdChild::SyncFn {
-                stderr,
-                stdout,
-                cmd,
-                ..
-            } => {
-                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
-                if let Some(stdout) = stdout {
+            CmdChildHandle::SyncFn(sync_fn) => {
+                let _ = sync_fn?;
+                let polling_stderr = child.stderr.map(CmdChild::log_stderr_output);
+                if let Some(stdout) = child.stdout {
                     f(Box::new(stdout));
                 }
-                CmdChild::wait_logging_thread(&cmd, polling_stderr);
+                CmdChild::wait_logging_thread(&child.cmd, polling_stderr);
             }
         };
-        let _ = Self::wait_children(&mut self.children, self.ignore_error);
+        Self::wait_children(&mut self.children)
     }
 }
 
 #[derive(Debug)]
-pub(crate) enum CmdChild {
-    Proc {
-        child: Child,
-        cmd: String,
-        stdout: Option<PipeReader>,
-        stderr: Option<PipeReader>,
-    },
-    ThreadFn {
-        child: JoinHandle<CmdResult>,
-        cmd: String,
-        stdout: Option<PipeReader>,
-        stderr: Option<PipeReader>,
-    },
-    SyncFn {
-        cmd: String,
-        stdout: Option<PipeReader>,
-        stderr: Option<PipeReader>,
-    },
+pub(crate) struct CmdChild {
+    pub(crate) handle: CmdChildHandle,
+    pub(crate) cmd: String,
+    pub(crate) stdout: Option<PipeReader>,
+    pub(crate) stderr: Option<PipeReader>,
+}
+
+#[derive(Debug)]
+pub(crate) enum CmdChildHandle {
+    Proc(Result<Child>),
+    Thread(Result<JoinHandle<CmdResult>>),
+    SyncFn(CmdResult),
 }
 
 impl CmdChild {
-    fn wait(self, is_last: bool, ignore_error: bool) -> CmdResult {
-        match self {
-            CmdChild::Proc {
-                mut child,
-                stderr,
-                cmd,
-                ..
-            } => {
-                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
-                let status = child.wait()?;
-                Self::wait_logging_thread(&cmd, polling_stderr);
-                if !status.success() {
-                    if !ignore_error && (is_last || process::pipefail_enabled()) {
-                        return Err(Self::status_to_io_error(
-                            status,
-                            &format!("{} exited with error", cmd),
-                        ));
-                    } else if process::debug_enabled() {
-                        warn!("{} exited with error: {}", cmd, status);
-                    }
+    fn wait(self, is_last: bool) -> CmdResult {
+        let polling_stderr = self.stderr.map(CmdChild::log_stderr_output);
+        match self.handle {
+            CmdChildHandle::Proc(proc) => {
+                let status = proc?.wait()?;
+                Self::wait_logging_thread(&self.cmd, polling_stderr);
+                if !status.success() && (is_last || process::pipefail_enabled()) {
+                    return Err(Self::status_to_io_error(
+                        status,
+                        &format!("{} exited with error", self.cmd),
+                    ));
                 }
             }
-            CmdChild::ThreadFn {
-                child, cmd, stderr, ..
-            } => {
-                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
-                let status = child.join();
-                Self::wait_logging_thread(&cmd, polling_stderr);
+            CmdChildHandle::Thread(thread) => {
+                let status = thread?.join();
+                Self::wait_logging_thread(&self.cmd, polling_stderr);
                 match status {
                     Err(e) => {
                         return Err(Error::new(
                             ErrorKind::Other,
-                            format!("{} thread joined with error: {:?}", cmd, e),
+                            format!("{} thread joined with error: {:?}", self.cmd, e),
                         ));
                     }
                     Ok(result) => {
                         if let Err(e) = result {
-                            if !ignore_error && (is_last || process::pipefail_enabled()) {
+                            if is_last || process::pipefail_enabled() {
                                 return Err(e);
-                            } else if process::debug_enabled() {
-                                warn!("{} exited with error: {:?}", cmd, e);
                             }
                         }
                     }
                 }
             }
-            CmdChild::SyncFn { stderr, cmd, .. } => {
-                Self::wait_logging_thread(&cmd, stderr.map(Self::log_stderr_output));
+            CmdChildHandle::SyncFn(sync_fn) => {
+                let _ = sync_fn?;
+                Self::wait_logging_thread(&self.cmd, polling_stderr);
             }
         }
         Ok(())
     }
 
-    fn wait_with_output(self, ignore_error: bool) -> Result<Vec<u8>> {
+    fn wait_with_output(self) -> Result<Vec<u8>> {
         let read_to_buf = |stdout: Option<PipeReader>| -> Result<Vec<u8>> {
             if let Some(mut out) = stdout {
                 let mut buf = vec![];
@@ -228,66 +157,43 @@ impl CmdChild {
                 Ok(vec![])
             }
         };
-        match self {
-            CmdChild::Proc {
-                mut child,
-                cmd,
-                stdout,
-                stderr,
-            } => {
-                drop(child.stdin.take());
-                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
-                let buf = read_to_buf(stdout)?;
-                let status = child.wait()?;
-                Self::wait_logging_thread(&cmd, polling_stderr);
-                if !status.success() && !ignore_error {
+        let polling_stderr = self.stderr.map(CmdChild::log_stderr_output);
+        match self.handle {
+            CmdChildHandle::Proc(proc) => {
+                let buf = read_to_buf(self.stdout)?;
+                let status = proc?.wait()?;
+                Self::wait_logging_thread(&self.cmd, polling_stderr);
+                if !status.success() {
                     return Err(Self::status_to_io_error(
                         status,
-                        &format!("{} exited with error", cmd),
+                        &format!("{} exited with error", self.cmd),
                     ));
-                } else if process::debug_enabled() {
-                    warn!("{} exited with error: {}", cmd, status);
                 }
                 Ok(buf)
             }
-            CmdChild::ThreadFn {
-                cmd,
-                stdout,
-                stderr,
-                child,
-                ..
-            } => {
-                let polling_stderr = stderr.map(CmdChild::log_stderr_output);
-                let buf = read_to_buf(stdout)?;
-                let status = child.join();
-                Self::wait_logging_thread(&cmd, polling_stderr);
+            CmdChildHandle::Thread(thread) => {
+                let buf = read_to_buf(self.stdout)?;
+                let status = thread?.join();
+                Self::wait_logging_thread(&self.cmd, polling_stderr);
                 match status {
                     Err(e) => {
                         return Err(Error::new(
                             ErrorKind::Other,
-                            format!("{} thread joined with error: {:?}", cmd, e),
+                            format!("{} thread joined with error: {:?}", self.cmd, e),
                         ));
                     }
                     Ok(result) => {
                         if let Err(e) = result {
-                            if !ignore_error {
-                                return Err(e);
-                            } else if process::debug_enabled() {
-                                warn!("{} exited with error: {:?}", cmd, e);
-                            }
+                            return Err(e);
                         }
                     }
                 }
                 Ok(buf)
             }
-            CmdChild::SyncFn {
-                cmd,
-                stdout,
-                stderr,
-                ..
-            } => {
-                Self::wait_logging_thread(&cmd, stderr.map(Self::log_stderr_output));
-                if let Some(mut out) = stdout {
+            CmdChildHandle::SyncFn(sync_fn) => {
+                let _ = sync_fn?;
+                Self::wait_logging_thread(&self.cmd, polling_stderr);
+                if let Some(mut out) = self.stdout {
                     let mut buf = vec![];
                     out.read_to_end(&mut buf)?;
                     return Ok(buf);
@@ -326,17 +232,5 @@ impl CmdChild {
                 format!("{}; terminated by {}", command, status),
             )
         }
-    }
-
-    fn get_full_cmd(children: &[Self]) -> String {
-        children
-            .iter()
-            .map(|child| match child {
-                CmdChild::Proc { cmd, .. } => cmd.to_owned(),
-                CmdChild::ThreadFn { cmd, .. } => cmd.to_owned(),
-                CmdChild::SyncFn { cmd, .. } => cmd.to_owned(),
-            })
-            .collect::<Vec<_>>()
-            .join(" | ")
     }
 }

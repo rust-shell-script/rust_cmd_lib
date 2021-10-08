@@ -1,4 +1,4 @@
-use crate::child::{CmdChild, CmdChildren};
+use crate::child::{CmdChild, CmdChildHandle, CmdChildren};
 use crate::io::{CmdIn, CmdOut};
 use crate::{CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
@@ -13,6 +13,7 @@ use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
+use std::thread;
 
 const CD_CMD: &str = "cd";
 const IGNORE_CMD: &str = "ignore";
@@ -87,23 +88,12 @@ pub fn set_pipefail(enable: bool) {
     std::env::set_var("CMD_LIB_PIPEFAIL", if enable { "1" } else { "0" });
 }
 
-/// set flag to log command error or not, true by default
-///
-/// Setting environment variable CMD_LIB_LOG_ERROR=0|1 has the same effect
-pub fn set_log_cmd_error(enable: bool) {
-    std::env::set_var("CMD_LIB_LOG_ERROR", if enable { "1" } else { "0" });
-}
-
 pub(crate) fn debug_enabled() -> bool {
     std::env::var("CMD_LIB_DEBUG") == Ok("1".into())
 }
 
 pub(crate) fn pipefail_enabled() -> bool {
     std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into())
-}
-
-pub(crate) fn log_cmd_error_enabled() -> bool {
-    std::env::var("CMD_LIB_LOG_ERROR") != Ok("0".into())
 }
 
 #[doc(hidden)]
@@ -148,7 +138,7 @@ impl GroupCmds {
         let mut cmds = self.group_cmds.pop().unwrap();
         let ret = cmds.spawn(&mut self.current_dir, with_output);
         if let Err(ref e) = ret {
-            if log_cmd_error_enabled() {
+            if debug_enabled() {
                 error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), e);
             }
         }
@@ -157,16 +147,16 @@ impl GroupCmds {
 
     fn report_error(e: Error, msg: &str, ignore_error: bool) -> CmdResult {
         if ignore_error {
-            if log_cmd_error_enabled() {
+            if debug_enabled() {
                 warn!("{}", msg);
             }
+            Ok(())
         } else {
-            if log_cmd_error_enabled() {
+            if debug_enabled() {
                 error!("{}", msg);
             }
-            return Err(e);
+            Err(e)
         }
-        Ok(())
     }
 }
 
@@ -224,15 +214,15 @@ impl Cmds {
             children.push(child);
         }
 
-        Ok(CmdChildren::from(children, self.ignore_error))
+        Ok(CmdChildren::from(children))
     }
 
     fn run_cmd(&mut self, current_dir: &mut PathBuf) -> CmdResult {
-        self.spawn(current_dir, false)?.wait_cmd_result_nolog()
+        self.spawn(current_dir, false)?.wait_cmd_result()
     }
 
     fn run_fun(&mut self, current_dir: &mut PathBuf) -> FunResult {
-        self.spawn(current_dir, true)?.wait_fun_result_nolog()
+        self.spawn(current_dir, true)?.wait_fun_result()
     }
 }
 
@@ -377,8 +367,9 @@ impl Cmd {
         let arg0 = self.arg0();
         let full_cmd = self.debug_str();
         if arg0 == CD_CMD {
-            self.run_cd_cmd(current_dir)?;
-            Ok(CmdChild::SyncFn {
+            let child = self.run_cd_cmd(current_dir);
+            Ok(CmdChild {
+                handle: CmdChildHandle::SyncFn(child),
                 cmd: full_cmd,
                 stdout: None,
                 stderr: None,
@@ -417,16 +408,17 @@ impl Cmd {
 
             let internal_cmd = CMD_MAP.lock().unwrap()[&arg0];
             if pipe_out || with_output {
-                let handle = std::thread::spawn(move || internal_cmd(&mut env));
-                Ok(CmdChild::ThreadFn {
-                    child: handle,
+                let handle = thread::Builder::new().spawn(move || internal_cmd(&mut env));
+                Ok(CmdChild {
+                    handle: CmdChildHandle::Thread(handle),
                     stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
                     cmd: full_cmd,
                 })
             } else {
-                internal_cmd(&mut env)?;
-                Ok(CmdChild::SyncFn {
+                let child = internal_cmd(&mut env);
+                Ok(CmdChild {
+                    handle: CmdChildHandle::SyncFn(child),
                     cmd: full_cmd,
                     stdout: self.stdout_logging,
                     stderr: self.stderr_logging,
@@ -456,12 +448,12 @@ impl Cmd {
             }
 
             // spawning process
-            let child = cmd.spawn()?;
-            Ok(CmdChild::Proc {
+            let child = cmd.spawn();
+            Ok(CmdChild {
+                handle: CmdChildHandle::Proc(child),
                 cmd: full_cmd,
                 stdout: self.stdout_logging,
                 stderr: self.stderr_logging,
-                child,
             })
         }
     }
@@ -477,15 +469,10 @@ impl Cmd {
         let dir = PathBuf::from(&self.args[1]);
         if !dir.is_dir() {
             let err_msg = format!("cd {}: No such file or directory", dir.display());
-            error!("{}", err_msg);
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
-        if let Err(e) = dir.access(AccessMode::EXECUTE) {
-            error!("cd {}: {}", dir.display(), e);
-            return Err(e);
-        }
-
+        dir.access(AccessMode::EXECUTE)?;
         *current_dir = dir;
         Ok(())
     }

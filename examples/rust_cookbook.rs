@@ -34,7 +34,7 @@ fn main() -> CmdResult {
             .filter(|line| line.find("usb").is_some())
             .take(10)
             .for_each(|line| println!("{}", line));
-    });
+    })?;
 
     Ok(())
 }
