@@ -214,7 +214,7 @@ impl Cmds {
             children.push(child);
         }
 
-        Ok(CmdChildren::from(children))
+        Ok(CmdChildren::from(children, self.ignore_error))
     }
 
     fn run_cmd(&mut self, current_dir: &mut PathBuf) -> CmdResult {
