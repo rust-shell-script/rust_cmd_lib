@@ -3,7 +3,7 @@ use crate::io::{CmdIn, CmdOut};
 use crate::{CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use os_pipe::{self, PipeReader, PipeWriter};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
@@ -112,8 +112,9 @@ impl GroupCmds {
     pub fn run_cmd(&mut self) -> CmdResult {
         for cmds in self.group_cmds.iter_mut() {
             if let Err(e) = cmds.run_cmd(&mut self.current_dir) {
-                let msg = format!("Running {} failed, Error: {}", cmds.get_full_cmds(), e);
-                Self::report_error(e, &msg, cmds.ignore_error)?;
+                if !cmds.ignore_error {
+                    return Err(e);
+                }
             }
         }
         Ok(())
@@ -124,11 +125,9 @@ impl GroupCmds {
         let mut last_cmd = self.group_cmds.pop().unwrap();
         self.run_cmd()?;
         // run last function command
-        let mut ret = last_cmd.run_fun(&mut self.current_dir);
-        if let Err(e) = ret {
-            let msg = format!("Running {} failed, Error: {}", last_cmd.get_full_cmds(), e);
-            Self::report_error(e, &msg, last_cmd.ignore_error)?;
-            ret = Ok("".into());
+        let ret = last_cmd.run_fun(&mut self.current_dir);
+        if ret.is_err() && last_cmd.ignore_error {
+            return Ok("".into());
         }
         ret
     }
@@ -137,26 +136,16 @@ impl GroupCmds {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap();
         let ret = cmds.spawn(&mut self.current_dir, with_output);
+        // spawning error contains no command information, attach it here
         if let Err(ref e) = ret {
-            if debug_enabled() {
-                error!("Spawning {} failed, Error: {}", cmds.get_full_cmds(), e);
+            if !cmds.ignore_error {
+                return Err(Error::new(
+                    e.kind(),
+                    format!("Spawning {} failed: {}", cmds.get_full_cmds(), e),
+                ));
             }
         }
         ret
-    }
-
-    fn report_error(e: Error, msg: &str, ignore_error: bool) -> CmdResult {
-        if ignore_error {
-            if debug_enabled() {
-                warn!("{}", msg);
-            }
-            Ok(())
-        } else {
-            if debug_enabled() {
-                error!("{}", msg);
-            }
-            Err(e)
-        }
     }
 }
 

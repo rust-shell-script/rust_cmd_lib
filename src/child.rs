@@ -128,7 +128,11 @@ impl CmdChild {
         let buf = {
             if let Some(mut out) = self.stdout {
                 let mut buf = vec![];
-                out.read_to_end(&mut buf)?;
+                if let Err(e) = out.read_to_end(&mut buf) {
+                    if !ignore_error {
+                        return Err(CmdChildHandle::cmd_io_error(e, &self.cmd, false));
+                    }
+                }
                 buf
             } else {
                 vec![]
