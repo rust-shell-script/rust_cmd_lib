@@ -53,12 +53,17 @@ impl CmdChildren {
                 Err(e)
             }
             Ok(output) => {
-                let mut ret = String::from_utf8_lossy(&output).to_string();
-                if ret.ends_with('\n') {
-                    ret.pop();
+                let mut s = String::from_utf8_lossy(&output).to_string();
+                if s.ends_with('\n') {
+                    s.pop();
                 }
-                CmdChildren::wait_children(&mut self.children)?;
-                Ok(ret)
+                let ret = CmdChildren::wait_children(&mut self.children);
+                if let Err(e) = ret {
+                    if !self.ignore_error {
+                        return Err(e);
+                    }
+                }
+                Ok(s)
             }
         }
     }
@@ -161,7 +166,7 @@ impl CmdChildHandle {
                             if !status.success() {
                                 ret = Err(Self::status_to_io_error(
                                     status,
-                                    &format!("{} exited with error", cmd),
+                                    &format!("Running {} exited with error", cmd),
                                 ));
                             }
                         }
@@ -181,7 +186,7 @@ impl CmdChildHandle {
                         Err(e) => {
                             ret = Err(Error::new(
                                 ErrorKind::Other,
-                                format!("{} thread joined with error: {:?}", cmd, e),
+                                format!("Running {} thread joined with error: {:?}", cmd, e),
                             ))
                         }
                     }
@@ -218,7 +223,7 @@ impl CmdChildHandle {
         Error::new(
             e.kind(),
             format!(
-                "{} {} failed: {:?}",
+                "{} {} failed: {}",
                 if spawning { "Spawning" } else { "Running" },
                 command,
                 e
