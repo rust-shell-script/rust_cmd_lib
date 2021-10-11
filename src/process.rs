@@ -162,7 +162,7 @@ impl Cmds {
         if !self.full_cmds.is_empty() {
             self.full_cmds += " | ";
         }
-        self.full_cmds += &cmd.debug_str();
+        self.full_cmds += &cmd.cmd_str();
         let (ignore_error, cmd) = cmd.gen_command();
         if ignore_error {
             if self.cmds.is_empty() {
@@ -316,7 +316,7 @@ impl Cmd {
         "".into()
     }
 
-    fn debug_str(&self) -> String {
+    fn cmd_str(&self) -> String {
         let mut ret = format!("{:?}", self.args);
         let mut extra = String::new();
         if !self.vars.is_empty() {
@@ -354,16 +354,16 @@ impl Cmd {
 
     fn spawn(mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChild> {
         let arg0 = self.arg0();
-        let full_cmd = self.debug_str();
         if arg0 == CD_CMD {
             let child = self.run_cd_cmd(current_dir);
-            Ok(CmdChild {
-                handle: CmdChildHandle::SyncFn(child),
-                cmd: full_cmd,
-                stdout: None,
-                stderr: None,
-            })
+            Ok(CmdChild::new(
+                CmdChildHandle::SyncFn(child),
+                self.cmd_str(),
+                self.stdout_logging,
+                self.stderr_logging,
+            ))
         } else if self.in_cmd_map {
+            let cmd_str = self.cmd_str();
             let pipe_out = self.stdout_logging.is_none();
             let mut env = CmdEnv {
                 args: self
@@ -398,20 +398,20 @@ impl Cmd {
             let internal_cmd = CMD_MAP.lock().unwrap()[&arg0];
             if pipe_out || with_output {
                 let handle = thread::Builder::new().spawn(move || internal_cmd(&mut env));
-                Ok(CmdChild {
-                    handle: CmdChildHandle::Thread(handle),
-                    stdout: self.stdout_logging,
-                    stderr: self.stderr_logging,
-                    cmd: full_cmd,
-                })
+                Ok(CmdChild::new(
+                    CmdChildHandle::Thread(handle),
+                    cmd_str,
+                    self.stdout_logging,
+                    self.stderr_logging,
+                ))
             } else {
                 let child = internal_cmd(&mut env);
-                Ok(CmdChild {
-                    handle: CmdChildHandle::SyncFn(child),
-                    cmd: full_cmd,
-                    stdout: self.stdout_logging,
-                    stderr: self.stderr_logging,
-                })
+                Ok(CmdChild::new(
+                    CmdChildHandle::SyncFn(child),
+                    cmd_str,
+                    self.stdout_logging,
+                    self.stderr_logging,
+                ))
             }
         } else {
             let mut cmd = self.std_cmd.take().unwrap();
@@ -438,12 +438,12 @@ impl Cmd {
 
             // spawning process
             let child = cmd.spawn();
-            Ok(CmdChild {
-                handle: CmdChildHandle::Proc(child),
-                cmd: full_cmd,
-                stdout: self.stdout_logging,
-                stderr: self.stderr_logging,
-            })
+            Ok(CmdChild::new(
+                CmdChildHandle::Proc(child),
+                self.cmd_str(),
+                self.stdout_logging,
+                self.stderr_logging,
+            ))
         }
     }
 
@@ -451,7 +451,7 @@ impl Cmd {
         if self.args.len() == 1 {
             return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
         } else if self.args.len() > 2 {
-            let err_msg = format!("cd: too many arguments: {}", self.debug_str());
+            let err_msg = format!("cd: too many arguments: {}", self.cmd_str());
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 

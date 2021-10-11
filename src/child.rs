@@ -105,13 +105,27 @@ impl CmdChildren {
 
 #[derive(Debug)]
 pub(crate) struct CmdChild {
-    pub(crate) handle: CmdChildHandle,
-    pub(crate) cmd: String,
-    pub(crate) stdout: Option<PipeReader>,
-    pub(crate) stderr: Option<PipeReader>,
+    handle: CmdChildHandle,
+    cmd: String,
+    stdout: Option<PipeReader>,
+    stderr: Option<PipeReader>,
 }
 
 impl CmdChild {
+    pub(crate) fn new(
+        handle: CmdChildHandle,
+        cmd: String,
+        stdout: Option<PipeReader>,
+        stderr: Option<PipeReader>,
+    ) -> Self {
+        Self {
+            handle,
+            cmd,
+            stdout,
+            stderr,
+        }
+    }
+
     fn wait(self, is_last: bool) -> CmdResult {
         let res = self.handle.wait_with_stderr(self.stderr, &self.cmd);
         if let Err(e) = res {
