@@ -220,7 +220,7 @@ impl Cmds {
     }
 
     fn run_fun(&mut self, current_dir: &mut PathBuf) -> FunResult {
-        self.spawn_with_output(current_dir)?.wait()
+        self.spawn_with_output(current_dir)?.wait_with_output()
     }
 }
 

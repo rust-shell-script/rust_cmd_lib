@@ -175,7 +175,7 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// let handle = spawn!(ping -c 10 192.168.0.1)?;
 /// // ...
-/// if handle.wait_cmd_result().is_err() {
+/// if handle.wait().is_err() {
 ///     // ...
 /// }
 /// # Ok::<(), std::io::Error>(())
@@ -204,7 +204,7 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// }
 ///
 /// for (i, mut proc) in procs.into_iter().enumerate() {
-///     let bandwidth = proc.wait_fun_result()?;
+///     let bandwidth = proc.wait_with_output()?;
 ///     run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
 /// }
 /// # Ok::<(), std::io::Error>(())

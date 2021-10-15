@@ -260,13 +260,15 @@
 //!
 //! `spawn!` macro executes the whole command as a child process, returning a handle to it. By
 //! default, stdin, stdout and stderr are inherited from the parent. The process will run in the
-//! background, so you can run other stuff concurrently. You can call `wait_cmd_result()` to wait
+//! background, so you can run other stuff concurrently. You can call `wait()` to wait
 //! for the process to finish.
 //!
-//! With `spawn_with_output!` you can get output result by calling `wait_fun_result()`.
+//! With `spawn_with_output!` you can get output by calling `wait_with_output()`, or even do stream
+//! processing with `wait_with_pipe()`.
 //!
 //! ```no_run
 //! # use cmd_lib::*;
+//! # use std::io::{BufRead, BufReader};
 //! let mut proc = spawn!(ping -c 10 192.168.0.1)?;
 //! // do other stuff
 //! // ...
@@ -275,7 +277,16 @@
 //! let mut proc = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?;
 //! // do other stuff
 //! // ...
-//! let output = proc.wait()?;
+//! let output = proc.wait_with_output()?;
+//!
+//! spawn_with_output!(journalctl)?.wait_with_pipe(&mut |pipe| {
+//!     BufReader::new(pipe)
+//!         .lines()
+//!         .filter_map(|line| line.ok())
+//!         .filter(|line| line.find("usb").is_some())
+//!         .take(10)
+//!         .for_each(|line| println!("{}", line));
+//! })?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!

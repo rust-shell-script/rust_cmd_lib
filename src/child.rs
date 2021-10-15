@@ -61,7 +61,7 @@ pub struct FunChildren {
 }
 
 impl FunChildren {
-    pub fn wait(&mut self) -> FunResult {
+    pub fn wait_with_output(&mut self) -> FunResult {
         // wait for the last child result
         let handle = self.children.pop().unwrap();
         let wait_last = handle.wait_with_output(self.ignore_error);
