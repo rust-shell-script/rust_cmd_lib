@@ -143,7 +143,7 @@
 //! converted to string as an atomic component, so you don't need to quote them. The parameters will be
 //! like `$a` or `${a}` in `run_cmd!` or `run_fun!` macros.
 //!
-//! ```
+//! ```no_run
 //! # use cmd_lib::run_cmd;
 //! let dir = "my folder";
 //! run_cmd!(echo "Creating $dir at /tmp")?;

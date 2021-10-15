@@ -160,8 +160,9 @@ fn test_pipe() {
 /// run_cmd!(ls >>&2).unwrap();
 /// ```
 fn test_redirect() {
-    assert!(run_cmd!(echo xxxx > /tmp/f).is_ok());
-    assert!(run_cmd!(echo yyyy >> /tmp/f).is_ok());
+    let tmp_file = "/tmp/f";
+    assert!(run_cmd!(echo xxxx > $tmp_file).is_ok());
+    assert!(run_cmd!(echo yyyy >> $tmp_file).is_ok());
     assert!(run_cmd!(
         ignore ls /x 2>/tmp/lsx.log;
         echo "dump file:";
@@ -170,11 +171,13 @@ fn test_redirect() {
     )
     .is_ok());
     assert!(run_cmd!(ignore ls /x 2>/dev/null).is_ok());
-    assert!(run_cmd!(ignore ls /x &>/tmp/f).is_ok());
-    assert!(run_cmd!(wc -w < /tmp/f).is_ok());
+    assert!(run_cmd!(ignore ls /x &>$tmp_file).is_ok());
+    assert!(run_cmd!(wc -w < $tmp_file).is_ok());
     assert!(run_cmd!(ls 1>&1).is_ok());
     assert!(run_cmd!(ls 2>&2).is_ok());
-    assert_eq!(run_fun!(ls &>/tmp/echo_test.log).unwrap(), "");
+    let tmp_log = "/tmp/echo_test.log";
+    assert_eq!(run_fun!(ls &>$tmp_log).unwrap(), "");
+    assert!(run_cmd!(rm -f $tmp_file $tmp_log).is_ok());
 }
 
 #[test]
