@@ -215,7 +215,7 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     let cmds = lexer::Lexer::new(input.into()).scan().parse(true);
     quote! ({
         use ::cmd_lib::AsOsStr;
-        #cmds.spawn(true)
+        #cmds.spawn_with_output()
     })
     .into()
 }

@@ -1,4 +1,4 @@
-use crate::child::{CmdChild, CmdChildHandle, CmdChildren};
+use crate::child::{CmdChild, CmdChildHandle, CmdChildren, FunChildren};
 use crate::io::{CmdIn, CmdOut};
 use crate::{CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
@@ -147,6 +147,10 @@ impl GroupCmds {
         }
         ret
     }
+
+    pub fn spawn_with_output(self) -> Result<FunChildren> {
+        self.spawn(true).map(CmdChildren::into_fun_children)
+    }
 }
 
 #[doc(hidden)]
@@ -206,12 +210,17 @@ impl Cmds {
         Ok(CmdChildren::new(children, self.ignore_error))
     }
 
+    fn spawn_with_output(&mut self, current_dir: &mut PathBuf) -> Result<FunChildren> {
+        self.spawn(current_dir, true)
+            .map(CmdChildren::into_fun_children)
+    }
+
     fn run_cmd(&mut self, current_dir: &mut PathBuf) -> CmdResult {
-        self.spawn(current_dir, false)?.wait_cmd_result()
+        self.spawn(current_dir, false)?.wait()
     }
 
     fn run_fun(&mut self, current_dir: &mut PathBuf) -> FunResult {
-        self.spawn(current_dir, true)?.wait_fun_result()
+        self.spawn_with_output(current_dir)?.wait()
     }
 }
 

@@ -8,7 +8,7 @@ use std::thread::JoinHandle;
 /// Representation of running or exited children processes, connected with pipes
 /// optionally.
 ///
-/// Calling `spawn!` or `spawn_with_output!` macro will return `Result<CmdChildren>`
+/// Calling `spawn!` macro will return `Result<CmdChildren>`
 pub struct CmdChildren {
     children: Vec<CmdChild>,
     ignore_error: bool,
@@ -22,7 +22,14 @@ impl CmdChildren {
         }
     }
 
-    pub fn wait_cmd_result(&mut self) -> CmdResult {
+    pub(crate) fn into_fun_children(self) -> FunChildren {
+        FunChildren {
+            children: self.children,
+            ignore_error: self.ignore_error,
+        }
+    }
+
+    pub fn wait(&mut self) -> CmdResult {
         // wait for the last child result
         let handle = self.children.pop().unwrap();
         if let Err(e) = handle.wait(true) {
@@ -42,8 +49,19 @@ impl CmdChildren {
         }
         ret
     }
+}
 
-    pub fn wait_fun_result(&mut self) -> FunResult {
+/// Representation of running or exited children processes with output, connected with pipes
+/// optionally.
+///
+/// Calling `spawn_with_output!` macro will return `Result<FunChildren>`
+pub struct FunChildren {
+    children: Vec<CmdChild>,
+    ignore_error: bool,
+}
+
+impl FunChildren {
+    pub fn wait(&mut self) -> FunResult {
         // wait for the last child result
         let handle = self.children.pop().unwrap();
         let wait_last = handle.wait_with_output(self.ignore_error);
@@ -99,7 +117,7 @@ impl CmdChildren {
             },
         };
         drop(polling_stderr);
-        Self::wait_children(&mut self.children)
+        CmdChildren::wait_children(&mut self.children)
     }
 }
 

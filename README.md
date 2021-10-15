@@ -244,12 +244,12 @@ With `spawn_with_output!` you can get output result by calling `wait_fun_result(
 let mut proc = spawn!(ping -c 10 192.168.0.1)?;
 // do other stuff
 // ...
-proc.wait_cmd_result()?;
+proc.wait()?;
 
 let mut proc = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?;
 // do other stuff
 // ...
-let output = proc.wait_fun_result()?;
+let output = proc.wait()?;
 ```
 
 

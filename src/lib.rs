@@ -270,12 +270,12 @@
 //! let mut proc = spawn!(ping -c 10 192.168.0.1)?;
 //! // do other stuff
 //! // ...
-//! proc.wait_cmd_result()?;
+//! proc.wait()?;
 //!
 //! let mut proc = spawn_with_output!(/bin/cat file.txt | sed s/a/b/)?;
 //! // do other stuff
 //! // ...
-//! let output = proc.wait_fun_result()?;
+//! let output = proc.wait()?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -348,7 +348,7 @@ pub use builtins::{
     builtin_cat, builtin_debug, builtin_die, builtin_echo, builtin_error, builtin_info,
     builtin_trace, builtin_warn,
 };
-pub use child::CmdChildren;
+pub use child::{CmdChildren, FunChildren};
 #[doc(hidden)]
 pub use log;
 pub use logger::init_builtin_logger;
