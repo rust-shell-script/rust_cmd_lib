@@ -27,9 +27,10 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
             let cmd = self.parse_cmd();
             if !cmd.is_empty() {
                 ret.extend(quote!(.append(#cmd)));
-                if for_spawn && self.iter.peek().is_some() {
-                    panic!("wrong spawning format: group command not allowed");
-                }
+                assert!(
+                    !(for_spawn && self.iter.peek().is_some()),
+                    "wrong spawning format: group command not allowed"
+                );
             }
         }
         ret
