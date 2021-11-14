@@ -366,7 +366,7 @@ impl Cmd {
         if arg0 == CD_CMD {
             let child = self.run_cd_cmd(current_dir);
             Ok(CmdChild::new(
-                CmdChildHandle::SyncFn(child),
+                child.map(CmdChildHandle::SyncFn),
                 self.cmd_str(),
                 self.stdout_logging,
                 self.stderr_logging,
@@ -408,7 +408,7 @@ impl Cmd {
             if pipe_out || with_output {
                 let handle = thread::Builder::new().spawn(move || internal_cmd(&mut env));
                 Ok(CmdChild::new(
-                    CmdChildHandle::Thread(handle),
+                    handle.map(CmdChildHandle::Thread),
                     cmd_str,
                     self.stdout_logging,
                     self.stderr_logging,
@@ -416,7 +416,7 @@ impl Cmd {
             } else {
                 let child = internal_cmd(&mut env);
                 Ok(CmdChild::new(
-                    CmdChildHandle::SyncFn(child),
+                    child.map(CmdChildHandle::SyncFn),
                     cmd_str,
                     self.stdout_logging,
                     self.stderr_logging,
@@ -448,7 +448,7 @@ impl Cmd {
             // spawning process
             let child = cmd.spawn();
             Ok(CmdChild::new(
-                CmdChildHandle::Proc(child),
+                child.map(CmdChildHandle::Proc),
                 self.cmd_str(),
                 self.stdout_logging,
                 self.stderr_logging,
@@ -566,7 +566,7 @@ impl<T: ToString> AsOsStr for T {
 }
 
 #[doc(hidden)]
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct CmdString(OsString);
 impl CmdString {
     pub fn append<T: AsRef<OsStr>>(mut self, value: T) -> Self {
