@@ -10,12 +10,12 @@ use std::thread::JoinHandle;
 ///
 /// Calling `spawn!` macro will return `Result<CmdChildren>`
 pub struct CmdChildren {
-    children: Vec<CmdChild>,
+    children: Vec<Result<CmdChild>>,
     ignore_error: bool,
 }
 
 impl CmdChildren {
-    pub(crate) fn new(children: Vec<CmdChild>, ignore_error: bool) -> Self {
+    pub(crate) fn new(children: Vec<Result<CmdChild>>, ignore_error: bool) -> Self {
         Self {
             children,
             ignore_error,
@@ -32,19 +32,32 @@ impl CmdChildren {
     pub fn wait(&mut self) -> CmdResult {
         // wait for the last child result
         let handle = self.children.pop().unwrap();
-        if let Err(e) = handle.wait(true) {
-            let _ = Self::wait_children(&mut self.children);
-            return Err(e);
+        match handle {
+            Err(e) => {
+                let _ = Self::wait_children(&mut self.children);
+                return Err(e);
+            }
+            Ok(handle) => {
+                if let Err(e) = handle.wait(true) {
+                    let _ = Self::wait_children(&mut self.children);
+                    return Err(e);
+                }
+            }
         }
         Self::wait_children(&mut self.children)
     }
 
-    fn wait_children(children: &mut Vec<CmdChild>) -> CmdResult {
+    fn wait_children(children: &mut Vec<Result<CmdChild>>) -> CmdResult {
         let mut ret = Ok(());
         while !children.is_empty() {
             let child_handle = children.pop().unwrap();
-            if let Err(e) = child_handle.wait(false) {
-                ret = Err(e);
+            match child_handle {
+                Err(e) => ret = Err(e),
+                Ok(child_handle) => {
+                    if let Err(e) = child_handle.wait(false) {
+                        ret = Err(e);
+                    }
+                }
             }
         }
         ret
@@ -56,7 +69,7 @@ impl CmdChildren {
 ///
 /// Calling `spawn_with_output!` macro will return `Result<FunChildren>`
 pub struct FunChildren {
-    children: Vec<CmdChild>,
+    children: Vec<Result<CmdChild>>,
     ignore_error: bool,
 }
 
@@ -64,32 +77,40 @@ impl FunChildren {
     pub fn wait_with_output(&mut self) -> FunResult {
         // wait for the last child result
         let handle = self.children.pop().unwrap();
-        let wait_last = handle.wait_with_output(self.ignore_error);
-        match wait_last {
+        match handle {
             Err(e) => {
                 let _ = CmdChildren::wait_children(&mut self.children);
                 Err(e)
             }
-            Ok(output) => {
-                let mut s = String::from_utf8_lossy(&output).to_string();
-                if s.ends_with('\n') {
-                    s.pop();
-                }
-                let ret = CmdChildren::wait_children(&mut self.children);
-                if let Err(e) = ret {
-                    if !self.ignore_error {
-                        return Err(e);
+            Ok(handle) => {
+                let wait_last = handle.wait_with_output(self.ignore_error);
+                match wait_last {
+                    Err(e) => {
+                        let _ = CmdChildren::wait_children(&mut self.children);
+                        Err(e)
+                    }
+                    Ok(output) => {
+                        let mut s = String::from_utf8_lossy(&output).to_string();
+                        if s.ends_with('\n') {
+                            s.pop();
+                        }
+                        let ret = CmdChildren::wait_children(&mut self.children);
+                        if let Err(e) = ret {
+                            if !self.ignore_error {
+                                return Err(e);
+                            }
+                        }
+                        Ok(s)
                     }
                 }
-                Ok(s)
             }
         }
     }
 
     pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) -> CmdResult {
-        let child = self.children.pop().unwrap();
+        let child = self.children.pop().unwrap()?;
         let polling_stderr = StderrLogging::new(&child.cmd, child.stderr);
-        match child.handle? {
+        match child.handle {
             CmdChildHandle::Proc(mut proc) => {
                 if let Some(stdout) = child.stdout {
                     f(Box::new(stdout));
@@ -113,7 +134,7 @@ impl FunChildren {
 }
 
 pub(crate) struct CmdChild {
-    handle: Result<CmdChildHandle>,
+    handle: CmdChildHandle,
     cmd: String,
     stdout: Option<PipeReader>,
     stderr: Option<PipeReader>,
@@ -121,7 +142,7 @@ pub(crate) struct CmdChild {
 
 impl CmdChild {
     pub(crate) fn new(
-        handle: Result<CmdChildHandle>,
+        handle: CmdChildHandle,
         cmd: String,
         stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
@@ -135,7 +156,7 @@ impl CmdChild {
     }
 
     fn wait(self, is_last: bool) -> CmdResult {
-        let res = self.handle?.wait_with_stderr(self.stderr, &self.cmd);
+        let res = self.handle.wait_with_stderr(self.stderr, &self.cmd);
         if let Err(e) = res {
             if is_last || process::pipefail_enabled() {
                 return Err(e);
@@ -158,7 +179,7 @@ impl CmdChild {
                 vec![]
             }
         };
-        let res = self.handle?.wait_with_stderr(self.stderr, &self.cmd);
+        let res = self.handle.wait_with_stderr(self.stderr, &self.cmd);
         if let Err(e) = res {
             if !ignore_error {
                 return Err(e);

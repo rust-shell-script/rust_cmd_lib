@@ -19,7 +19,7 @@ fn main() -> CmdResult {
     println!(
         "Top 10 biggest files and directories in '{}':\n{}",
         directory.display(),
-        run_fun!(du -ah . | sort -hr | head -n 10).unwrap()
+        run_fun!(du -ah . | sort -hr | head -n 10)?
     );
 
     // Redirect both stdout and stderr of child process to the same file

@@ -190,7 +190,7 @@ impl Cmds {
         }
 
         // spawning all the sub-processes
-        let mut children: Vec<CmdChild> = Vec::new();
+        let mut children: Vec<Result<CmdChild>> = Vec::new();
         let len = self.cmds.len();
         let mut prev_pipe_in = None;
         for (i, cmd_opt) in self.cmds.iter_mut().enumerate() {
@@ -203,7 +203,7 @@ impl Cmds {
             } else {
                 cmd.setup_redirects(&mut prev_pipe_in, None, with_output)?;
             }
-            let child = cmd.spawn(current_dir, with_output)?;
+            let child = cmd.spawn(current_dir, with_output);
             children.push(child);
         }
 
@@ -364,9 +364,9 @@ impl Cmd {
     fn spawn(mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChild> {
         let arg0 = self.arg0();
         if arg0 == CD_CMD {
-            let child = self.run_cd_cmd(current_dir);
+            let child = self.run_cd_cmd(current_dir)?;
             Ok(CmdChild::new(
-                child.map(CmdChildHandle::SyncFn),
+                CmdChildHandle::SyncFn(child),
                 self.cmd_str(),
                 self.stdout_logging,
                 self.stderr_logging,
@@ -406,17 +406,17 @@ impl Cmd {
 
             let internal_cmd = CMD_MAP.lock().unwrap()[&arg0];
             if pipe_out || with_output {
-                let handle = thread::Builder::new().spawn(move || internal_cmd(&mut env));
+                let handle = thread::Builder::new().spawn(move || internal_cmd(&mut env))?;
                 Ok(CmdChild::new(
-                    handle.map(CmdChildHandle::Thread),
+                    CmdChildHandle::Thread(handle),
                     cmd_str,
                     self.stdout_logging,
                     self.stderr_logging,
                 ))
             } else {
-                let child = internal_cmd(&mut env);
+                let child = internal_cmd(&mut env)?;
                 Ok(CmdChild::new(
-                    child.map(CmdChildHandle::SyncFn),
+                    CmdChildHandle::SyncFn(child),
                     cmd_str,
                     self.stdout_logging,
                     self.stderr_logging,
@@ -446,9 +446,9 @@ impl Cmd {
             }
 
             // spawning process
-            let child = cmd.spawn();
+            let child = cmd.spawn()?;
             Ok(CmdChild::new(
-                child.map(CmdChildHandle::Proc),
+                CmdChildHandle::Proc(child),
                 self.cmd_str(),
                 self.stdout_logging,
                 self.stderr_logging,
