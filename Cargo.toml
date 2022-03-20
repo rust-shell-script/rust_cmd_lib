@@ -19,7 +19,7 @@ members = ["macros", "examples"]
 cmd_lib_macros = { version = "1.3.0", path = "./macros" }
 lazy_static = "1.4.0"
 log = "0.4"
-faccess = "0.2"
+faccess = { version="0.2.4", git="https://github.com/MightyPork/faccess" }
 os_pipe = "0.9"
 
 [dev-dependencies]
