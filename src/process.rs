@@ -291,21 +291,28 @@ impl Default for Cmd {
 }
 
 impl Cmd {
-    pub fn add_arg(mut self, arg: OsString) -> Self {
-        let arg_str = arg.to_string_lossy().to_string();
+    pub fn add_arg<O>(mut self, arg: O) -> Self
+    where
+        O: AsRef<OsStr>,
+    {
+        let arg_str = arg.as_ref().to_string_lossy().to_string();
         if arg_str != IGNORE_CMD && !self.args.iter().any(|cmd| *cmd != IGNORE_CMD) {
             let v: Vec<&str> = arg_str.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 self.vars.insert(v[0].into(), v[1].into());
                 return self;
             }
-            self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(&arg);
+            self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg.as_ref());
         }
-        self.args.push(arg);
+        self.args.push(arg.as_ref().to_os_string());
         self
     }
 
-    pub fn add_args(mut self, args: Vec<OsString>) -> Self {
+    pub fn add_args<I, O>(mut self, args: I) -> Self
+    where
+        I: IntoIterator<Item = O>,
+        O: AsRef<OsStr>,
+    {
         for arg in args {
             self = self.add_arg(arg);
         }
@@ -583,6 +590,12 @@ impl CmdString {
     }
 }
 
+impl AsRef<OsStr> for CmdString {
+    fn as_ref(&self) -> &OsStr {
+        self.0.as_ref()
+    }
+}
+
 impl<T: ?Sized + AsRef<OsStr>> From<&T> for CmdString {
     fn from(s: &T) -> Self {
         Self(s.as_ref().into())
@@ -603,8 +616,8 @@ mod tests {
     fn test_run_piped_cmds() {
         let mut current_dir = PathBuf::new();
         assert!(Cmds::default()
-            .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
-            .pipe(Cmd::default().add_args(vec!["wc".into()]))
+            .pipe(Cmd::default().add_args(vec!["echo", "rust"]))
+            .pipe(Cmd::default().add_args(vec!["wc"]))
             .run_cmd(&mut current_dir)
             .is_ok());
     }
@@ -614,7 +627,7 @@ mod tests {
         let mut current_dir = PathBuf::new();
         assert_eq!(
             Cmds::default()
-                .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
+                .pipe(Cmd::default().add_args(vec!["echo", "rust"]))
                 .run_fun(&mut current_dir)
                 .unwrap(),
             "rust"
@@ -622,8 +635,8 @@ mod tests {
 
         assert_eq!(
             Cmds::default()
-                .pipe(Cmd::default().add_args(vec!["echo".into(), "rust".into()]))
-                .pipe(Cmd::default().add_args(vec!["wc".into(), "-c".into()]))
+                .pipe(Cmd::default().add_args(vec!["echo", "rust"]))
+                .pipe(Cmd::default().add_args(vec!["wc", "-c"]))
                 .run_fun(&mut current_dir)
                 .unwrap()
                 .trim(),
@@ -635,14 +648,14 @@ mod tests {
     fn test_stdout_redirect() {
         let mut current_dir = PathBuf::new();
         let tmp_file = "/tmp/file_echo_rust";
-        let mut write_cmd = Cmd::default().add_args(vec!["echo".into(), "rust".into()]);
+        let mut write_cmd = Cmd::default().add_args(vec!["echo", "rust"]);
         write_cmd = write_cmd.add_redirect(Redirect::StdoutToFile(PathBuf::from(tmp_file), false));
         assert!(Cmds::default()
             .pipe(write_cmd)
             .run_cmd(&mut current_dir)
             .is_ok());
 
-        let read_cmd = Cmd::default().add_args(vec!["cat".into(), tmp_file.into()]);
+        let read_cmd = Cmd::default().add_args(vec!["cat", tmp_file]);
         assert_eq!(
             Cmds::default()
                 .pipe(read_cmd)
@@ -651,7 +664,7 @@ mod tests {
             "rust"
         );
 
-        let cleanup_cmd = Cmd::default().add_args(vec!["rm".into(), tmp_file.into()]);
+        let cleanup_cmd = Cmd::default().add_args(vec!["rm", tmp_file]);
         assert!(Cmds::default()
             .pipe(cleanup_cmd)
             .run_cmd(&mut current_dir)

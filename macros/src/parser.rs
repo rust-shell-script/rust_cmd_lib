@@ -80,10 +80,10 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
                     ret.extend(quote!(.add_redirect(#redirect)));
                 }
                 ParseArg::ArgStr(opt) => {
-                    ret.extend(quote!(.add_arg(#opt.into_os_string())));
+                    ret.extend(quote!(.add_arg(#opt)));
                 }
                 ParseArg::ArgVec(opts) => {
-                    ret.extend(quote! (.add_args(#opts.iter().map(|s| ::std::ffi::OsString::from(s)).collect())));
+                    ret.extend(quote! (.add_args(#opts)));
                 }
                 ParseArg::Pipe | ParseArg::Semicolon => break,
             }
