@@ -616,8 +616,8 @@ mod tests {
     fn test_run_piped_cmds() {
         let mut current_dir = PathBuf::new();
         assert!(Cmds::default()
-            .pipe(Cmd::default().add_args(vec!["echo", "rust"]))
-            .pipe(Cmd::default().add_args(vec!["wc"]))
+            .pipe(Cmd::default().add_args(["echo", "rust"]))
+            .pipe(Cmd::default().add_args(["wc"]))
             .run_cmd(&mut current_dir)
             .is_ok());
     }
@@ -627,7 +627,7 @@ mod tests {
         let mut current_dir = PathBuf::new();
         assert_eq!(
             Cmds::default()
-                .pipe(Cmd::default().add_args(vec!["echo", "rust"]))
+                .pipe(Cmd::default().add_args(["echo", "rust"]))
                 .run_fun(&mut current_dir)
                 .unwrap(),
             "rust"
@@ -635,8 +635,8 @@ mod tests {
 
         assert_eq!(
             Cmds::default()
-                .pipe(Cmd::default().add_args(vec!["echo", "rust"]))
-                .pipe(Cmd::default().add_args(vec!["wc", "-c"]))
+                .pipe(Cmd::default().add_args(["echo", "rust"]))
+                .pipe(Cmd::default().add_args(["wc", "-c"]))
                 .run_fun(&mut current_dir)
                 .unwrap()
                 .trim(),
@@ -648,14 +648,14 @@ mod tests {
     fn test_stdout_redirect() {
         let mut current_dir = PathBuf::new();
         let tmp_file = "/tmp/file_echo_rust";
-        let mut write_cmd = Cmd::default().add_args(vec!["echo", "rust"]);
+        let mut write_cmd = Cmd::default().add_args(["echo", "rust"]);
         write_cmd = write_cmd.add_redirect(Redirect::StdoutToFile(PathBuf::from(tmp_file), false));
         assert!(Cmds::default()
             .pipe(write_cmd)
             .run_cmd(&mut current_dir)
             .is_ok());
 
-        let read_cmd = Cmd::default().add_args(vec!["cat", tmp_file]);
+        let read_cmd = Cmd::default().add_args(["cat", tmp_file]);
         assert_eq!(
             Cmds::default()
                 .pipe(read_cmd)
@@ -664,7 +664,7 @@ mod tests {
             "rust"
         );
 
-        let cleanup_cmd = Cmd::default().add_args(vec!["rm", tmp_file]);
+        let cleanup_cmd = Cmd::default().add_args(["rm", tmp_file]);
         assert!(Cmds::default()
             .pipe(cleanup_cmd)
             .run_cmd(&mut current_dir)
