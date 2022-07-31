@@ -471,7 +471,7 @@ impl Cmd {
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
-        let dir = PathBuf::from(&self.args[1]);
+        let dir = current_dir.join(&self.args[1]);
         if !dir.is_dir() {
             let err_msg = format!("cd {}: No such file or directory", dir.display());
             return Err(Error::new(ErrorKind::Other, err_msg));
