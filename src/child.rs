@@ -49,8 +49,7 @@ impl CmdChildren {
 
     fn wait_children(children: &mut Vec<Result<CmdChild>>) -> CmdResult {
         let mut ret = Ok(());
-        while !children.is_empty() {
-            let child_handle = children.pop().unwrap();
+        while let Some(child_handle) = children.pop() {
             match child_handle {
                 Err(e) => ret = Err(e),
                 Ok(child_handle) => {
@@ -122,7 +121,7 @@ impl FunChildren {
                     f(Box::new(stdout));
                 }
             }
-            CmdChildHandle::SyncFn(_) => {
+            CmdChildHandle::SyncFn => {
                 if let Some(stdout) = child.stdout {
                     f(Box::new(stdout));
                 }
@@ -192,7 +191,7 @@ impl CmdChild {
 pub(crate) enum CmdChildHandle {
     Proc(Child),
     Thread(JoinHandle<CmdResult>),
-    SyncFn(()),
+    SyncFn,
 }
 
 impl CmdChildHandle {
@@ -229,7 +228,7 @@ impl CmdChildHandle {
                     }
                 }
             }
-            CmdChildHandle::SyncFn(_) => {}
+            CmdChildHandle::SyncFn => {}
         }
         drop(polling_stderr);
         Ok(())
@@ -273,7 +272,7 @@ impl StderrLogging {
             let thread = std::thread::spawn(move || {
                 BufReader::new(stderr)
                     .lines()
-                    .filter_map(|line| line.ok())
+                    .map_while(Result::ok)
                     .for_each(|line| info!("{}", line))
             });
             Self {

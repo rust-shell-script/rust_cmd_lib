@@ -366,9 +366,9 @@ impl Cmd {
     fn spawn(mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChild> {
         let arg0 = self.arg0();
         if arg0 == CD_CMD {
-            let child = self.run_cd_cmd(current_dir)?;
+            self.run_cd_cmd(current_dir)?;
             Ok(CmdChild::new(
-                CmdChildHandle::SyncFn(child),
+                CmdChildHandle::SyncFn,
                 self.cmd_str(),
                 self.stdout_logging,
                 self.stderr_logging,
@@ -416,9 +416,9 @@ impl Cmd {
                     self.stderr_logging,
                 ))
             } else {
-                let child = internal_cmd(&mut env)?;
+                internal_cmd(&mut env)?;
                 Ok(CmdChild::new(
-                    CmdChildHandle::SyncFn(child),
+                    CmdChildHandle::SyncFn,
                     cmd_str,
                     self.stdout_logging,
                     self.stderr_logging,
