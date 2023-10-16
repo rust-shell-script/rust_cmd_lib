@@ -4,7 +4,7 @@
 //
 use cmd_lib::*;
 use std::io::{BufRead, BufReader};
-fn main() -> CmdResult {
+fn main() -> MainResult {
     init_builtin_logger();
     cmd_lib::set_pipefail(false); // do not fail due to pipe errors
 

@@ -363,6 +363,8 @@ pub use child::{CmdChildren, FunChildren};
 #[doc(hidden)]
 pub use log;
 pub use logger::init_builtin_logger;
+pub use main_error::MainError;
+pub use main_error::MainResult;
 pub use process::{
     export_cmd, set_debug, set_pipefail, AsOsStr, Cmd, CmdEnv, CmdString, Cmds, GroupCmds, Redirect,
 };

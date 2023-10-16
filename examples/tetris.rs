@@ -556,7 +556,7 @@ fn cmd_exit() {
     std::process::exit(0);
 }
 
-fn main() -> CmdResult {
+fn main() -> MainResult {
     init_builtin_logger();
     #[rustfmt::skip]
     let old_cfg = run_fun!(stty -g)?; // let's save terminal state ...

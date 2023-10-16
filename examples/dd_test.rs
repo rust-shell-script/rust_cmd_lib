@@ -32,7 +32,7 @@ struct Opt {
     file: String,
 }
 
-fn main() -> CmdResult {
+fn main() -> MainResult {
     use_builtin_cmd!(echo, info);
     init_builtin_logger();
     let Opt {

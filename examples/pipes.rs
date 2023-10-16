@@ -338,7 +338,7 @@ fn rand() -> i32 {
     run_fun!(bash -c r"echo $RANDOM").unwrap().parse().unwrap()
 }
 
-fn main() -> CmdResult {
+fn main() -> MainResult {
     use_builtin_cmd!(info);
     init_builtin_logger();
 

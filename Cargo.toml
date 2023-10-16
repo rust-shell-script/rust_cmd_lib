@@ -21,6 +21,7 @@ lazy_static = "1.4.0"
 log = "0.4"
 faccess = "0.2"
 os_pipe = "0.9"
+main_error = "0.1.2"
 
 [dev-dependencies]
 rayon = "1.5"
