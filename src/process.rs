@@ -240,16 +240,16 @@ impl fmt::Debug for Redirect {
             Redirect::StderrToStdout => f.write_str("2>&1"),
             Redirect::StdoutToFile(path, append) => {
                 if *append {
-                    f.write_str(&format!("1>> {}", path.display()))
+                    f.write_str(&format!("1>>{}", path.display()))
                 } else {
-                    f.write_str(&format!("1> {}", path.display()))
+                    f.write_str(&format!("1>{}", path.display()))
                 }
             }
             Redirect::StderrToFile(path, append) => {
                 if *append {
-                    f.write_str(&format!("2>> {}", path.display()))
+                    f.write_str(&format!("2>>{}", path.display()))
                 } else {
-                    f.write_str(&format!("2> {}", path.display()))
+                    f.write_str(&format!("2>{}", path.display()))
                 }
             }
         }
@@ -333,21 +333,16 @@ impl Cmd {
     }
 
     fn cmd_str(&self) -> String {
-        let mut ret = format!("{:?}", self.args);
-        let mut extra = String::new();
-        if !self.vars.is_empty() {
-            extra += &format!("{:?}", self.vars);
-        }
-        if !self.redirects.is_empty() {
-            if !extra.is_empty() {
-                extra += ", ";
-            }
-            extra += &format!("{:?}", self.redirects);
-        }
-        if !extra.is_empty() {
-            ret += &format!("({})", extra);
-        }
-        ret
+        format!(
+            "[{}]",
+            self.vars
+                .iter()
+                .map(|(k, v)| format!("{k}={v:?}"))
+                .chain(self.args.iter().map(|s| format!("{s:?}")))
+                .chain(self.redirects.iter().map(|r| format!("{r:?}")))
+                .collect::<Vec<String>>()
+                .join(" ")
+        )
     }
 
     fn gen_command(mut self) -> (bool, Self) {
