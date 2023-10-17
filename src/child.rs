@@ -60,6 +60,11 @@ impl CmdChildren {
         }
         ret
     }
+
+    /// Returns the OS-assigned process identifiers associated with these children processes
+    pub fn pids(&self) -> Vec<u32> {
+        self.children.iter().filter_map(|x| x.pid()).collect()
+    }
 }
 
 /// Representation of running or exited children processes with output, connected with pipes
@@ -124,6 +129,11 @@ impl FunChildren {
         drop(polling_stderr);
         CmdChildren::wait_children(&mut self.children)
     }
+
+    /// Returns the OS-assigned process identifiers associated with these children processes
+    pub fn pids(&self) -> Vec<u32> {
+        self.children.iter().filter_map(|x| x.pid()).collect()
+    }
 }
 
 pub(crate) struct CmdChild {
@@ -183,6 +193,10 @@ impl CmdChild {
 
     fn kill(self) -> CmdResult {
         self.handle.kill()
+    }
+
+    fn pid(&self) -> Option<u32> {
+        self.handle.pid()
     }
 }
 
@@ -247,6 +261,13 @@ impl CmdChildHandle {
                 panic!("thread killing not suppported!")
             }
             CmdChildHandle::SyncFn => Ok(()),
+        }
+    }
+
+    fn pid(&self) -> Option<u32> {
+        match self {
+            CmdChildHandle::Proc(proc) => Some(proc.id()),
+            _ => None,
         }
     }
 }
