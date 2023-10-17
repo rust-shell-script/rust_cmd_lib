@@ -29,6 +29,7 @@ impl CmdChildren {
         }
     }
 
+    /// Waits for the children processes to exit completely, returning the status that they exited with.
     pub fn wait(&mut self) -> CmdResult {
         // wait for the last child result
         let handle = self.children.pop().unwrap();
@@ -61,6 +62,22 @@ impl CmdChildren {
         }
         ret
     }
+
+    /// Forces the children processes to exit.
+    pub fn kill(&mut self) -> CmdResult {
+        let mut ret = Ok(());
+        while let Some(child_handle) = self.children.pop() {
+            match child_handle {
+                Err(e) => ret = Err(e),
+                Ok(child_handle) => {
+                    if let Err(e) = child_handle.kill() {
+                        ret = Err(e);
+                    }
+                }
+            }
+        }
+        ret
+    }
 }
 
 /// Representation of running or exited children processes with output, connected with pipes
@@ -73,6 +90,7 @@ pub struct FunChildren {
 }
 
 impl FunChildren {
+    /// Waits for the children processes to exit completely, returning the output.
     pub fn wait_with_output(&mut self) -> FunResult {
         // wait for the last child result
         let handle = self.children.pop().unwrap();
@@ -106,6 +124,8 @@ impl FunChildren {
         }
     }
 
+    /// Waits for the children processes to exit completely, pipe content will be processed by
+    /// provided function.
     pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) -> CmdResult {
         let child = self.children.pop().unwrap()?;
         let polling_stderr = StderrLogging::new(&child.cmd, child.stderr);
@@ -186,6 +206,10 @@ impl CmdChild {
         }
         Ok(buf)
     }
+
+    fn kill(self) -> CmdResult {
+        self.handle.kill()
+    }
 }
 
 pub(crate) enum CmdChildHandle {
@@ -257,6 +281,18 @@ impl CmdChildHandle {
                 ErrorKind::Other,
                 format!("{}; terminated by {}", command, status),
             )
+        }
+    }
+
+    fn kill(self) -> CmdResult {
+        match self {
+            CmdChildHandle::Proc(mut proc) => {
+                proc.kill()
+            }
+            CmdChildHandle::Thread(_thread) => {
+                panic!("thread killing not suppported!")
+            }
+            CmdChildHandle::SyncFn => { Ok(()) }
         }
     }
 }
