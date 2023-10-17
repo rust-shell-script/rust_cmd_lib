@@ -10,12 +10,12 @@ use std::thread::JoinHandle;
 ///
 /// Calling `spawn!` macro will return `Result<CmdChildren>`
 pub struct CmdChildren {
-    children: Vec<Result<CmdChild>>,
+    children: Vec<CmdChild>,
     ignore_error: bool,
 }
 
 impl CmdChildren {
-    pub(crate) fn new(children: Vec<Result<CmdChild>>, ignore_error: bool) -> Self {
+    pub(crate) fn new(children: Vec<CmdChild>, ignore_error: bool) -> Self {
         Self {
             children,
             ignore_error,
@@ -33,31 +33,18 @@ impl CmdChildren {
     pub fn wait(&mut self) -> CmdResult {
         // wait for the last child result
         let handle = self.children.pop().unwrap();
-        match handle {
-            Err(e) => {
-                let _ = Self::wait_children(&mut self.children);
-                return Err(e);
-            }
-            Ok(handle) => {
-                if let Err(e) = handle.wait(true) {
-                    let _ = Self::wait_children(&mut self.children);
-                    return Err(e);
-                }
-            }
+        if let Err(e) = handle.wait(true) {
+            let _ = Self::wait_children(&mut self.children);
+            return Err(e);
         }
         Self::wait_children(&mut self.children)
     }
 
-    fn wait_children(children: &mut Vec<Result<CmdChild>>) -> CmdResult {
+    fn wait_children(children: &mut Vec<CmdChild>) -> CmdResult {
         let mut ret = Ok(());
         while let Some(child_handle) = children.pop() {
-            match child_handle {
-                Err(e) => ret = Err(e),
-                Ok(child_handle) => {
-                    if let Err(e) = child_handle.wait(false) {
-                        ret = Err(e);
-                    }
-                }
+            if let Err(e) = child_handle.wait(false) {
+                ret = Err(e);
             }
         }
         ret
@@ -67,13 +54,8 @@ impl CmdChildren {
     pub fn kill(&mut self) -> CmdResult {
         let mut ret = Ok(());
         while let Some(child_handle) = self.children.pop() {
-            match child_handle {
-                Err(e) => ret = Err(e),
-                Ok(child_handle) => {
-                    if let Err(e) = child_handle.kill() {
-                        ret = Err(e);
-                    }
-                }
+            if let Err(e) = child_handle.kill() {
+                ret = Err(e);
             }
         }
         ret
@@ -85,7 +67,7 @@ impl CmdChildren {
 ///
 /// Calling `spawn_with_output!` macro will return `Result<FunChildren>`
 pub struct FunChildren {
-    children: Vec<Result<CmdChild>>,
+    children: Vec<CmdChild>,
     ignore_error: bool,
 }
 
@@ -94,32 +76,24 @@ impl FunChildren {
     pub fn wait_with_output(&mut self) -> FunResult {
         // wait for the last child result
         let handle = self.children.pop().unwrap();
-        match handle {
+        let wait_last = handle.wait_with_output(self.ignore_error);
+        match wait_last {
             Err(e) => {
                 let _ = CmdChildren::wait_children(&mut self.children);
                 Err(e)
             }
-            Ok(handle) => {
-                let wait_last = handle.wait_with_output(self.ignore_error);
-                match wait_last {
-                    Err(e) => {
-                        let _ = CmdChildren::wait_children(&mut self.children);
-                        Err(e)
-                    }
-                    Ok(output) => {
-                        let mut s = String::from_utf8_lossy(&output).to_string();
-                        if s.ends_with('\n') {
-                            s.pop();
-                        }
-                        let ret = CmdChildren::wait_children(&mut self.children);
-                        if let Err(e) = ret {
-                            if !self.ignore_error {
-                                return Err(e);
-                            }
-                        }
-                        Ok(s)
+            Ok(output) => {
+                let mut s = String::from_utf8_lossy(&output).to_string();
+                if s.ends_with('\n') {
+                    s.pop();
+                }
+                let ret = CmdChildren::wait_children(&mut self.children);
+                if let Err(e) = ret {
+                    if !self.ignore_error {
+                        return Err(e);
                     }
                 }
+                Ok(s)
             }
         }
     }
@@ -127,7 +101,7 @@ impl FunChildren {
     /// Waits for the children processes to exit completely, pipe content will be processed by
     /// provided function.
     pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) -> CmdResult {
-        let child = self.children.pop().unwrap()?;
+        let child = self.children.pop().unwrap();
         let polling_stderr = StderrLogging::new(&child.cmd, child.stderr);
         match child.handle {
             CmdChildHandle::Proc(mut proc) => {
@@ -190,7 +164,7 @@ impl CmdChild {
                 let mut buf = vec![];
                 if let Err(e) = out.read_to_end(&mut buf) {
                     if !ignore_error {
-                        return Err(CmdChildHandle::cmd_io_error(e, &self.cmd, false));
+                        return Err(process::new_cmd_io_error(&e, &self.cmd));
                     }
                 }
                 buf
@@ -225,7 +199,7 @@ impl CmdChildHandle {
             CmdChildHandle::Proc(mut proc) => {
                 let status = proc.wait();
                 match status {
-                    Err(e) => return Err(CmdChildHandle::cmd_io_error(e, cmd, false)),
+                    Err(e) => return Err(process::new_cmd_io_error(&e, cmd)),
                     Ok(status) => {
                         if !status.success() {
                             return Err(Self::status_to_io_error(
@@ -241,7 +215,7 @@ impl CmdChildHandle {
                 match status {
                     Ok(result) => {
                         if let Err(e) = result {
-                            return Err(CmdChildHandle::cmd_io_error(e, cmd, false));
+                            return Err(process::new_cmd_io_error(&e, cmd));
                         }
                     }
                     Err(e) => {
@@ -258,41 +232,21 @@ impl CmdChildHandle {
         Ok(())
     }
 
-    fn cmd_io_error(e: Error, command: &str, spawning: bool) -> Error {
-        Error::new(
-            e.kind(),
-            format!(
-                "{} {} failed: {}",
-                if spawning { "Spawning" } else { "Running" },
-                command,
-                e
-            ),
-        )
-    }
-
-    fn status_to_io_error(status: ExitStatus, command: &str) -> Error {
+    fn status_to_io_error(status: ExitStatus, cmd: &str) -> Error {
         if let Some(code) = status.code() {
-            Error::new(
-                ErrorKind::Other,
-                format!("{}; status code: {}", command, code),
-            )
+            Error::new(ErrorKind::Other, format!("{cmd}; status code: {code}"))
         } else {
-            Error::new(
-                ErrorKind::Other,
-                format!("{}; terminated by {}", command, status),
-            )
+            Error::new(ErrorKind::Other, format!("{cmd}; terminated by {status}"))
         }
     }
 
     fn kill(self) -> CmdResult {
         match self {
-            CmdChildHandle::Proc(mut proc) => {
-                proc.kill()
-            }
+            CmdChildHandle::Proc(mut proc) => proc.kill(),
             CmdChildHandle::Thread(_thread) => {
                 panic!("thread killing not suppported!")
             }
-            CmdChildHandle::SyncFn => { Ok(()) }
+            CmdChildHandle::SyncFn => Ok(()),
         }
     }
 }

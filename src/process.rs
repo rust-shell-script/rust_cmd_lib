@@ -139,10 +139,7 @@ impl GroupCmds {
         // spawning error contains no command information, attach it here
         if let Err(ref e) = ret {
             if !cmds.ignore_error {
-                return Err(Error::new(
-                    e.kind(),
-                    format!("Spawning {} failed: {}", cmds.get_full_cmds(), e),
-                ));
+                return Err(new_cmd_io_error(e, &cmds.full_cmds));
             }
         }
         ret
@@ -180,17 +177,13 @@ impl Cmds {
         self
     }
 
-    fn get_full_cmds(&self) -> &str {
-        &self.full_cmds
-    }
-
     fn spawn(&mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChildren> {
         if debug_enabled() {
-            debug!("Running {} ...", self.get_full_cmds());
+            debug!("Running {} ...", self.full_cmds);
         }
 
         // spawning all the sub-processes
-        let mut children: Vec<Result<CmdChild>> = Vec::new();
+        let mut children: Vec<CmdChild> = Vec::new();
         let len = self.cmds.len();
         let mut prev_pipe_in = None;
         for (i, cmd_opt) in self.cmds.iter_mut().enumerate() {
@@ -203,7 +196,7 @@ impl Cmds {
             } else {
                 cmd.setup_redirects(&mut prev_pipe_in, None, with_output)?;
             }
-            let child = cmd.spawn(current_dir, with_output);
+            let child = cmd.spawn(current_dir, with_output)?;
             children.push(child);
         }
 
@@ -240,16 +233,16 @@ impl fmt::Debug for Redirect {
             Redirect::StderrToStdout => f.write_str("2>&1"),
             Redirect::StdoutToFile(path, append) => {
                 if *append {
-                    f.write_str(&format!("1>>{}", path.display()))
+                    f.write_str(&format!("1>>\"{}\"", path.display()))
                 } else {
-                    f.write_str(&format!("1>{}", path.display()))
+                    f.write_str(&format!("1>\"{}\"", path.display()))
                 }
             }
             Redirect::StderrToFile(path, append) => {
                 if *append {
-                    f.write_str(&format!("2>>{}", path.display()))
+                    f.write_str(&format!("2>>\"{}\"", path.display()))
                 } else {
-                    f.write_str(&format!("2>{}", path.display()))
+                    f.write_str(&format!("2>\"{}\"", path.display()))
                 }
             }
         }
@@ -601,6 +594,10 @@ impl fmt::Display for CmdString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0.to_string_lossy())
     }
+}
+
+pub(crate) fn new_cmd_io_error(e: &Error, command: &str) -> Error {
+    Error::new(e.kind(), format!("Running {command} failed: {e}"))
 }
 
 #[cfg(test)]
