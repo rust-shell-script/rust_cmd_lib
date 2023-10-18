@@ -144,14 +144,7 @@ impl GroupCmds {
     pub fn spawn(mut self, with_output: bool) -> Result<CmdChildren> {
         assert_eq!(self.group_cmds.len(), 1);
         let mut cmds = self.group_cmds.pop().unwrap();
-        let ret = cmds.spawn(&mut self.current_dir, with_output);
-        // spawning error contains no command information, attach it here
-        if let Err(ref e) = ret {
-            if !cmds.ignore_error {
-                return Err(new_cmd_io_error(e, &cmds.full_cmds));
-            }
-        }
-        ret
+        cmds.spawn(&mut self.current_dir, with_output)
     }
 
     pub fn spawn_with_output(self) -> Result<FunChildren> {
@@ -188,9 +181,10 @@ impl Cmds {
     }
 
     fn spawn(&mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChildren> {
+        let full_cmds = &self.full_cmds;
         if debug_enabled() {
             let _ = try_init_default_logger();
-            debug!("Running {} ...", self.full_cmds);
+            debug!("Running {full_cmds} ...");
         }
 
         // spawning all the sub-processes
@@ -201,13 +195,18 @@ impl Cmds {
             let mut cmd = cmd_opt.take().unwrap();
             if i != len - 1 {
                 // not the last, update redirects
-                let (pipe_reader, pipe_writer) = os_pipe::pipe()?;
-                cmd.setup_redirects(&mut prev_pipe_in, Some(pipe_writer), with_output)?;
+                let (pipe_reader, pipe_writer) =
+                    os_pipe::pipe().map_err(|e| new_cmd_io_error(&e, full_cmds))?;
+                cmd.setup_redirects(&mut prev_pipe_in, Some(pipe_writer), with_output)
+                    .map_err(|e| new_cmd_io_error(&e, full_cmds))?;
                 prev_pipe_in = Some(pipe_reader);
             } else {
-                cmd.setup_redirects(&mut prev_pipe_in, None, with_output)?;
+                cmd.setup_redirects(&mut prev_pipe_in, None, with_output)
+                    .map_err(|e| new_cmd_io_error(&e, full_cmds))?;
             }
-            let child = cmd.spawn(current_dir, with_output)?;
+            let child = cmd
+                .spawn(current_dir, with_output)
+                .map_err(|e| new_cmd_io_error(&e, full_cmds))?;
             children.push(child);
         }
 
