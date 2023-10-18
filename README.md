@@ -52,12 +52,12 @@ let now = Instant::now();
         | awk r#"/copied/{print $(NF-1) " " $NF}"#
     )
     .unwrap_or_else(|_| cmd_die!("thread $i failed"));
-    cmd_info!("thread $i bandwidth: $bandwidth");
+    log::info!("thread {i} bandwidth: {bandwidth}");
 });
 let total_bandwidth = Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128)
     .get_appropriate_unit(true)
     .to_string();
-cmd_info!("Total bandwidth: ${total_bandwidth}/s");
+log::info!("Total bandwidth: {total_bandwidth}/s");
 ```
 
 Output will be like this:
@@ -203,9 +203,6 @@ working directory for the whole program.
 ##### ignore
 
 Ignore errors for command execution, which can be used without importing.
-
-##### die
-Print fatal message and exit (with status code 1).
 
 ##### echo
 Print messages to stdout

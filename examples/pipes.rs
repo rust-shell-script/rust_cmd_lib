@@ -97,14 +97,14 @@ fn print_help() {
     let colors = run_fun!(tput colors).unwrap();
     let term = std::env::var("TERM").unwrap();
     #[rustfmt::skip]
-    cmd_echo!("
-Usage: $prog [OPTION]...
+    eprintln!("
+Usage: {prog} [OPTION]...
 Animated pipes terminal screensaver.
 
   -p [1-]               number of pipes (D=1)
-  -t [0-$max_type]              pipe type (D=0)
+  -t [0-{max_type}]              pipe type (D=0)
   -t c[16 chars]        custom pipe type
-  -c [0-$colors]${cgap}pipe color INDEX (TERM=$term), can be
+  -c [0-{colors}]{cgap}pipe color INDEX (TERM={term}), can be
                         hexadecimal with '#' prefix
                         (D=-c 1 -c 2 ... -c 7 -c 0)
   -f [20-100]           framerate (D=75)
@@ -148,7 +148,7 @@ fn parse() -> CmdResult {
     // $arg and $OPTARG are the option name and argument set by getopts.
     fn pearg(arg: &str, msg: &str) -> ! {
         let arg0 = prog_name();
-        cmd_info!("$arg0: -$arg invalid argument; $msg");
+        log::info!("{arg0}: -{arg} invalid argument; {msg}");
         print_help();
         std::process::exit(1)
     }

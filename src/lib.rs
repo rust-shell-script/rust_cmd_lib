@@ -58,12 +58,12 @@
 //!         | awk r#"/copied/{print $(NF-1) " " $NF}"#
 //!     )
 //!     .unwrap_or_else(|_| cmd_die!("thread $i failed"));
-//!     cmd_info!("thread $i bandwidth: $bandwidth");
+//!     log::info!("thread {i} bandwidth: {bandwidth}");
 //! });
 //! let total_bandwidth = Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128)
 //!     .get_appropriate_unit(true)
 //!     .to_string();
-//! cmd_info!("Total bandwidth: ${total_bandwidth}/s");
+//! log::info!("Total bandwidth: {total_bandwidth}/s");
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -224,9 +224,6 @@
 //!
 //! Ignore errors for command execution, which can be used without importing.
 //!
-//! #### die
-//! Print fatal message and exit (with status code 1).
-//!
 //! #### echo
 //! Print messages to stdout
 //!
@@ -353,8 +350,7 @@
 //!
 
 pub use cmd_lib_macros::{
-    cmd_debug, cmd_die, cmd_echo, cmd_error, cmd_info, cmd_trace, cmd_warn, export_cmd, run_cmd,
-    run_fun, spawn, spawn_with_output, use_custom_cmd,
+    cmd_die, export_cmd, run_cmd, run_fun, spawn, spawn_with_output, use_custom_cmd,
 };
 /// Return type for run_fun!() macro
 pub type FunResult = std::io::Result<String>;

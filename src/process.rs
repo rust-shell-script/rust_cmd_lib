@@ -73,7 +73,6 @@ lazy_static! {
         m.insert("info".into(), builtin_info);
         m.insert("warn".into(), builtin_warn);
         m.insert("error".into(), builtin_error);
-        m.insert("die".into(), builtin_die);
 
         Mutex::new(m)
     };

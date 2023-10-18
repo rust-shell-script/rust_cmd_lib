@@ -8,12 +8,6 @@ pub(crate) fn builtin_echo(env: &mut CmdEnv) -> CmdResult {
     writeln!(env.stdout(), "{}", msg)
 }
 
-pub(crate) fn builtin_die(env: &mut CmdEnv) -> CmdResult {
-    let _ = try_init_default_logger();
-    error!("FATAL: {}", env.args()[1..].join(" "));
-    std::process::exit(1);
-}
-
 pub(crate) fn builtin_error(env: &mut CmdEnv) -> CmdResult {
     let _ = try_init_default_logger();
     error!("{}", env.args()[1..].join(" "));
