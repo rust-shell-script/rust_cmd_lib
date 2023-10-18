@@ -198,6 +198,7 @@ pub fn cmd_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
         use ::cmd_lib::AsOsStr;
+        let _ = ::cmd_lib::try_init_default_logger();
         ::cmd_lib::log::error!("{}", #msg)
     })
     .into()
@@ -210,6 +211,7 @@ pub fn cmd_warn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
         use ::cmd_lib::AsOsStr;
+        let _ = ::cmd_lib::try_init_default_logger();
         ::cmd_lib::log::warn!("{}", #msg)
     })
     .into()
@@ -243,6 +245,7 @@ pub fn cmd_info(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
         use ::cmd_lib::AsOsStr;
+        let _ = ::cmd_lib::try_init_default_logger();
         ::cmd_lib::log::info!("{}", #msg)
     })
     .into()
@@ -255,6 +258,7 @@ pub fn cmd_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
         use ::cmd_lib::AsOsStr;
+        let _ = ::cmd_lib::try_init_default_logger();
         ::cmd_lib::log::debug!("{}", #msg)
     })
     .into()
@@ -267,6 +271,7 @@ pub fn cmd_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
         use ::cmd_lib::AsOsStr;
+        let _ = ::cmd_lib::try_init_default_logger();
         ::cmd_lib::log::trace!("{}", #msg)
     })
     .into()
@@ -292,6 +297,7 @@ pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
         use ::cmd_lib::AsOsStr;
+        let _ = ::cmd_lib::try_init_default_logger();
         ::cmd_lib::log::error!("FATAL: {}", #msg);
         std::process::exit(1)
     })

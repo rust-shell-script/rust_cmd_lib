@@ -1,6 +1,7 @@
 use crate::builtins::*;
 use crate::child::{CmdChild, CmdChildHandle, CmdChildren, FunChildren};
 use crate::io::{CmdIn, CmdOut};
+use crate::logger::try_init_default_logger;
 use crate::{CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
@@ -179,6 +180,7 @@ impl Cmds {
                 // first command in the pipe
                 self.ignore_error = true;
             } else {
+                let _ = try_init_default_logger();
                 warn!("Builtin \"ignore\" command at wrong position");
             }
         }
@@ -188,6 +190,7 @@ impl Cmds {
 
     fn spawn(&mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChildren> {
         if debug_enabled() {
+            let _ = try_init_default_logger();
             debug!("Running {} ...", self.full_cmds);
         }
 

@@ -3,16 +3,17 @@
 // Usage: dd_test [-b <block_size>] [-t <thread_num>] -f <file>
 //
 // e.g:
-// ➜  rust_cmd_lib git:(master) ✗ cargo run --example dd_test -- -b 4096 -f /dev/nvme0n1 -t 4
-//     Finished dev [unoptimized + debuginfo] target(s) in 1.56s
-//      Running `target/debug/examples/dd_test -b 4096 -f /dev/nvme0n1 -t 4`
-// INFO - Dropping caches at first
-// INFO - Running with thread_num: 4, block_size: 4096
-// INFO - thread 1 bandwidth: 286 MB/s
-// INFO - thread 3 bandwidth: 269 MB/s
-// INFO - thread 2 bandwidth: 267 MB/s
-// INFO - thread 0 bandwidth: 265 MB/s
-// INFO - Total bandwidth: 1.01 GiB/s
+//! ➜  rust_cmd_lib git:(master) ✗ cargo run --example dd_test -- -b 4096 -f /dev/nvme0n1 -t 4
+//!     Finished dev [unoptimized + debuginfo] target(s) in 0.04s
+//!      Running `target/debug/examples/dd_test -b 4096 -f /dev/nvme0n1 -t 4`
+//! [INFO ] Dropping caches at first
+//! [INFO ] Running with thread_num: 4, block_size: 4096
+//! [INFO ] thread 3 bandwidth: 317 MB/s
+//! [INFO ] thread 1 bandwidth: 289 MB/s
+//! [INFO ] thread 0 bandwidth: 281 MB/s
+//! [INFO ] thread 2 bandwidth: 279 MB/s
+//! [INFO ] Total bandwidth: 1.11 GiB/s
+//! ```
 use byte_unit::Byte;
 use cmd_lib::*;
 use rayon::prelude::*;
@@ -33,7 +34,6 @@ struct Opt {
 }
 
 fn main() -> MainResult {
-    init_builtin_logger();
     let Opt {
         block_size,
         thread_num,

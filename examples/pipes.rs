@@ -339,8 +339,6 @@ fn rand() -> i32 {
 }
 
 fn main() -> MainResult {
-    init_builtin_logger();
-
     // simple pre-check of TERM, tput's error message should be enough
     let term = std::env::var("TERM").unwrap();
     run_cmd!(tput -T $term sgr0 >/dev/null)?;

@@ -1,3 +1,4 @@
+use crate::logger::try_init_default_logger;
 use crate::{process, CmdResult, FunResult};
 use log::{info, warn};
 use os_pipe::PipeReader;
@@ -284,7 +285,10 @@ impl StderrLogging {
                 BufReader::new(stderr)
                     .lines()
                     .map_while(Result::ok)
-                    .for_each(|line| info!("{}", line))
+                    .for_each(|line| {
+                        let _ = try_init_default_logger();
+                        info!("{}", line)
+                    })
             });
             Self {
                 cmd: cmd.into(),
@@ -303,6 +307,7 @@ impl Drop for StderrLogging {
     fn drop(&mut self) {
         if let Some(thread) = self.thread.take() {
             if let Err(e) = thread.join() {
+                let _ = try_init_default_logger();
                 warn!("{} logging thread exited with error: {:?}", self.cmd, e);
             }
         }

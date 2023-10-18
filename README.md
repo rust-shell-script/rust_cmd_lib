@@ -64,15 +64,15 @@ Output will be like this:
 
 ```console
 ➜  rust_cmd_lib git:(master) ✗ cargo run --example dd_test -- -b 4096 -f /dev/nvme0n1 -t 4
-    Finished dev [unoptimized + debuginfo] target(s) in 1.56s
+    Finished dev [unoptimized + debuginfo] target(s) in 0.04s
      Running `target/debug/examples/dd_test -b 4096 -f /dev/nvme0n1 -t 4`
-INFO - Dropping caches at first
-INFO - Running with thread_num: 4, block_size: 4096
-INFO - thread 1 bandwidth: 286 MB/s
-INFO - thread 3 bandwidth: 269 MB/s
-INFO - thread 2 bandwidth: 267 MB/s
-INFO - thread 0 bandwidth: 265 MB/s
-INFO - Total bandwidth: 1.01 GiB/s
+[INFO ] Dropping caches at first
+[INFO ] Running with thread_num: 4, block_size: 4096
+[INFO ] thread 3 bandwidth: 317 MB/s
+[INFO ] thread 1 bandwidth: 289 MB/s
+[INFO ] thread 0 bandwidth: 281 MB/s
+[INFO ] thread 2 bandwidth: 279 MB/s
+[INFO ] Total bandwidth: 1.11 GiB/s
 ```
 
 ### What this library provides
@@ -173,17 +173,16 @@ are printed to stderr will be logged. Since it is returning result type, you can
 errors if command execution fails.
 
 ```rust
-// this code snppit is using a builtin simple logger, you can replace it with a real logger
-init_builtin_logger();
 let dir: &str = "folder with spaces";
 assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir).is_ok());
 assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
 // output:
-// INFO - mkdir: cannot create directory ‘/tmp/folder with spaces’: File exists
+// [INFO ] mkdir: cannot create directory ‘/tmp/folder with spaces’: File exists
 ```
 
 It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite
-logging implementation. **Notice that if you don't provide any logger, the stderr from process will be discarded**.
+logger implementation. Notice that if you don't provide any logger, it will use env_logger to print
+messages from process's stderr.
 
 #### Builtin commands
 ##### cd
