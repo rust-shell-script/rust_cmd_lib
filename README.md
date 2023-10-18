@@ -183,7 +183,7 @@ assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err())
 ```
 
 It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite
-logging implementation. Notice that if you don't provide any logger, the stderr output will be discarded.
+logging implementation. **Notice that if you don't provide any logger, the stderr from process will be discarded**.
 
 #### Builtin commands
 ##### cd
@@ -205,13 +205,19 @@ working directory for the whole program.
 
 Ignore errors for command execution, which can be used without importing.
 
-##### echo
+##### die
+Print fatal message and exit (with status code 1).
 
-Print messages to stdout, which needs to be imported with `use_builtin_cmd!` macro.
+##### echo
+Print messages to stdout
+
+##### error, warn, info, debug, trace
+
+Print messages to logging (if provided) with different levels.
 
 ```rust
-use_builtin_cmd!(echo, warn); // find more builtin commands in src/builtins.rs
 run_cmd!(echo "This is from builtin command!")?;
+run_cmd!(info "This is from builtin command!")?;
 run_cmd!(warn "This is from builtin command!")?;
 ```
 

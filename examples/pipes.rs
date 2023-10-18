@@ -339,7 +339,6 @@ fn rand() -> i32 {
 }
 
 fn main() -> MainResult {
-    use_builtin_cmd!(info);
     init_builtin_logger();
 
     // simple pre-check of TERM, tput's error message should be enough

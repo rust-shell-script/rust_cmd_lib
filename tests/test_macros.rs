@@ -135,7 +135,6 @@ fn test_tls_set() {
 
 #[test]
 fn test_pipe() {
-    use_builtin_cmd!(echo);
     assert!(run_cmd!(echo "xx").is_ok());
     assert_eq!(run_fun!(echo "xx").unwrap(), "xx");
     assert!(run_cmd!(echo xx | wc).is_ok());
@@ -237,7 +236,6 @@ fn test_redirect_fail() {}
 
 #[test]
 fn test_buitin_stdout_redirect() {
-    use_builtin_cmd!(echo);
     let f = "/tmp/builtin";
     let msg = run_fun!(echo xx &> $f).unwrap();
     assert_eq!(msg, "");

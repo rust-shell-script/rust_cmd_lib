@@ -80,35 +80,6 @@ pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
     .into()
 }
 
-/// import library predefined builtin command
-/// ```
-/// # use cmd_lib::*;
-/// use_builtin_cmd!(info); // import only one builtin command
-/// use_builtin_cmd!(echo, info, warn, err, die, cat); // import all the builtins
-/// ```
-/// `cd` builtin command is always enabled without importing it.
-#[proc_macro]
-#[proc_macro_error]
-pub fn use_builtin_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let item: proc_macro2::TokenStream = item.into();
-    let mut ret = TokenStream::new();
-    for t in item {
-        if let TokenTree::Punct(ref ch) = t {
-            if ch.as_char() != ',' {
-                abort!(t, "only comma is allowed");
-            }
-        } else if let TokenTree::Ident(cmd) = t {
-            let cmd_name = cmd.to_string();
-            let cmd_fn = syn::Ident::new(&format!("builtin_{}", cmd_name), Span::call_site());
-            ret.extend(quote!(::cmd_lib::export_cmd(#cmd_name, ::cmd_lib::#cmd_fn);));
-        } else {
-            abort!(t, "expect a list of comma separated commands");
-        }
-    }
-
-    ret.into()
-}
-
 /// Run commands, returning result handle to check status
 /// ```
 /// # use cmd_lib::run_cmd;

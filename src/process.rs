@@ -1,3 +1,4 @@
+use crate::builtins::*;
 use crate::child::{CmdChild, CmdChildHandle, CmdChildren, FunChildren};
 use crate::io::{CmdIn, CmdOut};
 use crate::{CmdResult, FunResult};
@@ -64,7 +65,15 @@ type FnFun = fn(&mut CmdEnv) -> CmdResult;
 lazy_static! {
     static ref CMD_MAP: Mutex<HashMap<OsString, FnFun>> = {
         // needs explicit type, or it won't compile
-        let m: HashMap<OsString, FnFun> = HashMap::new();
+        let mut m: HashMap<OsString, FnFun> = HashMap::new();
+        m.insert("echo".into(), builtin_echo);
+        m.insert("trace".into(), builtin_trace);
+        m.insert("debug".into(), builtin_debug);
+        m.insert("info".into(), builtin_info);
+        m.insert("warn".into(), builtin_warn);
+        m.insert("error".into(), builtin_error);
+        m.insert("die".into(), builtin_die);
+
         Mutex::new(m)
     };
 }

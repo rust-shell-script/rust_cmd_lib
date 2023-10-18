@@ -201,7 +201,7 @@
 //! ```
 //!
 //! It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite
-//! logging implementation. Notice that if you don't provide any logger, the stderr output will be discarded.
+//! logging implementation. **Notice that if you don't provide any logger, the stderr from process will be discarded**.
 //!
 //! ### Builtin commands
 //! #### cd
@@ -225,14 +225,20 @@
 //!
 //! Ignore errors for command execution, which can be used without importing.
 //!
-//! #### echo
+//! #### die
+//! Print fatal message and exit (with status code 1).
 //!
-//! Print messages to stdout, which needs to be imported with `use_builtin_cmd!` macro.
+//! #### echo
+//! Print messages to stdout
+//!
+//! #### error, warn, info, debug, trace
+//!
+//! Print messages to logging (if provided) with different levels.
 //!
 //! ```
-//! # use cmd_lib::{run_cmd, use_builtin_cmd};
-//! use_builtin_cmd!(echo, warn); // find more builtin commands in src/builtins.rs
+//! # use cmd_lib::*;
 //! run_cmd!(echo "This is from builtin command!")?;
+//! run_cmd!(info "This is from builtin command!")?;
 //! run_cmd!(warn "This is from builtin command!")?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
@@ -349,16 +355,12 @@
 
 pub use cmd_lib_macros::{
     cmd_debug, cmd_die, cmd_echo, cmd_error, cmd_info, cmd_trace, cmd_warn, export_cmd, run_cmd,
-    run_fun, spawn, spawn_with_output, use_builtin_cmd, use_custom_cmd,
+    run_fun, spawn, spawn_with_output, use_custom_cmd,
 };
 /// Return type for run_fun!() macro
 pub type FunResult = std::io::Result<String>;
 /// Return type for run_cmd!() macro
 pub type CmdResult = std::io::Result<()>;
-pub use builtins::{
-    builtin_cat, builtin_debug, builtin_die, builtin_echo, builtin_error, builtin_info,
-    builtin_trace, builtin_warn,
-};
 pub use child::{CmdChildren, FunChildren};
 #[doc(hidden)]
 pub use log;

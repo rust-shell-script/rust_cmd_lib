@@ -33,7 +33,6 @@ struct Opt {
 }
 
 fn main() -> MainResult {
-    use_builtin_cmd!(echo, info);
     init_builtin_logger();
     let Opt {
         block_size,
