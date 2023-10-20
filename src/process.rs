@@ -181,7 +181,7 @@ impl Cmds {
     }
 
     fn spawn(&mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChildren> {
-        let full_cmds = &self.full_cmds;
+        let full_cmds = format!("[{}]", self.full_cmds);
         if debug_enabled() {
             let _ = try_init_default_logger();
             debug!("Running {full_cmds} ...");
@@ -196,17 +196,17 @@ impl Cmds {
             if i != len - 1 {
                 // not the last, update redirects
                 let (pipe_reader, pipe_writer) =
-                    os_pipe::pipe().map_err(|e| new_cmd_io_error(&e, full_cmds))?;
+                    os_pipe::pipe().map_err(|e| new_cmd_io_error(&e, &full_cmds))?;
                 cmd.setup_redirects(&mut prev_pipe_in, Some(pipe_writer), with_output)
-                    .map_err(|e| new_cmd_io_error(&e, full_cmds))?;
+                    .map_err(|e| new_cmd_io_error(&e, &full_cmds))?;
                 prev_pipe_in = Some(pipe_reader);
             } else {
                 cmd.setup_redirects(&mut prev_pipe_in, None, with_output)
-                    .map_err(|e| new_cmd_io_error(&e, full_cmds))?;
+                    .map_err(|e| new_cmd_io_error(&e, &full_cmds))?;
             }
             let child = cmd
                 .spawn(current_dir, with_output)
-                .map_err(|e| new_cmd_io_error(&e, full_cmds))?;
+                .map_err(|e| new_cmd_io_error(&e, &full_cmds))?;
             children.push(child);
         }
 
@@ -336,16 +336,13 @@ impl Cmd {
     }
 
     fn cmd_str(&self) -> String {
-        format!(
-            "[{}]",
-            self.vars
-                .iter()
-                .map(|(k, v)| format!("{k}={v:?}"))
-                .chain(self.args.iter().map(|s| format!("{s:?}")))
-                .chain(self.redirects.iter().map(|r| format!("{r:?}")))
-                .collect::<Vec<String>>()
-                .join(" ")
-        )
+        self.vars
+            .iter()
+            .map(|(k, v)| format!("{k}={v:?}"))
+            .chain(self.args.iter().map(|s| format!("{s:?}")))
+            .chain(self.redirects.iter().map(|r| format!("{r:?}")))
+            .collect::<Vec<String>>()
+            .join(" ")
     }
 
     fn gen_command(mut self) -> (bool, Self) {

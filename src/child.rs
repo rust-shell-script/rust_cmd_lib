@@ -219,7 +219,7 @@ impl CmdChildHandle {
                         if !status.success() {
                             return Err(Self::status_to_io_error(
                                 status,
-                                &format!("Running {} exited with error", cmd),
+                                &format!("Running [{cmd}] exited with error"),
                             ));
                         }
                     }
@@ -236,7 +236,7 @@ impl CmdChildHandle {
                     Err(e) => {
                         return Err(Error::new(
                             ErrorKind::Other,
-                            format!("Running {} thread joined with error: {:?}", cmd, e),
+                            format!("Running [{cmd}] thread joined with error: {e:?}"),
                         ))
                     }
                 }
@@ -308,7 +308,7 @@ impl Drop for StderrLogging {
         if let Some(thread) = self.thread.take() {
             if let Err(e) = thread.join() {
                 let _ = try_init_default_logger();
-                warn!("{} logging thread exited with error: {:?}", self.cmd, e);
+                warn!("[{}] logging thread exited with error: {:?}", self.cmd, e);
             }
         }
     }
