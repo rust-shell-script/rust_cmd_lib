@@ -204,7 +204,7 @@
 //!
 //! ### Builtin commands
 //! #### cd
-//! cd: set process current directory, which can be used without importing.
+//! cd: set process current directory.
 //! ```no_run
 //! # use cmd_lib::run_cmd;
 //! run_cmd! (
@@ -222,20 +222,24 @@
 //!
 //! #### ignore
 //!
-//! Ignore errors for command execution, which can be used without importing.
+//! Ignore errors for command execution.
 //!
 //! #### echo
-//! Print messages to stdout
+//! Print messages to stdout.
 //!
 //! #### error, warn, info, debug, trace
 //!
-//! Print messages to logging (if provided) with different levels.
+//! Print messages to logging with different logging levels.
 //!
-//! ```
+//! ```no_run
 //! # use cmd_lib::*;
-//! run_cmd!(echo "This is from builtin command!")?;
-//! run_cmd!(info "This is from builtin command!")?;
-//! run_cmd!(warn "This is from builtin command!")?;
+//! run_cmd!(error "This is an error message")?;
+//! run_cmd!(warn "This is a warning message")?;
+//! run_cmd!(info "This is an infomation message")?;
+//! // output:
+//! // [ERROR] This is an error message
+//! // [WARN ] This is a warning message
+//! // [INFO ] This is an infomation message
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -359,12 +363,13 @@ pub type CmdResult = std::io::Result<()>;
 pub use child::{CmdChildren, FunChildren};
 #[doc(hidden)]
 pub use log;
+#[doc(hidden)]
 pub use logger::try_init_default_logger;
 pub use main_error::MainError;
 pub use main_error::MainResult;
-pub use process::{
-    export_cmd, set_debug, set_pipefail, AsOsStr, Cmd, CmdEnv, CmdString, Cmds, GroupCmds, Redirect,
-};
+#[doc(hidden)]
+pub use process::{export_cmd, AsOsStr, Cmd, CmdString, Cmds, GroupCmds, Redirect};
+pub use process::{set_debug, set_pipefail, CmdEnv};
 
 mod builtins;
 mod child;

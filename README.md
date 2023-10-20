@@ -186,7 +186,7 @@ messages from process's stderr.
 
 #### Builtin commands
 ##### cd
-cd: set process current directory, which can be used without importing.
+cd: set process current directory.
 ```rust
 run_cmd! (
     cd /tmp;
@@ -202,19 +202,23 @@ working directory for the whole program.
 
 ##### ignore
 
-Ignore errors for command execution, which can be used without importing.
+Ignore errors for command execution.
 
 ##### echo
-Print messages to stdout
+Print messages to stdout.
 
 ##### error, warn, info, debug, trace
 
-Print messages to logging (if provided) with different levels.
+Print messages to logging with different logging levels.
 
 ```rust
-run_cmd!(echo "This is from builtin command!")?;
-run_cmd!(info "This is from builtin command!")?;
-run_cmd!(warn "This is from builtin command!")?;
+run_cmd!(error "This is an error message")?;
+run_cmd!(warn "This is a warning message")?;
+run_cmd!(info "This is an infomation message")?;
+// output:
+// [ERROR] This is an error message
+// [WARN ] This is a warning message
+// [INFO ] This is an infomation message
 ```
 
 #### Macros to register your own commands

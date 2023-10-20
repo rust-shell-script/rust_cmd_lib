@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream, TokenTree};
 use proc_macro_error::{abort, proc_macro_error};
 use quote::{quote, ToTokens};
 
-/// export the function as an command to be run by `run_cmd!` or `run_fun!`
+/// Export the function as an command to be run by `run_cmd!` or `run_fun!`
 ///
 /// ```
 /// # use cmd_lib::*;
@@ -41,7 +41,7 @@ pub fn export_cmd(
     new_functions.into()
 }
 
-/// import user registered custom command
+/// Import user registered custom command
 /// ```
 /// # use cmd_lib::*;
 /// #[export_cmd(my_cmd)]
@@ -176,7 +176,7 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// for (i, mut proc) in procs.into_iter().enumerate() {
 ///     let bandwidth = proc.wait_with_output()?;
-///     run_cmd!(info "thread $i bandwidth: $bandwidth MB/s")?;
+///     log::info!("thread {i} bandwidth: {bandwidth} MB/s")?;
 /// }
 /// # Ok::<(), std::io::Error>(())
 /// ```
