@@ -173,7 +173,7 @@ impl Cmds {
                 self.ignore_error = true;
             } else {
                 let _ = try_init_default_logger();
-                warn!("Builtin \"ignore\" command at wrong position");
+                warn!("Builtin {IGNORE_CMD:?} command at wrong position");
             }
         }
         self.cmds.push(Some(cmd));
@@ -238,21 +238,21 @@ pub enum Redirect {
 impl fmt::Debug for Redirect {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Redirect::FileToStdin(path) => f.write_str(&format!("< {}", path.display())),
+            Redirect::FileToStdin(path) => f.write_str(&format!("<{:?}", path.display())),
             Redirect::StdoutToStderr => f.write_str(">&2"),
             Redirect::StderrToStdout => f.write_str("2>&1"),
             Redirect::StdoutToFile(path, append) => {
                 if *append {
-                    f.write_str(&format!("1>>\"{}\"", path.display()))
+                    f.write_str(&format!("1>>{:?}", path.display()))
                 } else {
-                    f.write_str(&format!("1>\"{}\"", path.display()))
+                    f.write_str(&format!("1>{:?}", path.display()))
                 }
             }
             Redirect::StderrToFile(path, append) => {
                 if *append {
-                    f.write_str(&format!("2>>\"{}\"", path.display()))
+                    f.write_str(&format!("2>>{:?}", path.display()))
                 } else {
-                    f.write_str(&format!("2>\"{}\"", path.display()))
+                    f.write_str(&format!("2>{:?}", path.display()))
                 }
             }
         }
@@ -460,15 +460,15 @@ impl Cmd {
 
     fn run_cd_cmd(&self, current_dir: &mut PathBuf) -> CmdResult {
         if self.args.len() == 1 {
-            return Err(Error::new(ErrorKind::Other, "cd: missing directory"));
+            return Err(Error::new(ErrorKind::Other, "{CD_CMD}: missing directory"));
         } else if self.args.len() > 2 {
-            let err_msg = format!("cd: too many arguments: {}", self.cmd_str());
+            let err_msg = format!("{CD_CMD}: too many arguments");
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
         let dir = current_dir.join(&self.args[1]);
         if !dir.is_dir() {
-            let err_msg = format!("cd {}: No such file or directory", dir.display());
+            let err_msg = format!("{CD_CMD}: No such file or directory");
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
