@@ -193,7 +193,7 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 
 #[proc_macro]
 #[proc_macro_error]
-/// Logs a fatal message at the error level, and exit process
+/// Log a fatal message at the error level, and exit process
 ///
 /// e.g:
 /// ```

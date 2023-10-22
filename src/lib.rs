@@ -61,8 +61,7 @@
 //!     log::info!("thread {i} bandwidth: {bandwidth}");
 //! });
 //! let total_bandwidth = Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128)
-//!     .get_appropriate_unit(true)
-//!     .to_string();
+//!     .get_appropriate_unit(true);
 //! log::info!("Total bandwidth: {total_bandwidth}/s");
 //! # Ok::<(), std::io::Error>(())
 //! ```
