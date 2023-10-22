@@ -201,7 +201,7 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 /// let file = "bad_file";
 /// cmd_die!("could not open file: $file");
 /// // output:
-/// // FATAL: could not open file: bad_file
+/// // [ERROR] FATAL: could not open file: bad_file
 /// ```
 /// format should be string literals, and variable interpolation is supported.
 /// Note that this macro is just for convenience. The process will exit with 1 and print

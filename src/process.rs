@@ -83,14 +83,14 @@ pub fn export_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(OsString::from(cmd), func);
 }
 
-/// set debug mode or not, false by default
+/// Set debug mode or not, false by default
 ///
 /// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect
 pub fn set_debug(enable: bool) {
     std::env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 
-/// set pipefail or not, true by default
+/// Set pipefail or not, true by default
 ///
 /// Setting environment variable CMD_LIB_PIPEFAIL=0|1 has the same effect
 pub fn set_pipefail(enable: bool) {
