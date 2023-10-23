@@ -15,11 +15,11 @@
 //! [Redirection](https://en.wikipedia.org/wiki/Redirection_(computing)) or
 //! [Piping](https://en.wikipedia.org/wiki/Redirection_(computing)#Piping) is needed, you need to
 //! set up the parent and child IO handles manually, like this in the
-//! [rust cookbook](https://rust-lang-nursery.github.io/rust-cookbook/os/external.html), which is often a tedious
-//! work.
+//! [rust cookbook](https://rust-lang-nursery.github.io/rust-cookbook/os/external.html), which is often tedious
+//! and [error prone](https://github.com/ijackson/rust-rfcs/blob/command/text/0000-command-ergonomics.md#currently-accepted-wrong-programs).
 //!
 //! A lot of developers just choose shell(sh, bash, ...) scripts for such tasks, by using `<` to redirect input,
-//! `>` to redirect output and '|' to pipe outputs. In my experience, this is **the only good parts** of shell script.
+//! `>` to redirect output and `|` to pipe outputs. In my experience, this is **the only good parts** of shell script.
 //! You can find all kinds of pitfalls and mysterious tricks to make other parts of shell script work. As the shell
 //! scripts grow, they will ultimately be unmaintainable and no one wants to touch them any more.
 //!
@@ -58,11 +58,10 @@
 //!         | awk r#"/copied/{print $(NF-1) " " $NF}"#
 //!     )
 //!     .unwrap_or_else(|_| cmd_die!("thread $i failed"));
-//!     log::info!("thread {i} bandwidth: {bandwidth}");
+//!     info!("thread {i} bandwidth: {bandwidth}");
 //! });
-//! let total_bandwidth = Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128)
-//!     .get_appropriate_unit(true);
-//! log::info!("Total bandwidth: {total_bandwidth}/s");
+//! let total_bandwidth = Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128).get_appropriate_unit(true);
+//! info!("Total bandwidth: {total_bandwidth}/s");
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -185,16 +184,18 @@
 //! ### Logging
 //!
 //! This library provides convenient macros and builtin commands for logging. All messages which
-//! are printed to stderr will be logged. Since it is returning result type, you can also log the
-//! errors if command execution fails.
+//! are printed to stderr will be logged. It will also include the full running commands in the error
+//! result.
 //!
 //! ```no_run
 //! # use cmd_lib::*;
 //! let dir: &str = "folder with spaces";
-//! assert!(run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir).is_ok());
-//! assert!(run_cmd!(mkdir /tmp/"$dir"; ls /tmp/"$dir"; rmdir /tmp/"$dir").is_err());
+//! run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir)?;
+//! run_cmd!(mkdir /tmp/$dir; ls /tmp/$dir; rmdir /tmp/$dir)?;
 //! // output:
 //! // [INFO ] mkdir: cannot create directory ‘/tmp/folder with spaces’: File exists
+//! // Error: Running ["mkdir" "/tmp/folder with spaces"] exited with error; status code: 1
+//! # Ok::<(), std::io::Error>(())
 //! ```
 //!
 //! It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite
@@ -361,9 +362,10 @@ pub type FunResult = std::io::Result<String>;
 pub type CmdResult = std::io::Result<()>;
 pub use child::{CmdChildren, FunChildren};
 #[doc(hidden)]
-pub use log;
+pub use log as inner_log;
 #[doc(hidden)]
 pub use logger::try_init_default_logger;
+#[doc(hidden)]
 pub use main_error::MainError;
 pub use main_error::MainResult;
 #[doc(hidden)]

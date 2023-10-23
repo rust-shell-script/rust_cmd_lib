@@ -54,11 +54,11 @@ fn main() -> MainResult {
             | awk r#"/copied/{print $(NF-1) " " $NF}"#
         )
         .unwrap_or_else(|_| cmd_die!("thread $i failed"));
-        log::info!("thread {i} bandwidth: {bandwidth}");
+        info!("thread {i} bandwidth: {bandwidth}");
     });
-    let total_bandwidth = Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128)
-        .get_appropriate_unit(true);
-    log::info!("Total bandwidth: {total_bandwidth}/s");
+    let total_bandwidth =
+        Byte::from_bytes((DATA_SIZE / now.elapsed().as_secs()) as u128).get_appropriate_unit(true);
+    info!("Total bandwidth: {total_bandwidth}/s");
 
     Ok(())
 }

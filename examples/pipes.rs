@@ -148,7 +148,7 @@ fn parse() -> CmdResult {
     // $arg and $OPTARG are the option name and argument set by getopts.
     fn pearg(arg: &str, msg: &str) -> ! {
         let arg0 = prog_name();
-        log::info!("{arg0}: -{arg} invalid argument; {msg}");
+        info!("{arg0}: -{arg} invalid argument; {msg}");
         print_help();
         std::process::exit(1)
     }

@@ -176,7 +176,7 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// for (i, mut proc) in procs.into_iter().enumerate() {
 ///     let bandwidth = proc.wait_with_output()?;
-///     log::info!("thread {i} bandwidth: {bandwidth} MB/s")?;
+///     info!("thread {i} bandwidth: {bandwidth} MB/s")?;
 /// }
 /// # Ok::<(), std::io::Error>(())
 /// ```
@@ -210,9 +210,9 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
+        use ::cmd_lib::error;
         use ::cmd_lib::AsOsStr;
-        let _ = ::cmd_lib::try_init_default_logger();
-        ::cmd_lib::log::error!("FATAL: {}", #msg);
+        error!("FATAL: {}", #msg);
         std::process::exit(1)
     })
     .into()
