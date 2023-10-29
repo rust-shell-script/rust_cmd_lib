@@ -3,8 +3,14 @@ use crate::{CmdEnv, CmdResult};
 use std::io::Write;
 
 pub(crate) fn builtin_echo(env: &mut CmdEnv) -> CmdResult {
-    let msg = env.args()[1..].join(" ");
-    writeln!(env.stdout(), "{}", msg)
+    let args = env.args();
+    let msg = if args.len() > 1 && args[1] == "-n" {
+        args[2..].join(" ")
+    } else {
+        args[1..].join(" ") + "\n"
+    };
+
+    write!(env.stdout(), "{}", msg)
 }
 
 pub(crate) fn builtin_error(env: &mut CmdEnv) -> CmdResult {

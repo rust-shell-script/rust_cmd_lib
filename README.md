@@ -206,6 +206,8 @@ Ignore errors for command execution.
 ##### echo
 Print messages to stdout.
 
+-n     do not output the trailing newline
+
 ##### error, warn, info, debug, trace
 
 Print messages to logging with different logging levels.
