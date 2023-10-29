@@ -37,3 +37,8 @@ pub(crate) fn builtin_trace(env: &mut CmdEnv) -> CmdResult {
     trace!("{}", env.args()[1..].join(" "));
     Ok(())
 }
+
+pub(crate) fn builtin_empty(_env: &mut CmdEnv) -> CmdResult {
+    Ok(())
+}
+
