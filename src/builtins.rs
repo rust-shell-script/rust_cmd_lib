@@ -1,6 +1,6 @@
 use crate::{debug, error, info, trace, warn};
 use crate::{CmdEnv, CmdResult};
-use std::io::Write;
+use std::io::{Read, Write};
 
 pub(crate) fn builtin_echo(env: &mut CmdEnv) -> CmdResult {
     let args = env.args();
@@ -38,7 +38,9 @@ pub(crate) fn builtin_trace(env: &mut CmdEnv) -> CmdResult {
     Ok(())
 }
 
-pub(crate) fn builtin_empty(_env: &mut CmdEnv) -> CmdResult {
+pub(crate) fn builtin_empty(env: &mut CmdEnv) -> CmdResult {
+    let mut buf = vec![];
+    env.stdin().read_to_end(&mut buf)?;
+    env.stdout().write_all(&buf)?;
     Ok(())
 }
-
