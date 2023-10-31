@@ -556,6 +556,7 @@ fn cmd_exit() {
     std::process::exit(0);
 }
 
+#[cmd_lib::main]
 fn main() -> MainResult {
     #[rustfmt::skip]
     let old_cfg = run_fun!(stty -g)?; // let's save terminal state ...

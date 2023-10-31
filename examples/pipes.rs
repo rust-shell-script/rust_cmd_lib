@@ -338,6 +338,7 @@ fn rand() -> i32 {
     run_fun!(bash -c r"echo $RANDOM").unwrap().parse().unwrap()
 }
 
+#[cmd_lib::main]
 fn main() -> MainResult {
     // simple pre-check of TERM, tput's error message should be enough
     let term = std::env::var("TERM").unwrap();

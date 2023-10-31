@@ -2,6 +2,44 @@ use proc_macro2::{Span, TokenStream, TokenTree};
 use proc_macro_error::{abort, proc_macro_error};
 use quote::{quote, ToTokens};
 
+/// Mark main function to log error result by default
+///
+/// ```
+/// # use cmd_lib::*;
+///
+/// #[cmd_lib::main]
+/// fn main() -> MainResult {
+///     run_cmd!(bad_cmd)?;
+///     Ok(())
+/// }
+/// // output:
+/// // [ERROR] FATAL: Running ["bad_cmd"] failed: No such file or directory (os error 2)
+/// ```
+#[proc_macro_attribute]
+pub fn main(
+    _args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let orig_function: syn::ItemFn = syn::parse2(item.into()).unwrap();
+    let orig_main_return_type = orig_function.sig.output;
+    let orig_main_block = orig_function.block;
+
+    quote! (
+        fn main() {
+            fn cmd_lib_main() #orig_main_return_type {
+                #orig_main_block
+            }
+
+            cmd_lib_main().unwrap_or_else(|err| {
+                ::cmd_lib::error!("FATAL: {err}");
+                std::process::exit(1);
+            });
+        }
+
+    )
+    .into()
+}
+
 /// Export the function as an command to be run by `run_cmd!` or `run_fun!`
 ///
 /// ```
@@ -210,9 +248,7 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        use ::cmd_lib::error;
-        use ::cmd_lib::AsOsStr;
-        error!("FATAL: {}", #msg);
+        ::cmd_lib::error!("FATAL: {}", #msg);
         std::process::exit(1)
     })
     .into()

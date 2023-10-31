@@ -33,6 +33,7 @@ struct Opt {
     file: String,
 }
 
+#[cmd_lib::main]
 fn main() -> MainResult {
     let Opt {
         block_size,

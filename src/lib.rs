@@ -99,16 +99,14 @@
 //! // if any command fails, just return Err(...)
 //! let file = "/tmp/f";
 //! let keyword = "rust";
-//! if run_cmd! {
+//! run_cmd! {
 //!     cat ${file} | grep ${keyword};
 //!     echo "bad cmd" >&2;
 //!     ignore ls /nofile;
 //!     date;
 //!     ls oops;
 //!     cat oops;
-//! }.is_err() {
-//!     // your error handling code
-//! }
+//! }?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -201,6 +199,12 @@
 //! It is using rust [log crate](https://crates.io/crates/log), and you can use your actual favorite
 //! logger implementation. Notice that if you don't provide any logger, it will use env_logger to print
 //! messages from process's stderr.
+//!
+//! You can also mark your `main()` function with `#[cmd_lib::main]`, which will log error from
+//! main() by default. Like this:
+//! ```console
+//! [ERROR] FATAL: Running ["mkdir" "/tmp/folder with spaces"] exited with error; status code: 1
+//! ```
 //!
 //! ### Builtin commands
 //! #### cd
@@ -356,7 +360,7 @@
 //!
 
 pub use cmd_lib_macros::{
-    cmd_die, export_cmd, run_cmd, run_fun, spawn, spawn_with_output, use_custom_cmd,
+    cmd_die, export_cmd, main, run_cmd, run_fun, spawn, spawn_with_output, use_custom_cmd,
 };
 /// Return type for run_fun!() macro
 pub type FunResult = std::io::Result<String>;
@@ -378,5 +382,6 @@ mod builtins;
 mod child;
 mod io;
 mod logger;
+mod main_error;
 mod process;
 mod thread_local;
