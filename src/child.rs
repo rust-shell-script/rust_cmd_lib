@@ -302,13 +302,12 @@ impl StderrThread {
                         if !capture {
                             info!("{line}");
                         } else {
+                            if !output.is_empty() {
+                                output.push('\n');
+                            }
                             output.push_str(&line);
-                            output.push('\n');
                         }
                     });
-                if output.ends_with('\n') {
-                    output.pop();
-                }
                 output
             });
             Self {
@@ -327,13 +326,11 @@ impl StderrThread {
         if let Some(thread) = self.thread.take() {
             match thread.join() {
                 Err(e) => {
+                    let cmd = &self.cmd;
                     return Err(Error::new(
                         ErrorKind::Other,
-                        format!(
-                            "Running [{}] stderr thread joined with error: {e:?}",
-                            self.cmd
-                        ),
-                    ))
+                        format!("Running [{cmd}] stderr thread joined with error: {e:?}",),
+                    ));
                 }
                 Ok(output) => return Ok(output),
             }
