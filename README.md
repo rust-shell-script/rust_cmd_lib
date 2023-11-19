@@ -76,7 +76,7 @@ Output will be like this:
 ### What this library provides
 
 #### Macros to run external commands
-- [run_cmd!](https://docs.rs/cmd_lib/latest/cmd_lib/macro.run_cmd.html) -> [CmdResult](https://docs.rs/cmd_lib/latest/cmd_lib/type.CmdResult.html)
+- [`run_cmd!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.run_cmd.html) -> [`CmdResult`](https://docs.rs/cmd_lib/latest/cmd_lib/type.CmdResult.html)
 
 ```rust
 let msg = "I love rust";
@@ -101,7 +101,7 @@ run_cmd! {
 }?;
 ```
 
-- [run_fun!](https://docs.rs/cmd_lib/latest/cmd_lib/macro.run_fun.html) -> [FunResult](https://docs.rs/cmd_lib/latest/cmd_lib/type.FunResult.html)
+- [`run_fun!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.run_fun.html) -> [`FunResult`](https://docs.rs/cmd_lib/latest/cmd_lib/type.FunResult.html)
 
 ```rust
 let version = run_fun!(rustc --version)?;
@@ -228,7 +228,7 @@ run_cmd!(info "This is an infomation message")?;
 ```
 
 #### Macros to register your own commands
-Declare your function with `#[export_cmd(..)]` attribute, and import it with [`use_custom_cmd!`] macro:
+Declare your function with `#[export_cmd(..)]` attribute, and import it with [`use_custom_cmd!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.use_custom_cmd.html) macro:
 
 ```rust
 #[export_cmd(my_cmd)]
@@ -242,16 +242,16 @@ use_custom_cmd!(my_cmd);
 run_cmd!(my_cmd)?;
 println!("get result: {}", run_fun!(my_cmd)?);
 ```
-
 #### Low-level process spawning macros
 
-[`spawn!`] macro executes the whole command as a child process, returning a handle to it. By
+[`spawn!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.spawn.html) macro executes the whole command as a child process, returning a handle to it. By
 default, stdin, stdout and stderr are inherited from the parent. The process will run in the
-background, so you can run other stuff concurrently. You can call [`wait()`](`CmdChildren::wait()`) to wait
+background, so you can run other stuff concurrently. You can call [`wait()`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.CmdChildren.html#method.wait) to wait
 for the process to finish.
 
-With [`spawn_with_output!`] you can get output by calling [`wait_with_output()`](`FunChildren::wait_with_output()`), or even do stream
-processing with [`wait_with_pipe()`](`FunChildren::wait_with_pipe()`).
+With [`spawn_with_output!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.spawn_with_output.html) you can get output by calling
+[`wait_with_output()`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.FunChildren.html#method.wait_with_output), or even do stream
+processing with [`wait_with_pipe()`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.FunChildren.html#method.wait_with_pipe).
 
 There are also other useful APIs, and you can check the docs for more details.
 
@@ -278,9 +278,9 @@ spawn_with_output!(journalctl)?.wait_with_pipe(&mut |pipe| {
 
 
 #### Macros to define, get and set thread-local global variables
-- [`tls_init!`] to define thread local global variable
-- [`tls_get!`] to get the value
-- [`tls_set!`] to set the value
+- [`tls_init!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_init.html) to define thread local global variable
+- [`tls_get!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_get.html) to get the value
+- [`tls_set!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_set.html) to set the value
 ```rust
 tls_init!(DELAY, f64, 1.0);
 const DELAY_FACTOR: f64 = 0.8;
@@ -325,7 +325,7 @@ You can use the [glob](https://github.com/rust-lang-nursery/glob) package instea
 
 This library tries very hard to not set global states, so parallel `cargo test` can be executed just fine.
 The only known APIs not supported in multi-thread environment are the
-[`tls_init`]/[`tls_get`]/[`tls_set`] macros, and you should only use them for *thread local* variables.
+[`tls_init!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_init.html)/[`tls_get!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_get.html)/[`tls_set!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_set.html) macros, and you should only use them for *thread local* variables.
 
 
 License: MIT OR Apache-2.0
