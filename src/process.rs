@@ -19,7 +19,7 @@ use std::thread;
 const CD_CMD: &str = "cd";
 const IGNORE_CMD: &str = "ignore";
 
-/// Environment for builtin or custom commands
+/// Environment for builtin or custom commands.
 pub struct CmdEnv {
     stdin: CmdIn,
     stdout: CmdOut,
@@ -29,32 +29,32 @@ pub struct CmdEnv {
     current_dir: PathBuf,
 }
 impl CmdEnv {
-    /// Returns the arguments for this command
+    /// Returns the arguments for this command.
     pub fn args(&self) -> &[String] {
         &self.args
     }
 
-    /// Fetches the environment variable key for this command
+    /// Fetches the environment variable key for this command.
     pub fn var(&self, key: &str) -> Option<&String> {
         self.vars.get(key)
     }
 
-    /// Returns the current working directory for this command
+    /// Returns the current working directory for this command.
     pub fn current_dir(&self) -> &Path {
         &self.current_dir
     }
 
-    /// Returns a new handle to the standard input for this command
+    /// Returns a new handle to the standard input for this command.
     pub fn stdin(&mut self) -> impl Read + '_ {
         &mut self.stdin
     }
 
-    /// Returns a new handle to the standard output for this command
+    /// Returns a new handle to the standard output for this command.
     pub fn stdout(&mut self) -> impl Write + '_ {
         &mut self.stdout
     }
 
-    /// Returns a new handle to the standard error for this command
+    /// Returns a new handle to the standard error for this command.
     pub fn stderr(&mut self) -> impl Write + '_ {
         &mut self.stderr
     }
@@ -83,14 +83,14 @@ pub fn export_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(OsString::from(cmd), func);
 }
 
-/// Set debug mode or not, false by default
+/// Set debug mode or not, false by default.
 ///
 /// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect
 pub fn set_debug(enable: bool) {
     std::env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
 }
 
-/// Set pipefail or not, true by default
+/// Set pipefail or not, true by default.
 ///
 /// Setting environment variable CMD_LIB_PIPEFAIL=0|1 has the same effect
 pub fn set_pipefail(enable: bool) {

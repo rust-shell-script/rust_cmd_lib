@@ -76,7 +76,7 @@ Output will be like this:
 ### What this library provides
 
 #### Macros to run external commands
-- run_cmd! --> CmdResult
+- [run_cmd!](https://docs.rs/cmd_lib/latest/cmd_lib/macro.run_cmd.html) -> [CmdResult](https://docs.rs/cmd_lib/latest/cmd_lib/type.CmdResult.html)
 
 ```rust
 let msg = "I love rust";
@@ -101,7 +101,7 @@ run_cmd! {
 }?;
 ```
 
-- run_fun! --> FunResult
+- [run_fun!](https://docs.rs/cmd_lib/latest/cmd_lib/macro.run_fun.html) -> [FunResult](https://docs.rs/cmd_lib/latest/cmd_lib/type.FunResult.html)
 
 ```rust
 let version = run_fun!(rustc --version)?;
@@ -209,8 +209,9 @@ Ignore errors for command execution.
 
 ##### echo
 Print messages to stdout.
-
+```console
 -n     do not output the trailing newline
+```
 
 ##### error, warn, info, debug, trace
 
@@ -227,7 +228,7 @@ run_cmd!(info "This is an infomation message")?;
 ```
 
 #### Macros to register your own commands
-Declare your function with `#[export_cmd(..)]` attribute, and import it with `use_custom_cmd!` macro:
+Declare your function with `#[export_cmd(..)]` attribute, and import it with [`use_custom_cmd!`] macro:
 
 ```rust
 #[export_cmd(my_cmd)]
@@ -244,13 +245,15 @@ println!("get result: {}", run_fun!(my_cmd)?);
 
 #### Low-level process spawning macros
 
-`spawn!` macro executes the whole command as a child process, returning a handle to it. By
+[`spawn!`] macro executes the whole command as a child process, returning a handle to it. By
 default, stdin, stdout and stderr are inherited from the parent. The process will run in the
-background, so you can run other stuff concurrently. You can call `wait()` to wait
+background, so you can run other stuff concurrently. You can call [`wait()`](`CmdChildren::wait()`) to wait
 for the process to finish.
 
-With `spawn_with_output!` you can get output by calling `wait_with_output()`, or even do stream
-processing with `wait_with_pipe()`.
+With [`spawn_with_output!`] you can get output by calling [`wait_with_output()`](`FunChildren::wait_with_output()`), or even do stream
+processing with [`wait_with_pipe()`](`FunChildren::wait_with_pipe()`).
+
+There are also other useful APIs, and you can check the docs for more details.
 
 ```rust
 let mut proc = spawn!(ping -c 10 192.168.0.1)?;
@@ -275,9 +278,9 @@ spawn_with_output!(journalctl)?.wait_with_pipe(&mut |pipe| {
 
 
 #### Macros to define, get and set thread-local global variables
-- `tls_init!` to define thread local global variable
-- `tls_get!` to get the value
-- `tls_set!` to set the value
+- [`tls_init!`] to define thread local global variable
+- [`tls_get!`] to get the value
+- [`tls_set!`] to set the value
 ```rust
 tls_init!(DELAY, f64, 1.0);
 const DELAY_FACTOR: f64 = 0.8;
@@ -322,7 +325,7 @@ You can use the [glob](https://github.com/rust-lang-nursery/glob) package instea
 
 This library tries very hard to not set global states, so parallel `cargo test` can be executed just fine.
 The only known APIs not supported in multi-thread environment are the
-`tls_init/tls_get/tls_set` macros, and you should only use them for *thread local* variables.
+[`tls_init`]/[`tls_get`]/[`tls_set`] macros, and you should only use them for *thread local* variables.
 
 
 License: MIT OR Apache-2.0

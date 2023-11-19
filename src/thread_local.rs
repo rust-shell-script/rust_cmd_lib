@@ -1,4 +1,4 @@
-/// Declare a new thread local storage variable
+/// Declare a new thread local storage variable.
 /// ```
 /// # use cmd_lib::*;
 /// use std::collections::HashMap;
@@ -15,7 +15,7 @@ macro_rules! tls_init {
     };
 }
 
-/// Get the value of a thread local storage variable
+/// Get the value of a thread local storage variable.
 ///
 /// ```
 /// # use cmd_lib::*;
@@ -35,7 +35,7 @@ macro_rules! tls_get {
     };
 }
 
-/// Set the value of a thread local storage variable
+/// Set the value of a thread local storage variable.
 /// ```
 /// # use cmd_lib::*;
 /// # let changes = "";

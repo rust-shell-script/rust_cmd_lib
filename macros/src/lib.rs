@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream, TokenTree};
 use proc_macro_error::{abort, proc_macro_error};
 use quote::{quote, ToTokens};
 
-/// Mark main function to log error result by default
+/// Mark main function to log error result by default.
 ///
 /// ```
 /// # use cmd_lib::*;
@@ -40,7 +40,7 @@ pub fn main(
     .into()
 }
 
-/// Export the function as an command to be run by `run_cmd!` or `run_fun!`
+/// Export the function as an command to be run by [`run_cmd!`] or [`run_fun!`].
 ///
 /// ```
 /// # use cmd_lib::*;
@@ -79,7 +79,7 @@ pub fn export_cmd(
     new_functions.into()
 }
 
-/// Import user registered custom command
+/// Import user registered custom command.
 /// ```
 /// # use cmd_lib::*;
 /// #[export_cmd(my_cmd)]
@@ -118,7 +118,7 @@ pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
     .into()
 }
 
-/// Run commands, returning result handle to check status
+/// Run commands, returning [`CmdResult`](../cmd_lib/type.CmdResult.html) to check status.
 /// ```
 /// # use cmd_lib::run_cmd;
 /// let msg = "I love rust";
@@ -155,7 +155,7 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
-/// Run commands, returning result handle to capture output and to check status
+/// Run commands, returning [`FunResult`](../cmd_lib/type.FunResult.html) to capture output and to check status.
 /// ```
 /// # use cmd_lib::run_fun;
 /// let version = run_fun!(rustc --version)?;
@@ -177,8 +177,7 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
-/// Run commands with/without pipes as a child process, returning a handle to check the final
-/// result
+/// Run commands with/without pipes as a child process, returning [`CmdChildren`](../cmd_lib/struct.CmdChildren.html) result.
 /// ```
 /// # use cmd_lib::*;
 ///
@@ -199,8 +198,7 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
-/// Run commands with/without pipes as a child process, returning a handle to capture the
-/// final output
+/// Run commands with/without pipes as a child process, returning [`FunChildren`](../cmd_lib/struct.FunChildren.html) result.
 /// ```
 /// # use cmd_lib::*;
 /// let mut procs = vec![];
@@ -231,7 +229,7 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 
 #[proc_macro]
 #[proc_macro_error]
-/// Log a fatal message at the error level, and exit process
+/// Log a fatal message at the error level, and exit process.
 ///
 /// e.g:
 /// ```
