@@ -188,15 +188,13 @@ fn test_proc_env() {
 #[test]
 fn test_export_cmd() {
     use std::io::Write;
-    #[export_cmd(my_cmd)]
-    fn foo(env: &mut CmdEnv) -> CmdResult {
+    fn my_cmd(env: &mut CmdEnv) -> CmdResult {
         let msg = format!("msg from foo(), args: {:?}", env.args());
         writeln!(env.stderr(), "{}", msg)?;
         writeln!(env.stdout(), "bar")
     }
 
-    #[export_cmd(my_cmd2)]
-    fn foo2(env: &mut CmdEnv) -> CmdResult {
+    fn my_cmd2(env: &mut CmdEnv) -> CmdResult {
         let msg = format!("msg from foo2(), args: {:?}", env.args());
         writeln!(env.stderr(), "{}", msg)?;
         writeln!(env.stdout(), "bar2")

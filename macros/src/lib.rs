@@ -1,6 +1,6 @@
-use proc_macro2::{Span, TokenStream, TokenTree};
+use proc_macro2::{TokenStream, TokenTree};
 use proc_macro_error::{abort, proc_macro_error};
-use quote::{quote, ToTokens};
+use quote::quote;
 
 /// Mark main function to log error result by default.
 ///
@@ -40,50 +40,10 @@ pub fn main(
     .into()
 }
 
-/// Export the function as an command to be run by [`run_cmd!`] or [`run_fun!`].
-///
-/// ```
-/// # use cmd_lib::*;
-/// # use std::io::Write;
-/// #[export_cmd(my_cmd)]
-/// fn foo(env: &mut CmdEnv) -> CmdResult {
-///     let msg = format!("msg from foo(), args: {:?}\n", env.args());
-///     writeln!(env.stderr(), "{}", msg)?;
-///     writeln!(env.stdout(), "bar")
-/// }
-///
-/// use_custom_cmd!(my_cmd);
-/// run_cmd!(my_cmd)?;
-/// println!("get result: {}", run_fun!(my_cmd)?);
-/// # Ok::<(), std::io::Error>(())
-/// ```
-/// Here we export function `foo` as `my_cmd` command.
-
-#[proc_macro_attribute]
-pub fn export_cmd(
-    attr: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    let cmd_name = attr.to_string();
-    let export_cmd_fn = syn::Ident::new(&format!("export_cmd_{}", cmd_name), Span::call_site());
-
-    let orig_function: syn::ItemFn = syn::parse2(item.into()).unwrap();
-    let fn_ident = &orig_function.sig.ident;
-
-    let mut new_functions = orig_function.to_token_stream();
-    new_functions.extend(quote! (
-        fn #export_cmd_fn() {
-            export_cmd(#cmd_name, #fn_ident);
-        }
-    ));
-    new_functions.into()
-}
-
 /// Import user registered custom command.
 /// ```
 /// # use cmd_lib::*;
-/// #[export_cmd(my_cmd)]
-/// fn foo(env: &mut CmdEnv) -> CmdResult {
+/// fn my_cmd(env: &mut CmdEnv) -> CmdResult {
 ///     let msg = format!("msg from foo(), args: {:?}\n", env.args());
 ///     writeln!(env.stderr(), "{}", msg)?;
 ///     writeln!(env.stdout(), "bar")
@@ -105,15 +65,15 @@ pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
                 abort!(t, "only comma is allowed");
             }
         } else if let TokenTree::Ident(cmd) = t {
-            let cmd_fn = syn::Ident::new(&format!("export_cmd_{}", cmd), Span::call_site());
-            cmd_fns.push(cmd_fn);
+            let cmd_name = cmd.to_string();
+            cmd_fns.push(quote!(&#cmd_name, #cmd));
         } else {
             abort!(t, "expect a list of comma separated commands");
         }
     }
 
     quote! (
-        #(#cmd_fns();)*
+        #(::cmd_lib::register_cmd(#cmd_fns);)*
     )
     .into()
 }

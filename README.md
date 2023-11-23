@@ -228,11 +228,10 @@ run_cmd!(info "This is an infomation message")?;
 ```
 
 #### Macros to register your own commands
-Declare your function with `#[export_cmd(..)]` attribute, and import it with [`use_custom_cmd!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.use_custom_cmd.html) macro:
+Declare your function with the right signature, and register it with [`use_custom_cmd!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.use_custom_cmd.html) macro:
 
 ```rust
-#[export_cmd(my_cmd)]
-fn foo(env: &mut CmdEnv) -> CmdResult {
+fn my_cmd(env: &mut CmdEnv) -> CmdResult {
     let msg = format!("msg from foo(), args: {:?}", env.args());
     writeln!(env.stderr(), "{}", msg)?;
     writeln!(env.stdout(), "bar")

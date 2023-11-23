@@ -79,7 +79,7 @@ lazy_static! {
 }
 
 #[doc(hidden)]
-pub fn export_cmd(cmd: &'static str, func: FnFun) {
+pub fn register_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(OsString::from(cmd), func);
 }
 

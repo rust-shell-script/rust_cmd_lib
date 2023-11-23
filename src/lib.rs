@@ -251,13 +251,12 @@
 //! ```
 //!
 //! ### Macros to register your own commands
-//! Declare your function with `#[export_cmd(..)]` attribute, and import it with [`use_custom_cmd!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.use_custom_cmd.html) macro:
+//! Declare your function with the right signature, and register it with [`use_custom_cmd!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.use_custom_cmd.html) macro:
 //!
 //! ```
 //! # use cmd_lib::*;
 //! # use std::io::Write;
-//! #[export_cmd(my_cmd)]
-//! fn foo(env: &mut CmdEnv) -> CmdResult {
+//! fn my_cmd(env: &mut CmdEnv) -> CmdResult {
 //!     let msg = format!("msg from foo(), args: {:?}", env.args());
 //!     writeln!(env.stderr(), "{}", msg)?;
 //!     writeln!(env.stdout(), "bar")
@@ -363,7 +362,7 @@
 //!
 
 pub use cmd_lib_macros::{
-    cmd_die, export_cmd, main, run_cmd, run_fun, spawn, spawn_with_output, use_custom_cmd,
+    cmd_die, main, run_cmd, run_fun, spawn, spawn_with_output, use_custom_cmd,
 };
 /// Return type for [`run_fun!()`] macro.
 pub type FunResult = std::io::Result<String>;
@@ -378,7 +377,7 @@ pub use logger::try_init_default_logger;
 pub use main_error::MainError;
 pub use main_error::MainResult;
 #[doc(hidden)]
-pub use process::{export_cmd, AsOsStr, Cmd, CmdString, Cmds, GroupCmds, Redirect};
+pub use process::{register_cmd, AsOsStr, Cmd, CmdString, Cmds, GroupCmds, Redirect};
 pub use process::{set_debug, set_pipefail, CmdEnv};
 
 mod builtins;
