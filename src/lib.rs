@@ -297,7 +297,7 @@
 //! # use cmd_lib::*;
 //! # use std::io::Write;
 //! fn my_cmd(env: &mut CmdEnv) -> CmdResult {
-//!     let args = env.args();
+//!     let args = env.get_args();
 //!     let (res, stdout, stderr) = spawn_with_output! {
 //!         orig_cmd $[args]
 //!             --long-option xxx

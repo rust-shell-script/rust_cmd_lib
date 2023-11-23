@@ -29,9 +29,14 @@ pub struct CmdEnv {
     current_dir: PathBuf,
 }
 impl CmdEnv {
+    /// Returns the name of this command.
+    pub fn get_cmd_name(&self) -> &str {
+        &self.args[0]
+    }
+
     /// Returns the arguments for this command.
-    pub fn args(&self) -> &[String] {
-        &self.args
+    pub fn get_args(&self) -> &[String] {
+        &self.args[1..]
     }
 
     /// Fetches the environment variable key for this command.
