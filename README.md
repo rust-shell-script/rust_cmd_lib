@@ -215,32 +215,19 @@ Print messages to stdout.
 
 ##### error, warn, info, debug, trace
 
-Print messages to logging with different logging levels.
+Print messages to logging with different levels. You can also use the normal logging macros,
+if you don't need to do logging inside the command group.
 
 ```rust
 run_cmd!(error "This is an error message")?;
 run_cmd!(warn "This is a warning message")?;
-run_cmd!(info "This is an infomation message")?;
+run_cmd!(info "This is an information message")?;
 // output:
 // [ERROR] This is an error message
 // [WARN ] This is a warning message
-// [INFO ] This is an infomation message
+// [INFO ] This is an information message
 ```
 
-#### Macros to register your own commands
-Declare your function with the right signature, and register it with [`use_custom_cmd!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.use_custom_cmd.html) macro:
-
-```rust
-fn my_cmd(env: &mut CmdEnv) -> CmdResult {
-    let msg = format!("msg from foo(), args: {:?}", env.args());
-    writeln!(env.stderr(), "{}", msg)?;
-    writeln!(env.stdout(), "bar")
-}
-
-use_custom_cmd!(my_cmd);
-run_cmd!(my_cmd)?;
-println!("get result: {}", run_fun!(my_cmd)?);
-```
 #### Low-level process spawning macros
 
 [`spawn!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.spawn.html) macro executes the whole command as a child process, returning a handle to it. By
@@ -249,7 +236,9 @@ background, so you can run other stuff concurrently. You can call [`wait()`](htt
 for the process to finish.
 
 With [`spawn_with_output!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.spawn_with_output.html) you can get output by calling
-[`wait_with_output()`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.FunChildren.html#method.wait_with_output), or even do stream
+[`wait_with_output()`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.FunChildren.html#method.wait_with_output),
+[`wait_with_all()`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.FunChildren.html#method.wait_with_all)
+or even do stream
 processing with [`wait_with_pipe()`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.FunChildren.html#method.wait_with_pipe).
 
 There are also other useful APIs, and you can check the docs for more details.
@@ -275,6 +264,25 @@ spawn_with_output!(journalctl)?.wait_with_pipe(&mut |pipe| {
 })?;
 ```
 
+#### Macro to register your own commands
+Declare your function with the right signature, and register it with [`use_custom_cmd!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.use_custom_cmd.html) macro:
+
+```rust
+fn my_cmd(env: &mut CmdEnv) -> CmdResult {
+    let args = env.get_args();
+    let (res, stdout, stderr) = spawn_with_output! {
+        orig_cmd $[args]
+            --long-option xxx
+            --another-option yyy
+    }?
+    .wait_with_all();
+    writeln!(env.stdout(), "{}", stdout?)?;
+    writeln!(env.stderr(), "{}", stderr?)?;
+    res
+}
+
+use_custom_cmd!(my_cmd);
+```
 
 #### Macros to define, get and set thread-local global variables
 - [`tls_init!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_init.html) to define thread local global variable
