@@ -4,7 +4,7 @@ use quote::quote;
 
 /// Mark main function to log error result by default.
 ///
-/// ```
+/// ```no_run
 /// # use cmd_lib::*;
 ///
 /// #[cmd_lib::main]
@@ -41,8 +41,9 @@ pub fn main(
 }
 
 /// Import user registered custom command.
-/// ```
+/// ```no_run
 /// # use cmd_lib::*;
+/// # use std::io::Write;
 /// fn my_cmd(env: &mut CmdEnv) -> CmdResult {
 ///     let msg = format!("msg from foo(), args: {:?}", env.get_args());
 ///     writeln!(env.stderr(), "{msg}")?;
@@ -79,7 +80,7 @@ pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
 }
 
 /// Run commands, returning [`CmdResult`](../cmd_lib/type.CmdResult.html) to check status.
-/// ```
+/// ```no_run
 /// # use cmd_lib::run_cmd;
 /// let msg = "I love rust";
 /// run_cmd!(echo $msg)?;
@@ -116,7 +117,7 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /// Run commands, returning [`FunResult`](../cmd_lib/type.FunResult.html) to capture output and to check status.
-/// ```
+/// ```no_run
 /// # use cmd_lib::run_fun;
 /// let version = run_fun!(rustc --version)?;
 /// println!("Your rust version is {}", version);
@@ -138,10 +139,10 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /// Run commands with/without pipes as a child process, returning [`CmdChildren`](../cmd_lib/struct.CmdChildren.html) result.
-/// ```
+/// ```no_run
 /// # use cmd_lib::*;
 ///
-/// let handle = spawn!(ping -c 10 192.168.0.1)?;
+/// let mut handle = spawn!(ping -c 10 192.168.0.1)?;
 /// // ...
 /// if handle.wait().is_err() {
 ///     // ...
@@ -159,12 +160,12 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /// Run commands with/without pipes as a child process, returning [`FunChildren`](../cmd_lib/struct.FunChildren.html) result.
-/// ```
+/// ```no_run
 /// # use cmd_lib::*;
 /// let mut procs = vec![];
 /// for _ in 0..4 {
 ///     let proc = spawn_with_output!(
-///         sudo bash -c "dd if=$file of=/dev/null bs=$block_size skip=$off count=$cnt 2>&1"
+///         sudo bash -c "dd if=/dev/nvmen0 of=/dev/null bs=4096 skip=0 count=1024 2>&1"
 ///         | awk r#"/copied/{print $(NF-1) " " $NF}"#
 ///     )?;
 ///     procs.push(proc);
@@ -172,7 +173,7 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// for (i, mut proc) in procs.into_iter().enumerate() {
 ///     let bandwidth = proc.wait_with_output()?;
-///     info!("thread {i} bandwidth: {bandwidth} MB/s")?;
+///     info!("thread {i} bandwidth: {bandwidth} MB/s");
 /// }
 /// # Ok::<(), std::io::Error>(())
 /// ```
@@ -192,8 +193,8 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 /// Log a fatal message at the error level, and exit process.
 ///
 /// e.g:
-/// ```
-/// # use cmd_lib::cmd_die;
+/// ```no_run
+/// # use cmd_lib::*;
 /// let file = "bad_file";
 /// cmd_die!("could not open file: $file");
 /// // output:

@@ -16,7 +16,7 @@ edition = "2018"
 members = ["macros", "examples"]
 
 [dependencies]
-cmd_lib_macros = { version = "1.4.0", path = "./macros" }
+cmd_lib_macros = { path = "./macros" }
 lazy_static = "1.4.0"
 log = "0.4.20"
 faccess = "0.2.4"
