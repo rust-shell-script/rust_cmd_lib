@@ -3,82 +3,112 @@ use std::fs::File;
 use std::io::{Read, Result, Write};
 use std::process::Stdio;
 
-pub enum CmdIn {
-    Null,
-    File(File),
-    Pipe(PipeReader),
-}
+/// Standard input stream for custom command implementation, which is part of [`CmdEnv`](crate::CmdEnv).
+pub struct CmdIn(CmdInInner);
 
 impl Read for CmdIn {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        match self {
-            CmdIn::Null => Ok(0),
-            CmdIn::File(file) => file.read(buf),
-            CmdIn::Pipe(pipe) => pipe.read(buf),
+        match &mut self.0 {
+            CmdInInner::Null => Ok(0),
+            CmdInInner::File(file) => file.read(buf),
+            CmdInInner::Pipe(pipe) => pipe.read(buf),
         }
     }
 }
 
 impl From<CmdIn> for Stdio {
     fn from(cmd_in: CmdIn) -> Stdio {
-        match cmd_in {
-            CmdIn::Null => Stdio::null(),
-            CmdIn::File(file) => Stdio::from(file),
-            CmdIn::Pipe(pipe) => Stdio::from(pipe),
+        match cmd_in.0 {
+            CmdInInner::Null => Stdio::null(),
+            CmdInInner::File(file) => Stdio::from(file),
+            CmdInInner::Pipe(pipe) => Stdio::from(pipe),
         }
     }
 }
 
 impl CmdIn {
+    pub(crate) fn null() -> Self {
+        Self(CmdInInner::Null)
+    }
+
+    pub(crate) fn file(f: File) -> Self {
+        Self(CmdInInner::File(f))
+    }
+
+    pub(crate) fn pipe(p: PipeReader) -> Self {
+        Self(CmdInInner::Pipe(p))
+    }
+
     pub fn try_clone(&self) -> Result<Self> {
-        match self {
-            CmdIn::Null => Ok(CmdIn::Null),
-            CmdIn::File(file) => file.try_clone().map(CmdIn::File),
-            CmdIn::Pipe(pipe) => pipe.try_clone().map(CmdIn::Pipe),
+        match &self.0 {
+            CmdInInner::Null => Ok(Self(CmdInInner::Null)),
+            CmdInInner::File(file) => file.try_clone().map(|f| Self(CmdInInner::File(f))),
+            CmdInInner::Pipe(pipe) => pipe.try_clone().map(|p| Self(CmdInInner::Pipe(p))),
         }
     }
 }
 
-pub enum CmdOut {
+enum CmdInInner {
     Null,
     File(File),
-    Pipe(PipeWriter),
+    Pipe(PipeReader),
 }
+
+/// Standard output stream for custom command implementation, which is part of [`CmdEnv`](crate::CmdEnv).
+pub struct CmdOut(CmdOutInner);
 
 impl Write for CmdOut {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        match self {
-            CmdOut::Null => Ok(buf.len()),
-            CmdOut::File(file) => file.write(buf),
-            CmdOut::Pipe(pipe) => pipe.write(buf),
+        match &mut self.0 {
+            CmdOutInner::Null => Ok(buf.len()),
+            CmdOutInner::File(file) => file.write(buf),
+            CmdOutInner::Pipe(pipe) => pipe.write(buf),
         }
     }
 
     fn flush(&mut self) -> Result<()> {
-        match self {
-            CmdOut::Null => Ok(()),
-            CmdOut::File(file) => file.flush(),
-            CmdOut::Pipe(pipe) => pipe.flush(),
+        match &mut self.0 {
+            CmdOutInner::Null => Ok(()),
+            CmdOutInner::File(file) => file.flush(),
+            CmdOutInner::Pipe(pipe) => pipe.flush(),
         }
     }
 }
 
 impl CmdOut {
+    pub(crate) fn null() -> Self {
+        Self(CmdOutInner::Null)
+    }
+
+    pub(crate) fn file(f: File) -> Self {
+        Self(CmdOutInner::File(f))
+    }
+
+    pub(crate) fn pipe(p: PipeWriter) -> Self {
+        Self(CmdOutInner::Pipe(p))
+    }
+
     pub fn try_clone(&self) -> Result<Self> {
-        match self {
-            CmdOut::Null => Ok(CmdOut::Null),
-            CmdOut::File(file) => file.try_clone().map(CmdOut::File),
-            CmdOut::Pipe(pipe) => pipe.try_clone().map(CmdOut::Pipe),
+        match &self.0 {
+            CmdOutInner::Null => Ok(Self(CmdOutInner::Null)),
+            CmdOutInner::File(file) => file.try_clone().map(|f| Self(CmdOutInner::File(f))),
+            CmdOutInner::Pipe(pipe) => pipe.try_clone().map(|p| Self(CmdOutInner::Pipe(p))),
         }
     }
 }
 
 impl From<CmdOut> for Stdio {
     fn from(cmd_out: CmdOut) -> Stdio {
-        match cmd_out {
-            CmdOut::Null => Stdio::null(),
-            CmdOut::File(file) => Stdio::from(file),
-            CmdOut::Pipe(pipe) => Stdio::from(pipe),
+        match cmd_out.0 {
+            CmdOutInner::Null => Stdio::null(),
+            CmdOutInner::File(file) => Stdio::from(file),
+            CmdOutInner::Pipe(pipe) => Stdio::from(pipe),
         }
     }
+}
+
+enum CmdOutInner {
+    Null,
+    File(File),
+    Pipe(PipeWriter),
 }
