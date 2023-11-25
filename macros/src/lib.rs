@@ -44,8 +44,8 @@ pub fn main(
 /// ```
 /// # use cmd_lib::*;
 /// fn my_cmd(env: &mut CmdEnv) -> CmdResult {
-///     let msg = format!("msg from foo(), args: {:?}\n", env.args());
-///     writeln!(env.stderr(), "{}", msg)?;
+///     let msg = format!("msg from foo(), args: {:?}", env.get_args());
+///     writeln!(env.stderr(), "{msg}")?;
 ///     writeln!(env.stdout(), "bar")
 /// }
 ///

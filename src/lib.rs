@@ -377,6 +377,7 @@ pub type FunResult = std::io::Result<String>;
 /// Return type for [`run_cmd!()`] macro.
 pub type CmdResult = std::io::Result<()>;
 pub use child::{CmdChildren, FunChildren};
+pub use io::{CmdIn, CmdOut};
 #[doc(hidden)]
 pub use log as inner_log;
 #[doc(hidden)]

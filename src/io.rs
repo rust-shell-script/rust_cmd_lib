@@ -29,6 +29,16 @@ impl From<CmdIn> for Stdio {
     }
 }
 
+impl CmdIn {
+    pub fn try_clone(&self) -> Result<Self> {
+        match self {
+            CmdIn::Null => Ok(CmdIn::Null),
+            CmdIn::File(file) => file.try_clone().map(CmdIn::File),
+            CmdIn::Pipe(pipe) => pipe.try_clone().map(CmdIn::Pipe),
+        }
+    }
+}
+
 pub enum CmdOut {
     Null,
     File(File),

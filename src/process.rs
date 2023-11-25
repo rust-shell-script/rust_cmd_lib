@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{File, OpenOptions};
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
@@ -50,17 +50,17 @@ impl CmdEnv {
     }
 
     /// Returns a new handle to the standard input for this command.
-    pub fn stdin(&mut self) -> impl Read + '_ {
+    pub fn stdin(&mut self) -> &mut CmdIn {
         &mut self.stdin
     }
 
     /// Returns a new handle to the standard output for this command.
-    pub fn stdout(&mut self) -> impl Write + '_ {
+    pub fn stdout(&mut self) -> &mut CmdOut {
         &mut self.stdout
     }
 
     /// Returns a new handle to the standard error for this command.
-    pub fn stderr(&mut self) -> impl Write + '_ {
+    pub fn stderr(&mut self) -> &mut CmdOut {
         &mut self.stderr
     }
 }
