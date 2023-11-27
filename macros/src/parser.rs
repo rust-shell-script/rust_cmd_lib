@@ -51,7 +51,8 @@ impl<I: Iterator<Item = ParseArg>> Parser<I> {
     }
 
     fn parse_pipe(&mut self) -> TokenStream {
-        let mut ret = quote!(::cmd_lib::Cmd::default());
+        // TODO: get accurate line number once `proc_macro::Span::line()` API is stable
+        let mut ret = quote!(::cmd_lib::Cmd::default().with_location(file!(), line!()));
         while let Some(arg) = self.iter.peek() {
             match arg {
                 ParseArg::RedirectFd(fd1, fd2) => {

@@ -163,11 +163,16 @@ pub struct Cmds {
     cmds: Vec<Option<Cmd>>,
     full_cmds: String,
     ignore_error: bool,
+    file: String,
+    line: u32,
 }
 
 impl Cmds {
     pub fn pipe(mut self, cmd: Cmd) -> Self {
-        if !self.full_cmds.is_empty() {
+        if self.full_cmds.is_empty() {
+            self.file = cmd.file.clone();
+            self.line = cmd.line;
+        } else {
             self.full_cmds += " | ";
         }
         self.full_cmds += &cmd.cmd_str();
@@ -177,7 +182,10 @@ impl Cmds {
                 // first command in the pipe
                 self.ignore_error = true;
             } else {
-                warn!("Builtin {IGNORE_CMD:?} command at wrong position");
+                warn!(
+                    "Builtin {IGNORE_CMD:?} command at wrong position ({}:{})",
+                    self.file, self.line
+                );
             }
         }
         self.cmds.push(Some(cmd));
@@ -185,9 +193,11 @@ impl Cmds {
     }
 
     fn spawn(&mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChildren> {
-        let full_cmds = format!("[{}]", self.full_cmds);
+        let full_cmds = self.full_cmds.clone();
+        let file = self.file.clone();
+        let line = self.line;
         if debug_enabled() {
-            debug!("Running {full_cmds} ...");
+            debug!("Running [{full_cmds}] at {file}:{line} ...");
         }
 
         // spawning all the sub-processes
@@ -199,17 +209,17 @@ impl Cmds {
             if i != len - 1 {
                 // not the last, update redirects
                 let (pipe_reader, pipe_writer) =
-                    os_pipe::pipe().map_err(|e| new_cmd_io_error(&e, &full_cmds))?;
+                    os_pipe::pipe().map_err(|e| new_cmd_io_error(&e, &full_cmds, &file, line))?;
                 cmd.setup_redirects(&mut prev_pipe_in, Some(pipe_writer), with_output)
-                    .map_err(|e| new_cmd_io_error(&e, &full_cmds))?;
+                    .map_err(|e| new_cmd_io_error(&e, &full_cmds, &file, line))?;
                 prev_pipe_in = Some(pipe_reader);
             } else {
                 cmd.setup_redirects(&mut prev_pipe_in, None, with_output)
-                    .map_err(|e| new_cmd_io_error(&e, &full_cmds))?;
+                    .map_err(|e| new_cmd_io_error(&e, &full_cmds, &file, line))?;
             }
             let child = cmd
                 .spawn(current_dir, with_output)
-                .map_err(|e| new_cmd_io_error(&e, &full_cmds))?;
+                .map_err(|e| new_cmd_io_error(&e, &full_cmds, &file, line))?;
             children.push(child);
         }
 
@@ -269,6 +279,8 @@ pub struct Cmd {
     args: Vec<OsString>,
     vars: HashMap<String, String>,
     redirects: Vec<Redirect>,
+    file: String,
+    line: u32,
 
     // for running
     std_cmd: Option<Command>,
@@ -286,6 +298,8 @@ impl Default for Cmd {
             args: vec![],
             vars: HashMap::new(),
             redirects: vec![],
+            file: "".into(),
+            line: 0,
             std_cmd: None,
             stdin_redirect: None,
             stdout_redirect: None,
@@ -297,6 +311,12 @@ impl Default for Cmd {
 }
 
 impl Cmd {
+    pub fn with_location(mut self, file: &str, line: u32) -> Self {
+        self.file = file.into();
+        self.line = line;
+        self
+    }
+
     pub fn add_arg<O>(mut self, arg: O) -> Self
     where
         O: AsRef<OsStr>,
@@ -369,10 +389,12 @@ impl Cmd {
     fn spawn(mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChild> {
         let arg0 = self.arg0();
         if arg0 == CD_CMD {
-            self.run_cd_cmd(current_dir)?;
+            self.run_cd_cmd(current_dir, &self.file, self.line)?;
             Ok(CmdChild::new(
                 CmdChildHandle::SyncFn,
                 self.cmd_str(),
+                self.file,
+                self.line,
                 self.stdout_logging,
                 self.stderr_logging,
             ))
@@ -415,6 +437,8 @@ impl Cmd {
                 Ok(CmdChild::new(
                     CmdChildHandle::Thread(handle),
                     cmd_str,
+                    self.file,
+                    self.line,
                     self.stdout_logging,
                     self.stderr_logging,
                 ))
@@ -423,6 +447,8 @@ impl Cmd {
                 Ok(CmdChild::new(
                     CmdChildHandle::SyncFn,
                     cmd_str,
+                    self.file,
+                    self.line,
                     self.stdout_logging,
                     self.stderr_logging,
                 ))
@@ -455,15 +481,20 @@ impl Cmd {
             Ok(CmdChild::new(
                 CmdChildHandle::Proc(child),
                 self.cmd_str(),
+                self.file,
+                self.line,
                 self.stdout_logging,
                 self.stderr_logging,
             ))
         }
     }
 
-    fn run_cd_cmd(&self, current_dir: &mut PathBuf) -> CmdResult {
+    fn run_cd_cmd(&self, current_dir: &mut PathBuf, file: &str, line: u32) -> CmdResult {
         if self.args.len() == 1 {
-            return Err(Error::new(ErrorKind::Other, "{CD_CMD}: missing directory"));
+            return Err(Error::new(
+                ErrorKind::Other,
+                "{CD_CMD}: missing directory at {file}:{line}",
+            ));
         } else if self.args.len() > 2 {
             let err_msg = format!("{CD_CMD}: too many arguments");
             return Err(Error::new(ErrorKind::Other, err_msg));
@@ -471,7 +502,7 @@ impl Cmd {
 
         let dir = current_dir.join(&self.args[1]);
         if !dir.is_dir() {
-            let err_msg = format!("{CD_CMD}: No such file or directory");
+            let err_msg = format!("{CD_CMD}: No such file or directory at {file}:{line}");
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
@@ -606,8 +637,11 @@ impl fmt::Display for CmdString {
     }
 }
 
-pub(crate) fn new_cmd_io_error(e: &Error, command: &str) -> Error {
-    Error::new(e.kind(), format!("Running {command} failed: {e}"))
+pub(crate) fn new_cmd_io_error(e: &Error, command: &str, file: &str, line: u32) -> Error {
+    Error::new(
+        e.kind(),
+        format!("Running [{command}] failed: {e} at {file}:{line}"),
+    )
 }
 
 #[cfg(test)]

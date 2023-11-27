@@ -103,7 +103,8 @@ impl FunChildren {
     /// provided function.
     pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) -> CmdResult {
         let child = self.children.pop().unwrap();
-        let stderr_thread = StderrThread::new(&child.cmd, child.stderr, false);
+        let stderr_thread =
+            StderrThread::new(&child.cmd, &child.file, child.line, child.stderr, false);
         match child.handle {
             CmdChildHandle::Proc(mut proc) => {
                 if let Some(stdout) = child.stdout {
@@ -145,6 +146,8 @@ impl FunChildren {
 pub(crate) struct CmdChild {
     handle: CmdChildHandle,
     cmd: String,
+    file: String,
+    line: u32,
     stdout: Option<PipeReader>,
     stderr: Option<PipeReader>,
 }
@@ -153,10 +156,14 @@ impl CmdChild {
     pub(crate) fn new(
         handle: CmdChildHandle,
         cmd: String,
+        file: String,
+        line: u32,
         stdout: Option<PipeReader>,
         stderr: Option<PipeReader>,
     ) -> Self {
         Self {
+            file,
+            line,
             handle,
             cmd,
             stdout,
@@ -165,8 +172,9 @@ impl CmdChild {
     }
 
     fn wait(mut self, is_last: bool) -> CmdResult {
-        let _stderr_thread = StderrThread::new(&self.cmd, self.stderr.take(), false);
-        let res = self.handle.wait(&self.cmd);
+        let _stderr_thread =
+            StderrThread::new(&self.cmd, &self.file, self.line, self.stderr.take(), false);
+        let res = self.handle.wait(&self.cmd, &self.file, self.line);
         if let Err(e) = res {
             if is_last || process::pipefail_enabled() {
                 return Err(e);
@@ -184,7 +192,13 @@ impl CmdChild {
     }
 
     fn wait_with_all(mut self, capture: bool) -> (CmdResult, FunResult, FunResult) {
-        let mut stderr_thread = StderrThread::new(&self.cmd, self.stderr.take(), capture);
+        let mut stderr_thread = StderrThread::new(
+            &self.cmd,
+            &self.file,
+            self.line,
+            self.stderr.take(),
+            capture,
+        );
         let stdout_output = {
             if let Some(mut out) = self.stdout.take() {
                 let mut s = String::new();
@@ -202,7 +216,7 @@ impl CmdChild {
             }
         };
         let stderr_output = stderr_thread.join();
-        let res = self.handle.wait(&self.cmd);
+        let res = self.handle.wait(&self.cmd, &self.file, self.line);
         (res, stdout_output, stderr_output)
     }
 
@@ -222,17 +236,19 @@ pub(crate) enum CmdChildHandle {
 }
 
 impl CmdChildHandle {
-    fn wait(self, cmd: &str) -> CmdResult {
+    fn wait(self, cmd: &str, file: &str, line: u32) -> CmdResult {
         match self {
             CmdChildHandle::Proc(mut proc) => {
                 let status = proc.wait();
                 match status {
-                    Err(e) => return Err(process::new_cmd_io_error(&e, cmd)),
+                    Err(e) => return Err(process::new_cmd_io_error(&e, cmd, file, line)),
                     Ok(status) => {
                         if !status.success() {
                             return Err(Self::status_to_io_error(
                                 status,
                                 &format!("Running [{cmd}] exited with error"),
+                                file,
+                                line,
                             ));
                         }
                     }
@@ -243,13 +259,15 @@ impl CmdChildHandle {
                 match status {
                     Ok(result) => {
                         if let Err(e) = result {
-                            return Err(process::new_cmd_io_error(&e, cmd));
+                            return Err(process::new_cmd_io_error(&e, cmd, file, line));
                         }
                     }
                     Err(e) => {
                         return Err(Error::new(
                             ErrorKind::Other,
-                            format!("Running [{cmd}] thread joined with error: {e:?}"),
+                            format!(
+                                "Running [{cmd}] thread joined with error: {e:?} at {file}:{line}"
+                            ),
                         ))
                     }
                 }
@@ -259,11 +277,17 @@ impl CmdChildHandle {
         Ok(())
     }
 
-    fn status_to_io_error(status: ExitStatus, cmd: &str) -> Error {
+    fn status_to_io_error(status: ExitStatus, run_cmd: &str, file: &str, line: u32) -> Error {
         if let Some(code) = status.code() {
-            Error::new(ErrorKind::Other, format!("{cmd}; status code: {code}"))
+            Error::new(
+                ErrorKind::Other,
+                format!("{run_cmd}; status code: {code} at {file}:{line}"),
+            )
         } else {
-            Error::new(ErrorKind::Other, format!("{cmd}; terminated by {status}"))
+            Error::new(
+                ErrorKind::Other,
+                format!("{run_cmd}; terminated by {status} at {file}:{line}"),
+            )
         }
     }
 
@@ -288,10 +312,12 @@ impl CmdChildHandle {
 struct StderrThread {
     thread: Option<JoinHandle<String>>,
     cmd: String,
+    file: String,
+    line: u32,
 }
 
 impl StderrThread {
-    fn new(cmd: &str, stderr: Option<PipeReader>, capture: bool) -> Self {
+    fn new(cmd: &str, file: &str, line: u32, stderr: Option<PipeReader>, capture: bool) -> Self {
         if let Some(stderr) = stderr {
             let thread = std::thread::spawn(move || {
                 let mut output = String::new();
@@ -312,11 +338,15 @@ impl StderrThread {
             });
             Self {
                 cmd: cmd.into(),
+                file: file.into(),
+                line,
                 thread: Some(thread),
             }
         } else {
             Self {
                 cmd: cmd.into(),
+                file: file.into(),
+                line,
                 thread: None,
             }
         }
@@ -326,10 +356,12 @@ impl StderrThread {
         if let Some(thread) = self.thread.take() {
             match thread.join() {
                 Err(e) => {
-                    let cmd = &self.cmd;
                     return Err(Error::new(
                         ErrorKind::Other,
-                        format!("Running [{cmd}] stderr thread joined with error: {e:?}",),
+                        format!(
+                            "Running [{}] stderr thread joined with error: {:?} at {}:{}",
+                            self.cmd, e, self.file, self.line
+                        ),
                     ));
                 }
                 Ok(output) => return Ok(output),

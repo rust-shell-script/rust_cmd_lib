@@ -207,7 +207,7 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let msg = parse_msg(input.into());
     quote!({
-        ::cmd_lib::error!("FATAL: {}", #msg);
+        ::cmd_lib::error!("FATAL: {} at {}:{}", #msg, file!(), line!());
         std::process::exit(1)
     })
     .into()
