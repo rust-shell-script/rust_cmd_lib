@@ -6,7 +6,7 @@ use cmd_lib::*;
 use std::io::{BufRead, BufReader};
 
 #[cmd_lib::main]
-fn main() -> MainResult {
+fn main() -> CmdResult {
     cmd_lib::set_pipefail(false); // do not fail due to pipe errors
 
     // Run an external command and process stdout

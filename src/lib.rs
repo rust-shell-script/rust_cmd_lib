@@ -383,9 +383,6 @@ pub use log as inner_log;
 #[doc(hidden)]
 pub use logger::try_init_default_logger;
 #[doc(hidden)]
-pub use main_error::MainError;
-pub use main_error::MainResult;
-#[doc(hidden)]
 pub use process::{register_cmd, AsOsStr, Cmd, CmdString, Cmds, GroupCmds, Redirect};
 pub use process::{set_debug, set_pipefail, CmdEnv};
 
@@ -393,6 +390,5 @@ mod builtins;
 mod child;
 mod io;
 mod logger;
-mod main_error;
 mod process;
 mod thread_local;

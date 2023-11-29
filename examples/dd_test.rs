@@ -34,7 +34,7 @@ struct Opt {
 }
 
 #[cmd_lib::main]
-fn main() -> MainResult {
+fn main() -> CmdResult {
     let Opt {
         block_size,
         thread_num,

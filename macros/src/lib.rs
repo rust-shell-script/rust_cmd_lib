@@ -8,7 +8,7 @@ use quote::quote;
 /// # use cmd_lib::*;
 ///
 /// #[cmd_lib::main]
-/// fn main() -> MainResult {
+/// fn main() -> CmdResult {
 ///     run_cmd!(bad_cmd)?;
 ///     Ok(())
 /// }

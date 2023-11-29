@@ -339,7 +339,7 @@ fn rand() -> i32 {
 }
 
 #[cmd_lib::main]
-fn main() -> MainResult {
+fn main() -> CmdResult {
     // simple pre-check of TERM, tput's error message should be enough
     let term = std::env::var("TERM").unwrap();
     run_cmd!(tput -T $term sgr0 >/dev/null)?;

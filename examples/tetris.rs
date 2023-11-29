@@ -557,7 +557,7 @@ fn cmd_exit() {
 }
 
 #[cmd_lib::main]
-fn main() -> MainResult {
+fn main() -> CmdResult {
     #[rustfmt::skip]
     let old_cfg = run_fun!(stty -g)?; // let's save terminal state ...
     tls_set!(old_stty_cfg, |cfg| *cfg = old_cfg);
