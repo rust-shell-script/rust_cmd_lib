@@ -304,8 +304,8 @@
 //!             --another-option yyy
 //!     }?
 //!     .wait_with_all();
-//!     writeln!(env.stdout(), "{}", stdout?)?;
-//!     writeln!(env.stderr(), "{}", stderr?)?;
+//!     writeln!(env.stdout(), "{}", stdout)?;
+//!     writeln!(env.stderr(), "{}", stderr)?;
 //!     res
 //! }
 //!

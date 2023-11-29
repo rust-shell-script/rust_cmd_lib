@@ -496,7 +496,7 @@ impl Cmd {
                 "{CD_CMD}: missing directory at {file}:{line}",
             ));
         } else if self.args.len() > 2 {
-            let err_msg = format!("{CD_CMD}: too many arguments");
+            let err_msg = format!("{CD_CMD}: too many arguments at {file}:{line}");
             return Err(Error::new(ErrorKind::Other, err_msg));
         }
 
