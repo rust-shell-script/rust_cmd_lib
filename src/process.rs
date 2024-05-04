@@ -321,16 +321,22 @@ impl Cmd {
     where
         O: AsRef<OsStr>,
     {
-        let arg_str = arg.as_ref().to_string_lossy().to_string();
+        let arg = arg.as_ref();
+        if arg.is_empty() {
+            // Skip empty arguments
+            return self;
+        }
+
+        let arg_str = arg.to_string_lossy().to_string();
         if arg_str != IGNORE_CMD && !self.args.iter().any(|cmd| *cmd != IGNORE_CMD) {
             let v: Vec<&str> = arg_str.split('=').collect();
             if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 self.vars.insert(v[0].into(), v[1].into());
                 return self;
             }
-            self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg.as_ref());
+            self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg);
         }
-        self.args.push(arg.as_ref().to_os_string());
+        self.args.push(arg.to_os_string());
         self
     }
 

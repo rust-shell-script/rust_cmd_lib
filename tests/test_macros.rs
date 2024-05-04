@@ -249,3 +249,9 @@ fn test_path_as_var() {
     let dir2 = std::path::PathBuf::from("/");
     assert_eq!("/", run_fun!(cd $dir2; pwd).unwrap());
 }
+
+#[test]
+fn test_empty_arg() {
+    let opt = "";
+    assert!(run_cmd!(ls $opt).is_ok());
+}
