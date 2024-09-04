@@ -150,16 +150,20 @@ impl FunChildren {
 
     fn inner_wait_with_all(&mut self, capture_stderr: bool) -> (CmdResult, String, String) {
         // wait for the last child result
-        let handle = self.children.pop().unwrap();
+        let last_handle = self.children.pop().unwrap();
         let mut stdout_buf = Vec::new();
         let mut stderr = String::new();
-        let res = handle.wait_with_all(capture_stderr, &mut stdout_buf, &mut stderr);
-        let _ = CmdChildren::wait_children(&mut self.children);
+        let last_res = last_handle.wait_with_all(capture_stderr, &mut stdout_buf, &mut stderr);
+        let res = CmdChildren::wait_children(&mut self.children);
         let mut stdout: String = String::from_utf8_lossy(&stdout_buf).into();
         if stdout.ends_with('\n') {
             stdout.pop();
         }
-        (res, stdout, stderr)
+        if res.is_err() && !self.ignore_error && process::pipefail_enabled() {
+            (res, stdout, stderr)
+        } else {
+            (last_res, stdout, stderr)
+        }
     }
 }
 
