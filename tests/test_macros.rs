@@ -150,6 +150,14 @@ fn test_pipe() {
 
     let wc_cmd = "wc";
     assert!(run_cmd!(ls | $wc_cmd).is_ok());
+
+    // test pipefail
+    assert!(run_cmd!(false | true).is_err());
+    assert!(run_fun!(false | true).is_err());
+    assert!(run_fun!(ignore false | true).is_ok());
+    set_pipefail(false);
+    assert!(run_fun!(false | true).is_ok());
+    set_pipefail(true);
 }
 
 #[test]
@@ -254,14 +262,4 @@ fn test_path_as_var() {
 fn test_empty_arg() {
     let opt = "";
     assert!(run_cmd!(ls $opt).is_ok());
-}
-
-#[test]
-fn test_pipefail_in_fun() {
-    assert!(run_cmd!(false | true).is_err());
-    assert!(run_fun!(false | true).is_err());
-    assert!(run_fun!(ignore false | true).is_ok());
-    set_pipefail(false);
-    assert!(run_fun!(ignore false | true).is_ok());
-    set_pipefail(true);
 }
