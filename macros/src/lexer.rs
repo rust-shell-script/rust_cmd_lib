@@ -1,6 +1,6 @@
 use crate::parser::{ParseArg, Parser};
 use proc_macro2::{token_stream, Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
-use proc_macro_error::abort;
+use proc_macro_error2::abort;
 use quote::quote;
 use std::ffi::OsString;
 use std::iter::Peekable;
