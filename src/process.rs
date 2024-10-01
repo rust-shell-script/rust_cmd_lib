@@ -218,7 +218,7 @@ impl Cmds {
                     .map_err(|e| new_cmd_io_error(&e, &full_cmds, &file, line))?;
             }
             let child = cmd
-                .spawn(current_dir, with_output)
+                .spawn(full_cmds.clone(), current_dir, with_output)
                 .map_err(|e| new_cmd_io_error(&e, &full_cmds, &file, line))?;
             children.push(child);
         }
@@ -392,20 +392,24 @@ impl Cmd {
         (self.args.len() > args.len(), self)
     }
 
-    fn spawn(mut self, current_dir: &mut PathBuf, with_output: bool) -> Result<CmdChild> {
+    fn spawn(
+        mut self,
+        full_cmds: String,
+        current_dir: &mut PathBuf,
+        with_output: bool,
+    ) -> Result<CmdChild> {
         let arg0 = self.arg0();
         if arg0 == CD_CMD {
             self.run_cd_cmd(current_dir, &self.file, self.line)?;
             Ok(CmdChild::new(
                 CmdChildHandle::SyncFn,
-                self.cmd_str(),
+                full_cmds,
                 self.file,
                 self.line,
                 self.stdout_logging,
                 self.stderr_logging,
             ))
         } else if self.in_cmd_map {
-            let cmd_str = self.cmd_str();
             let pipe_out = self.stdout_logging.is_none();
             let mut env = CmdEnv {
                 args: self
@@ -442,7 +446,7 @@ impl Cmd {
                 let handle = thread::Builder::new().spawn(move || internal_cmd(&mut env))?;
                 Ok(CmdChild::new(
                     CmdChildHandle::Thread(handle),
-                    cmd_str,
+                    full_cmds,
                     self.file,
                     self.line,
                     self.stdout_logging,
@@ -452,7 +456,7 @@ impl Cmd {
                 internal_cmd(&mut env)?;
                 Ok(CmdChild::new(
                     CmdChildHandle::SyncFn,
-                    cmd_str,
+                    full_cmds,
                     self.file,
                     self.line,
                     self.stdout_logging,
@@ -486,7 +490,7 @@ impl Cmd {
             let child = cmd.spawn()?;
             Ok(CmdChild::new(
                 CmdChildHandle::Proc(child),
-                self.cmd_str(),
+                full_cmds,
                 self.file,
                 self.line,
                 self.stdout_logging,
