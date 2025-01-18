@@ -18,18 +18,18 @@ use byte_unit::Byte;
 use cmd_lib::*;
 use rayon::prelude::*;
 use std::time::Instant;
-use structopt::StructOpt;
+use clap::Parser;
 
 const DATA_SIZE: u64 = 10 * 1024 * 1024 * 1024; // 10GB data
 
-#[derive(StructOpt)]
-#[structopt(name = "dd_test", about = "Get disk read bandwidth.")]
+#[derive(Parser)]
+#[clap(name = "dd_test", about = "Get disk read bandwidth.")]
 struct Opt {
-    #[structopt(short, default_value = "4096")]
+    #[clap(short, default_value = "4096")]
     block_size: u64,
-    #[structopt(short, default_value = "1")]
+    #[clap(short, default_value = "1")]
     thread_num: u64,
-    #[structopt(short)]
+    #[clap(short)]
     file: String,
 }
 
@@ -39,7 +39,7 @@ fn main() -> CmdResult {
         block_size,
         thread_num,
         file,
-    } = Opt::from_args();
+    } = Opt::parse();
 
     run_cmd! (
         info "Dropping caches at first";
