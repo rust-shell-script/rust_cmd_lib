@@ -39,6 +39,9 @@ macro_rules! info {
 macro_rules! debug {
     ($($arg:tt)*) => {{
         $crate::try_init_default_logger();
+        #[cfg(feature = "build-print")]
+        $crate::inner_log::info!($($arg)*);
+        #[cfg(not(feature = "build-print"))]
         $crate::inner_log::debug!($($arg)*);
     }}
 }
@@ -48,6 +51,9 @@ macro_rules! debug {
 macro_rules! trace {
     ($($arg:tt)*) => {{
         $crate::try_init_default_logger();
+        #[cfg(feature = "build-print")]
+        $crate::inner_log::info!($($arg)*);
+        #[cfg(not(feature = "build-print"))]
         $crate::inner_log::trace!($($arg)*);
     }}
 }

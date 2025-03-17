@@ -22,8 +22,12 @@ log = "0.4.20"
 faccess = "0.2.4"
 os_pipe = "1.1.4"
 env_logger = "0.10.0"
+build-print = { version = "0.1.1", optional = true }
 
 [dev-dependencies]
 rayon = "1.8.0"
 clap = { version = "4", features = ["derive"] }
 byte-unit = "4.0.19"
+
+[features]
+build-print = ["dep:build-print"]

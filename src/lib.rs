@@ -376,8 +376,12 @@ pub use cmd_lib_macros::{
 pub type FunResult = std::io::Result<String>;
 /// Return type for [`run_cmd!()`] macro.
 pub type CmdResult = std::io::Result<()>;
+#[cfg(feature = "build-print")]
+#[doc(hidden)]
+pub use build_print as inner_log;
 pub use child::{CmdChildren, FunChildren};
 pub use io::{CmdIn, CmdOut};
+#[cfg(not(feature = "build-print"))]
 #[doc(hidden)]
 pub use log as inner_log;
 #[doc(hidden)]
