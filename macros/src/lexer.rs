@@ -7,7 +7,8 @@ use std::str::Chars;
 
 /// Scan string literal to tokenstream, used by most of the macros
 ///
-/// - support $var, ${var} or ${var:?} for interpolation
+/// - support $var, ${var} or ${var:fmt} for interpolation, where `fmt` can be any
+///   of the standard Rust formatting specifiers (e.g., `?`, `x`, `X`, `o`, `b`, `p`, `e`, `E`).
 ///   - to escape '$' itself, use "$$"
 /// - support normal rust character escapes:
 ///   https://doc.rust-lang.org/reference/tokens.html#ascii-escapes
@@ -49,23 +50,28 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
             // Before handling a variable, append any accumulated literal part.
             seal_current_literal_part(&mut output, &mut current_literal_part);
 
-            let mut debug_format = false; // New flag for debug formatting
+            let mut format_specifier = String::new(); // To store the fmt specifier (e.g., "?", "x", "#x")
+            let mut is_braced_interpolation = false;
 
             // Check for '{' to start a braced interpolation
             if chars.peek() == Some(&'{') {
+                is_braced_interpolation = true;
                 chars.next(); // Consume '{'
+            }
 
-                let var_name = parse_variable_name(&mut chars);
+            let var_name = parse_variable_name(&mut chars);
 
-                // After variable name, check for ':?' for debug formatting
+            if is_braced_interpolation {
+                // If it's braced, we might have a format specifier or it might just be empty braces.
                 if chars.peek() == Some(&':') {
                     chars.next(); // Consume ':'
-                    if chars.peek() == Some(&'?') {
-                        chars.next(); // Consume '?'
-                        debug_format = true;
-                    } else {
-                        // If it's ':' but not ':?', then it's a malformed substitution
-                        abort!(lit.span(), "bad substitution: expected '?' after ':'");
+                                  // Read the format specifier until '}'
+                    while let Some(&c) = chars.peek() {
+                        if c == '}' {
+                            break;
+                        }
+                        format_specifier.push(c);
+                        chars.next(); // Consume the character of the specifier
                     }
                 }
 
@@ -73,29 +79,29 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
                 if chars.next() != Some('}') {
                     abort!(lit.span(), "bad substitution: expected '}'");
                 }
+            }
 
-                if !var_name.is_empty() {
-                    let var_ident = syn::parse_str::<Ident>(&var_name).unwrap();
-                    if debug_format {
-                        output.extend(quote!(.append(format!("{:?}", #var_ident))));
-                    } else {
-                        output.extend(quote!(.append(format!("{}", #var_ident))));
+            if !var_name.is_empty() {
+                let var_ident = syn::parse_str::<Ident>(&var_name).unwrap();
+
+                // To correctly handle all format specifiers (like {:02X}), we need to insert the
+                // entire format string *as a literal* into the format! macro.
+                // The `format_specifier` string itself needs to be embedded.
+                let format_macro_call = if format_specifier.is_empty() {
+                    quote! {
+                        .append(format!("{}", #var_ident))
                     }
                 } else {
-                    // This covers cases like "${}" or "${:?}" with empty variable name
-                    output.extend(quote!(.append("$")));
-                }
+                    let format_literal_str = format!("{{:{}}}", format_specifier);
+                    let format_literal_token = Literal::string(&format_literal_str);
+                    quote! {
+                        .append(format!(#format_literal_token, #var_ident))
+                    }
+                };
+                output.extend(format_macro_call);
             } else {
-                // Handle bare $var (no braces)
-                let var_name = parse_variable_name(&mut chars);
-                if !var_name.is_empty() {
-                    let var_ident = syn::parse_str::<Ident>(&var_name).unwrap();
-                    output.extend(quote!(.append(format!("{}", #var_ident))));
-                } else {
-                    // If '$' is not followed by a valid variable name or a valid brace,
-                    // treat it as a literal "$".
-                    output.extend(quote!(.append("$")));
-                }
+                // This covers cases like "${}" or "${:?}" with empty variable name
+                output.extend(quote!(.append("$")));
             }
         } else {
             current_literal_part.push(ch);
