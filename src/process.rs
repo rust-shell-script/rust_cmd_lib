@@ -329,10 +329,11 @@ impl Cmd {
 
         let arg_str = arg.to_string_lossy().to_string();
         if arg_str != IGNORE_CMD && !self.args.iter().any(|cmd| *cmd != IGNORE_CMD) {
-            let v: Vec<&str> = arg_str.split('=').collect();
-            if v.len() == 2 && v[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                self.vars.insert(v[0].into(), v[1].into());
-                return self;
+            if let Some((key, value)) = arg_str.split_once('=') {
+                if key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    self.vars.insert(key.into(), value.into());
+                    return self;
+                }
             }
             self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg);
         }

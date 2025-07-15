@@ -263,3 +263,8 @@ fn test_empty_arg() {
     let opt = "";
     assert!(run_cmd!(ls $opt).is_ok());
 }
+
+#[test]
+fn test_env_var_with_equal_sign() {
+    assert!(run_cmd!(A="-c B=c" echo).is_ok());
+}
