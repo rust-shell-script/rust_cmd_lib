@@ -217,7 +217,7 @@ fn test_export_cmd() {
 fn test_escape() {
     let xxx = 42;
     assert_eq!(
-        run_fun!(/bin/echo "\"a你好${xxx}世界b\"").unwrap(),
+        run_fun!(echo "\"a你好${xxx}世界b\"").unwrap(),
         "\"a你好42世界b\""
     );
 }
