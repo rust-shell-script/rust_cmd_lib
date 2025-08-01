@@ -341,9 +341,13 @@ struct StderrThread {
 
 impl StderrThread {
     fn new(cmd: &str, file: &str, line: u32, stderr: Option<PipeReader>, capture: bool) -> Self {
+        #[cfg(feature = "tracing")]
+        let span = tracing::Span::current();
         if let Some(stderr) = stderr {
             let file_ = file.to_owned();
             let thread = std::thread::spawn(move || {
+                #[cfg(feature = "tracing")]
+                let _entered = span.enter();
                 if capture {
                     let mut output = String::new();
                     BufReader::new(stderr)
