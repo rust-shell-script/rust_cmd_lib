@@ -344,24 +344,74 @@ impl StderrThread {
         #[cfg(feature = "tracing")]
         let span = tracing::Span::current();
         if let Some(stderr) = stderr {
+            let file_ = file.to_owned();
             let thread = std::thread::spawn(move || {
                 #[cfg(feature = "tracing")]
                 let _entered = span.enter();
-                let mut output = String::new();
-                BufReader::new(stderr)
-                    .lines()
-                    .map_while(Result::ok)
-                    .for_each(|line| {
-                        if !capture {
-                            info!("{line}");
-                        } else {
-                            if !output.is_empty() {
-                                output.push('\n');
+                if capture {
+                    let mut output = String::new();
+                    BufReader::new(stderr)
+                        .lines()
+                        .map_while(Result::ok)
+                        .for_each(|line| {
+                            if !capture {
+                                info!("{line}");
+                            } else {
+                                if !output.is_empty() {
+                                    output.push('\n');
+                                }
+                                output.push_str(&line);
                             }
-                            output.push_str(&line);
+                        });
+                    return output;
+                }
+
+                // Log output one line at a time, including progress output separated by CR
+                let mut reader = BufReader::new(stderr);
+                let mut buffer = vec![];
+                loop {
+                    // Unconditionally try to read more data, since the BufReader buffer is empty
+                    let result = match reader.fill_buf() {
+                        Ok(buffer) => buffer,
+                        Err(error) => {
+                            warn!("Error reading from child process: {error:?} at {file_}:{line}");
+                            break;
                         }
-                    });
-                output
+                    };
+                    // Add the result onto our own buffer
+                    buffer.extend(result);
+                    // Empty the BufReader
+                    let read_len = result.len();
+                    reader.consume(read_len);
+
+                    // Log output. Take whole “lines” at every LF or CR (for progress bars etc),
+                    // but leave any incomplete lines in our buffer so we can try to complete them.
+                    while let Some(offset) = buffer.iter().position(|&b| b == b'\n' || b == b'\r') {
+                        let line = &buffer[..offset];
+                        let line = str::from_utf8(line).map_err(|_| line);
+                        match line {
+                            Ok(string) => info!("{string}"),
+                            Err(bytes) => info!("{bytes:?}"),
+                        }
+                        buffer = buffer.split_off(offset + 1);
+                    }
+
+                    if read_len == 0 {
+                        break;
+                    }
+                }
+
+                // Log any remaining incomplete line
+                if !buffer.is_empty() {
+                    let line = &buffer;
+                    let line = str::from_utf8(line).map_err(|_| line);
+                    match line {
+                        Ok(string) => info!("{string}"),
+                        Err(bytes) => info!("{bytes:?}"),
+                    }
+                }
+
+                "".to_owned()
             });
             Self {
                 cmd: cmd.into(),
