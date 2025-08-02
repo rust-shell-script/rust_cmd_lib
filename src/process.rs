@@ -11,6 +11,7 @@ use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Result};
+use std::mem::take;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
@@ -160,7 +161,7 @@ impl GroupCmds {
 #[doc(hidden)]
 #[derive(Default)]
 pub struct Cmds {
-    cmds: Vec<Option<Cmd>>,
+    cmds: Vec<Cmd>,
     full_cmds: String,
     ignore_error: bool,
     file: String,
@@ -188,7 +189,7 @@ impl Cmds {
                 );
             }
         }
-        self.cmds.push(Some(cmd));
+        self.cmds.push(cmd);
         self
     }
 
@@ -204,8 +205,7 @@ impl Cmds {
         let mut children: Vec<CmdChild> = Vec::new();
         let len = self.cmds.len();
         let mut prev_pipe_in = None;
-        for (i, cmd_opt) in self.cmds.iter_mut().enumerate() {
-            let mut cmd = cmd_opt.take().unwrap();
+        for (i, mut cmd) in take(&mut self.cmds).into_iter().enumerate() {
             if i != len - 1 {
                 // not the last, update redirects
                 let (pipe_reader, pipe_writer) =

@@ -354,14 +354,10 @@ impl StderrThread {
                         .lines()
                         .map_while(Result::ok)
                         .for_each(|line| {
-                            if !capture {
-                                info!("{line}");
-                            } else {
-                                if !output.is_empty() {
-                                    output.push('\n');
-                                }
-                                output.push_str(&line);
+                            if !output.is_empty() {
+                                output.push('\n');
                             }
+                            output.push_str(&line);
                         });
                     return output;
                 }
