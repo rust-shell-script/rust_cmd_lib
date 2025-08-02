@@ -31,13 +31,13 @@ impl CmdChildren {
 
     /// Waits for the children processes to exit completely, returning the status that they exited with.
     pub fn wait(&mut self) -> CmdResult {
-        // wait for the last child result
-        let handle = self.children.pop().unwrap();
-        if let Err(e) = handle.wait(true) {
-            let _ = Self::wait_children(&mut self.children);
-            return Err(e);
-        }
-        Self::wait_children(&mut self.children)
+        let last_child = self.children.pop().unwrap();
+        let last_child_res = last_child.wait(true);
+        let other_children_res = Self::wait_children(&mut self.children);
+
+        self.ignore_error
+            .then_some(Ok(()))
+            .unwrap_or(last_child_res.and(other_children_res))
     }
 
     fn wait_children(children: &mut Vec<CmdChild>) -> CmdResult {
@@ -149,21 +149,23 @@ impl FunChildren {
     }
 
     fn inner_wait_with_all(&mut self, capture_stderr: bool) -> (CmdResult, String, String) {
-        // wait for the last child result
-        let last_handle = self.children.pop().unwrap();
-        let mut stdout_buf = Vec::new();
+        let mut stdout = Vec::new();
         let mut stderr = String::new();
-        let last_res = last_handle.wait_with_all(capture_stderr, &mut stdout_buf, &mut stderr);
-        let res = CmdChildren::wait_children(&mut self.children);
-        let mut stdout: String = String::from_utf8_lossy(&stdout_buf).into();
+
+        let last_child = self.children.pop().unwrap();
+        let last_child_res = last_child.wait_with_all(capture_stderr, &mut stdout, &mut stderr);
+        let other_children_res = CmdChildren::wait_children(&mut self.children);
+        let cmd_result = self
+            .ignore_error
+            .then_some(Ok(()))
+            .unwrap_or(last_child_res.and(other_children_res));
+
+        let mut stdout: String = String::from_utf8_lossy(&stdout).into();
         if stdout.ends_with('\n') {
             stdout.pop();
         }
-        if res.is_err() && !self.ignore_error && process::pipefail_enabled() {
-            (res, stdout, stderr)
-        } else {
-            (last_res, stdout, stderr)
-        }
+
+        (cmd_result, stdout, stderr)
     }
 }
 
