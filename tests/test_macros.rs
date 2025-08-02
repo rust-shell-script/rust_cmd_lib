@@ -248,15 +248,29 @@ fn test_ignore_and_pipefail() {
         //     .wait_with_pipe(&mut |_stdout| {})),
     ];
 
+    macro_rules! check_eq {
+        ($left:expr, $right:expr, $($rest:tt)+) => {{
+            let left = $left;
+            let right = $right;
+            if left != right {
+                eprintln!("assertion failed ({} != {}): {}", left, right, format!($($rest)+));
+                false
+            } else {
+                true
+            }
+        }};
+    }
+
+    let mut ok = true;
     for case in test_cases.iter().flat_map(|items| items.iter()) {
-        assert_eq!(
+        ok &= check_eq!(
             (case.code)(),
             case.expected_ok_pipefail_on,
             "{} when pipefail is on",
             case.code_str
         );
         set_pipefail(false);
-        assert_eq!(
+        ok &= check_eq!(
             (case.code)(),
             case.expected_ok_pipefail_off,
             "{} when pipefail is off",
@@ -264,6 +278,8 @@ fn test_ignore_and_pipefail() {
         );
         set_pipefail(true);
     }
+
+    assert!(ok);
 }
 
 #[test]
