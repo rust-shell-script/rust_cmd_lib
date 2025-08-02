@@ -290,42 +290,42 @@ fn test_pipe() -> CmdResult {
         .wait_with_pipe(&mut |_stdout| {})
         .is_ok());
 
-    // wait_with_pipe_thread() checks the exit status of the last child, even if pipefail is disabled
+    // wait_with_borrowed_pipe() checks the exit status of the last child, even if pipefail is disabled
     set_pipefail(false);
     assert!(spawn_with_output!(true | false)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_err());
     assert!(spawn_with_output!(true | true)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_ok());
     assert!(spawn_with_output!(false)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_err());
     assert!(spawn_with_output!(true)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_ok());
     set_pipefail(true);
-    // wait_with_pipe_thread() checks the exit status of the other children, unless pipefail is disabled
+    // wait_with_borrowed_pipe() checks the exit status of the other children, unless pipefail is disabled
     set_pipefail(false);
     assert!(spawn_with_output!(false | true)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_ok());
     set_pipefail(true);
     assert!(spawn_with_output!(false | true)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_err());
     assert!(spawn_with_output!(true | true)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_ok());
-    // wait_with_pipe_thread() handles `ignore`
+    // wait_with_borrowed_pipe() handles `ignore`
     assert!(spawn_with_output!(ignore false | true)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_ok());
     assert!(spawn_with_output!(ignore true | false)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_ok());
     assert!(spawn_with_output!(ignore false)?
-        .wait_with_pipe_thread(|_stdout| {})
+        .wait_with_borrowed_pipe(&mut |_stdout| {})
         .is_ok());
 
     Ok(())

@@ -116,7 +116,7 @@ impl FunChildren {
     }
 
     /// Pipes stdout from the last child in the pipeline to the given function, which runs in
-    /// **the current thread**, then waits for all of the children to exit.
+    /// the current thread, then waits for all of the children to exit.
     ///
     /// <div class=warning>
     ///
@@ -153,19 +153,50 @@ impl FunChildren {
     }
 
     /// Pipes stdout from the last child in the pipeline to the given function, which runs in
-    /// **a new thread**, then waits for all of the children to exit.
-    pub fn wait_with_pipe_thread(
-        &mut self,
-        f: impl FnOnce(Box<dyn Read + Send>) + Send + 'static,
-    ) -> CmdResult {
-        if let Some(stdout) = self.children.last_mut().unwrap().stdout.take() {
-            let thread = std::thread::spawn(|| f(Box::new(stdout)));
-            let wait_res = self.wait_with_output().map(|_| ());
-            thread.join().expect("stdout thread panicked");
-            return wait_res;
-        }
+    /// the current thread, then waits for all of the children to exit.
+    ///
+    /// If the function returns early, without reading from stdout until the last child exits,
+    /// then the rest of stdout is automatically read and discarded to allow the child to finish.
+    pub fn wait_with_borrowed_pipe(&mut self, f: &mut dyn FnMut(&mut Box<dyn Read>)) -> CmdResult {
+        let mut last_child = self.children.pop().unwrap();
+        let mut stderr_thread = StderrThread::new(
+            &last_child.cmd,
+            &last_child.file,
+            last_child.line,
+            last_child.stderr.take(),
+            false,
+        );
+        let last_child_res = if let Some(stdout) = last_child.stdout {
+            let mut stdout: Box<dyn Read> = Box::new(stdout);
+            f(&mut stdout);
+            let mut buf = vec![0; 65536];
+            let status = loop {
+                if let CmdChildHandle::Proc(child) = &mut last_child.handle {
+                    if let Ok(Some(status)) = child.try_wait() {
+                        break status;
+                    }
+                }
+                let _ = stdout.read(&mut buf);
+            };
+            if status.success() {
+                Ok(())
+            } else {
+                Err(CmdChildHandle::status_to_io_error(
+                    status,
+                    &last_child.cmd,
+                    &last_child.file,
+                    last_child.line,
+                ))
+            }
+        } else {
+            last_child.wait(true)
+        };
+        let other_children_res = CmdChildren::wait_children(&mut self.children);
+        let _ = stderr_thread.join();
 
-        Ok(())
+        self.ignore_error
+            .then_some(Ok(()))
+            .unwrap_or(last_child_res.and(other_children_res))
     }
 
     /// Returns the OS-assigned process identifiers associated with these children processes.
