@@ -150,10 +150,9 @@ fn test_pipe() {
 
     let wc_cmd = "wc";
     assert!(run_cmd!(ls | $wc_cmd).is_ok());
-}
 
-#[test]
-fn test_ignore_and_pipefail() {
+    // test `ignore` command and pipefail mode
+    // FIXME: make set_pipefail() thread safe, then move this to a separate test_ignore_and_pipefail()
     struct TestCase {
         /// Run the test case, returning whether the result `.is_ok()`.
         code: fn() -> bool,
