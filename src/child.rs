@@ -115,8 +115,17 @@ impl FunChildren {
         }
     }
 
-    /// Waits for the children processes to exit completely, pipe content will be processed by
-    /// provided function.
+    /// Pipes stdout from the last child in the pipeline to the given function, which runs in
+    /// **the current thread**, then waits for all of the children to exit.
+    ///
+    /// <div class=warning>
+    ///
+    /// # Bugs
+    ///
+    /// The exit status of the last child is **ignored**. If the function returns early, without
+    /// reading from stdout until the last child exits, then the last child may be killed instead
+    /// of being waited for. To avoid these limitations, use [`Self::wait_with_stdout_thread`].
+    /// </div>
     pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) -> CmdResult {
         let child = self.children.pop().unwrap();
         let stderr_thread =
@@ -141,6 +150,22 @@ impl FunChildren {
         };
         drop(stderr_thread);
         CmdChildren::wait_children(&mut self.children)
+    }
+
+    /// Pipes stdout from the last child in the pipeline to the given function, which runs in
+    /// **a new thread**, then waits for all of the children to exit.
+    pub fn wait_with_pipe_thread(
+        &mut self,
+        f: impl FnOnce(Box<dyn Read + Send>) + Send + 'static,
+    ) -> CmdResult {
+        if let Some(stdout) = self.children.last_mut().unwrap().stdout.take() {
+            let thread = std::thread::spawn(|| f(Box::new(stdout)));
+            let wait_res = self.wait_with_output().map(|_| ());
+            thread.join().expect("stdout thread panicked");
+            return wait_res;
+        }
+
+        Ok(())
     }
 
     /// Returns the OS-assigned process identifiers associated with these children processes.
