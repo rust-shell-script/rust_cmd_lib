@@ -161,6 +161,112 @@ fn test_pipe() {
 }
 
 #[test]
+fn test_ignore_and_pipefail() {
+    struct TestCase {
+        /// Run the test case, returning whether the result `.is_ok()`.
+        code: fn() -> bool,
+        /// Stringified version of `code`, for identifying assertion failures.
+        code_str: &'static str,
+        /// Do we expect `.is_ok()` when pipefail is on?
+        expected_ok_pipefail_on: bool,
+        /// Do we expect `.is_ok()` when pipefail is off?
+        expected_ok_pipefail_off: bool,
+    }
+    /// Make a function for [TestCase::code].
+    ///
+    /// Usage: `code!((macro!(command)).extra)`
+    /// - `(macro!(command)).extra` is an expression of type CmdResult
+    macro_rules! code {
+        (($macro:tt $bang:tt ($($command:tt)+)) $($after:tt)*) => {
+            || $macro$bang($($command)+)$($after)*.is_ok()
+        };
+    }
+    /// Make a string for [TestCase::code_str].
+    ///
+    /// Usage: `code_str!((macro!(command)).extra)`
+    /// - `(macro!(command)).extra` is an expression of type CmdResult
+    macro_rules! code_str {
+        (($macro:tt $bang:tt ($($command:tt)+)) $($after:tt)*) => {
+            stringify!($macro$bang($($command)+)$($after)*.is_ok())
+        };
+    }
+    /// Make a [TestCase].
+    /// Usage: `test_case!(true/false, true/false, (macro!(command)).extra)`
+    /// - the first `true/false` is TestCase::expected_ok_pipefail_on
+    /// - the second `true/false` is TestCase::expected_ok_pipefail_off
+    /// - `(macro!(command)).extra` is an expression of type CmdResult
+    macro_rules! test_case {
+        ($expected_ok_pipefail_on:expr, $expected_ok_pipefail_off:expr, ($macro:tt $bang:tt ($($command:tt)+)) $($after:tt)*) => {
+            TestCase {
+                code: code!(($macro $bang ($($command)+)) $($after)*),
+                code_str: code_str!(($macro $bang ($($command)+)) $($after)*),
+                expected_ok_pipefail_on: $expected_ok_pipefail_on,
+                expected_ok_pipefail_off: $expected_ok_pipefail_off,
+            }
+        };
+    }
+    /// Generate test cases for the given entry point.
+    /// For each test case, every entry point should yield the same results.
+    macro_rules! test_cases_for_entry_point {
+        (($macro:tt $bang:tt (...)) $($after:tt)*) => {
+            &[
+                // Use result of last command in pipeline, if all others exit successfully.
+                test_case!(true, true, ($macro $bang (true)) $($after)*),
+                test_case!(false, false, ($macro $bang (false)) $($after)*),
+                test_case!(true, true, ($macro $bang (true | true)) $($after)*),
+                test_case!(false, false, ($macro $bang (true | false)) $($after)*),
+                // Use failure of other commands, if pipefail is on.
+                test_case!(false, true, ($macro $bang (false | true)) $($after)*),
+                // Use failure of last command in pipeline.
+                test_case!(false, false, ($macro $bang (false | false)) $($after)*),
+                // Ignore all failures, when using `ignore` command.
+                test_case!(true, true, ($macro $bang (ignore true)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore false)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore true | true)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore true | false)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore false | true)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore false | false)) $($after)*),
+            ]
+        };
+    }
+
+    let test_cases: &[&[TestCase]] = &[
+        test_cases_for_entry_point!((run_cmd!(...))),
+        test_cases_for_entry_point!((run_fun!(...)).map(|_stdout| ())),
+        test_cases_for_entry_point!((spawn!(...)).unwrap().wait()),
+        test_cases_for_entry_point!((spawn_with_output!(...)).unwrap().wait_with_all().0),
+        test_cases_for_entry_point!((spawn_with_output!(...))
+            .unwrap()
+            .wait_with_output()
+            .map(|_stdout| ())),
+        test_cases_for_entry_point!((spawn_with_output!(...))
+            .unwrap()
+            .wait_with_raw_output(&mut vec![])),
+        // FIXME: wait_with_pipe() is currently busted
+        // test_cases_for_entry_point!((spawn_with_output!(...))
+        //     .unwrap()
+        //     .wait_with_pipe(&mut |_stdout| {})),
+    ];
+
+    for case in test_cases.iter().flat_map(|items| items.iter()) {
+        assert_eq!(
+            (case.code)(),
+            case.expected_ok_pipefail_on,
+            "{} when pipefail is on",
+            case.code_str
+        );
+        set_pipefail(false);
+        assert_eq!(
+            (case.code)(),
+            case.expected_ok_pipefail_off,
+            "{} when pipefail is off",
+            case.code_str
+        );
+        set_pipefail(true);
+    }
+}
+
+#[test]
 /// ```compile_fail
 /// run_cmd!(ls > >&1).unwrap();
 /// run_cmd!(ls >>&1).unwrap();
