@@ -29,11 +29,10 @@ tracing = { version = "0.1.41", optional = true }
 rayon = "1.8.0"
 clap = { version = "4", features = ["derive"] }
 byte-unit = "4.0.19"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [features]
 build-print = ["dep:build-print"]
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [[example]]
 name = "tracing"
