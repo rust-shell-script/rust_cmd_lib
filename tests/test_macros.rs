@@ -108,6 +108,7 @@ fn test_vars_in_str3() {
 }
 
 #[test]
+// FIXME: doctests have no effect here, and we need to split these into one test per error
 /// ```compile_fail
 /// run_cmd!(echo "${msg0}").unwrap();
 /// assert_eq!(run_fun!(echo "${ msg }").unwrap(), "${ msg }");
@@ -144,23 +145,148 @@ fn test_pipe() {
     assert!(run_cmd!(false | wc).is_err());
     assert!(run_cmd!(echo xx | false | wc | wc | wc).is_err());
 
-    set_pipefail(false);
+    let _pipefail = ScopedPipefail::set(false);
     assert!(run_cmd!(du -ah . | sort -hr | head -n 10).is_ok());
-    set_pipefail(true);
+    let _pipefail = ScopedPipefail::set(true);
 
     let wc_cmd = "wc";
     assert!(run_cmd!(ls | $wc_cmd).is_ok());
-
-    // test pipefail
-    assert!(run_cmd!(false | true).is_err());
-    assert!(run_fun!(false | true).is_err());
-    assert!(run_fun!(ignore false | true).is_ok());
-    set_pipefail(false);
-    assert!(run_fun!(false | true).is_ok());
-    set_pipefail(true);
 }
 
 #[test]
+fn test_ignore_and_pipefail() {
+    struct TestCase {
+        /// Run the test case, returning whether the result `.is_ok()`.
+        code: fn() -> bool,
+        /// Stringified version of `code`, for identifying assertion failures.
+        code_str: &'static str,
+        /// Do we expect `.is_ok()` when pipefail is on?
+        expected_ok_pipefail_on: bool,
+        /// Do we expect `.is_ok()` when pipefail is off?
+        expected_ok_pipefail_off: bool,
+    }
+    /// Make a function for [TestCase::code].
+    ///
+    /// Usage: `code!((macro!(command)).extra)`
+    /// - `(macro!(command)).extra` is an expression of type CmdResult
+    macro_rules! code {
+        (($macro:tt $bang:tt ($($command:tt)+)) $($after:tt)*) => {
+            || $macro$bang($($command)+)$($after)*.is_ok()
+        };
+    }
+    /// Make a string for [TestCase::code_str].
+    ///
+    /// Usage: `code_str!((macro!(command)).extra)`
+    /// - `(macro!(command)).extra` is an expression of type CmdResult
+    macro_rules! code_str {
+        (($macro:tt $bang:tt ($($command:tt)+)) $($after:tt)*) => {
+            stringify!($macro$bang($($command)+)$($after)*.is_ok())
+        };
+    }
+    /// Make a [TestCase].
+    /// Usage: `test_case!(true/false, true/false, (macro!(command)).extra)`
+    /// - the first `true/false` is TestCase::expected_ok_pipefail_on
+    /// - the second `true/false` is TestCase::expected_ok_pipefail_off
+    /// - `(macro!(command)).extra` is an expression of type CmdResult
+    macro_rules! test_case {
+        ($expected_ok_pipefail_on:expr, $expected_ok_pipefail_off:expr, ($macro:tt $bang:tt ($($command:tt)+)) $($after:tt)*) => {
+            TestCase {
+                code: code!(($macro $bang ($($command)+)) $($after)*),
+                code_str: code_str!(($macro $bang ($($command)+)) $($after)*),
+                expected_ok_pipefail_on: $expected_ok_pipefail_on,
+                expected_ok_pipefail_off: $expected_ok_pipefail_off,
+            }
+        };
+    }
+    /// Generate test cases for the given entry point.
+    /// For each test case, every entry point should yield the same results.
+    macro_rules! test_cases_for_entry_point {
+        (($macro:tt $bang:tt (...)) $($after:tt)*) => {
+            &[
+                // Use result of last command in pipeline, if all others exit successfully.
+                test_case!(true, true, ($macro $bang (true)) $($after)*),
+                test_case!(false, false, ($macro $bang (false)) $($after)*),
+                test_case!(true, true, ($macro $bang (true | true)) $($after)*),
+                test_case!(false, false, ($macro $bang (true | false)) $($after)*),
+                // Use failure of other commands, if pipefail is on.
+                test_case!(false, true, ($macro $bang (false | true)) $($after)*),
+                // Use failure of last command in pipeline.
+                test_case!(false, false, ($macro $bang (false | false)) $($after)*),
+                // Ignore all failures, when using `ignore` command.
+                test_case!(true, true, ($macro $bang (ignore true)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore false)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore true | true)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore true | false)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore false | true)) $($after)*),
+                test_case!(true, true, ($macro $bang (ignore false | false)) $($after)*),
+                // Built-ins should work too, without locking up.
+                test_case!(true, true, ($macro $bang (echo)) $($after)*),
+                test_case!(true, true, ($macro $bang (echo | true)) $($after)*),
+                test_case!(false, false, ($macro $bang (echo | false)) $($after)*),
+                test_case!(true, true, ($macro $bang (true | echo)) $($after)*),
+                test_case!(false, true, ($macro $bang (false | echo)) $($after)*),
+                test_case!(true, true, ($macro $bang (cd /)) $($after)*),
+                test_case!(true, true, ($macro $bang (cd / | true)) $($after)*),
+                test_case!(false, false, ($macro $bang (cd / | false)) $($after)*),
+                test_case!(true, true, ($macro $bang (true | cd /)) $($after)*),
+                test_case!(false, true, ($macro $bang (false | cd /)) $($after)*),
+            ]
+        };
+    }
+
+    let test_cases: &[&[TestCase]] = &[
+        test_cases_for_entry_point!((run_cmd!(...))),
+        test_cases_for_entry_point!((run_fun!(...)).map(|_stdout| ())),
+        test_cases_for_entry_point!((spawn!(...)).unwrap().wait()),
+        test_cases_for_entry_point!((spawn_with_output!(...)).unwrap().wait_with_all().0),
+        test_cases_for_entry_point!((spawn_with_output!(...))
+            .unwrap()
+            .wait_with_output()
+            .map(|_stdout| ())),
+        test_cases_for_entry_point!((spawn_with_output!(...))
+            .unwrap()
+            .wait_with_raw_output(&mut vec![])),
+        test_cases_for_entry_point!((spawn_with_output!(...))
+            .unwrap()
+            .wait_with_pipe(&mut |_stdout| {})),
+    ];
+
+    macro_rules! check_eq {
+        ($left:expr, $right:expr, $($rest:tt)+) => {{
+            let left = $left;
+            let right = $right;
+            if left != right {
+                eprintln!("assertion failed ({} != {}): {}", left, right, format!($($rest)+));
+                false
+            } else {
+                true
+            }
+        }};
+    }
+
+    let mut ok = true;
+    for case in test_cases.iter().flat_map(|items| items.iter()) {
+        ok &= check_eq!(
+            (case.code)(),
+            case.expected_ok_pipefail_on,
+            "{} when pipefail is on",
+            case.code_str
+        );
+        let _pipefail = ScopedPipefail::set(false);
+        ok &= check_eq!(
+            (case.code)(),
+            case.expected_ok_pipefail_off,
+            "{} when pipefail is off",
+            case.code_str
+        );
+        let _pipefail = ScopedPipefail::set(true);
+    }
+
+    assert!(ok);
+}
+
+#[test]
+// FIXME: doctests have no effect here, and we need to split these into one test per error
 /// ```compile_fail
 /// run_cmd!(ls > >&1).unwrap();
 /// run_cmd!(ls >>&1).unwrap();
@@ -217,7 +343,7 @@ fn test_export_cmd() {
 fn test_escape() {
     let xxx = 42;
     assert_eq!(
-        run_fun!(/bin/echo "\"a你好${xxx}世界b\"").unwrap(),
+        run_fun!(echo "\"a你好${xxx}世界b\"").unwrap(),
         "\"a你好42世界b\""
     );
 }
@@ -232,6 +358,7 @@ fn test_current_dir() {
 }
 
 #[test]
+// FIXME: doctests have no effect here, and we need to split these into one test per error
 /// ```compile_fail
 /// run_cmd!(ls / /x &>>> /tmp/f).unwrap();
 /// run_cmd!(ls / /x &> > /tmp/f).unwrap();
@@ -262,4 +389,9 @@ fn test_path_as_var() {
 fn test_empty_arg() {
     let opt = "";
     assert!(run_cmd!(ls $opt).is_ok());
+}
+
+#[test]
+fn test_env_var_with_equal_sign() {
+    assert!(run_cmd!(A="-c B=c" echo).is_ok());
 }

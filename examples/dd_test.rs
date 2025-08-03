@@ -15,10 +15,10 @@
 //! [INFO ] Total bandwidth: 1.11 GiB/s
 //! ```
 use byte_unit::Byte;
+use clap::Parser;
 use cmd_lib::*;
 use rayon::prelude::*;
 use std::time::Instant;
-use clap::Parser;
 
 const DATA_SIZE: u64 = 10 * 1024 * 1024 * 1024; // 10GB data
 

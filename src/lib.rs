@@ -334,11 +334,10 @@
 //! key from the current process. It will report error if the environment variable is not present, and it also
 //! includes other checks to avoid silent failures.
 //!
-//! To set environment variables, you can use [std::env::set_var](https://doc.rust-lang.org/std/env/fn.set_var.html).
-//! There are also other related APIs in the [std::env](https://doc.rust-lang.org/std/env/index.html) module.
+//! To set environment variables in **single-threaded programs**, you can use [std::env::set_var] and
+//! [std::env::remove_var]. While those functions **[must not be called]** if any other threads might be running, you can
+//! always set environment variables for one command at a time, by putting the assignments before the command:
 //!
-//! To set environment variables for the command only, you can put the assignments before the command.
-//! Like this:
 //! ```no_run
 //! # use cmd_lib::run_cmd;
 //! run_cmd!(FOO=100 /tmp/test_run_cmd_lib.sh)?;
@@ -364,10 +363,21 @@
 //!
 //! ### Thread Safety
 //!
-//! This library tries very hard to not set global states, so parallel `cargo test` can be executed just fine.
-//! The only known APIs not supported in multi-thread environment are the
-//! [`tls_init!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_init.html)/[`tls_get!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_get.html)/[`tls_set!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_set.html) macros, and you should only use them for *thread local* variables.
+//! This library tries very hard to not set global state, so parallel `cargo test` can be executed just fine.
+//! That said, there are some limitations to be aware of:
 //!
+//! - [std::env::set_var] and [std::env::remove_var] **[must not be called]** in a multi-threaded program
+//! - [`tls_init!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_init.html),
+//!   [`tls_get!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_get.html), and
+//!   [`tls_set!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_set.html) create *thread-local* variables, which
+//!   means each thread will have its own independent version of the variable
+//! - [`set_debug`](https://docs.rs/cmd_lib/latest/cmd_lib/fn.set_debug.html) and
+//!   [`set_pipefail`](https://docs.rs/cmd_lib/latest/cmd_lib/fn.set_pipefail.html) are *global* and affect all threads;
+//!   there is currently no way to change those settings without affecting other threads
+//!
+//! [std::env::set_var]: https://doc.rust-lang.org/std/env/fn.set_var.html
+//! [std::env::remove_var]: https://doc.rust-lang.org/std/env/fn.remove_var.html
+//! [must not be called]: https://doc.rust-lang.org/nightly/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
 
 pub use cmd_lib_macros::{
     cmd_die, main, run_cmd, run_fun, spawn, spawn_with_output, use_custom_cmd,
@@ -388,7 +398,7 @@ pub use log as inner_log;
 pub use logger::try_init_default_logger;
 #[doc(hidden)]
 pub use process::{register_cmd, AsOsStr, Cmd, CmdString, Cmds, GroupCmds, Redirect};
-pub use process::{set_debug, set_pipefail, CmdEnv};
+pub use process::{set_debug, set_pipefail, CmdEnv, ScopedDebug, ScopedPipefail};
 
 mod builtins;
 mod child;

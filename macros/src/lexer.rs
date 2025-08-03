@@ -2,78 +2,134 @@ use crate::parser::{ParseArg, Parser};
 use proc_macro2::{token_stream, Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
 use proc_macro_error2::abort;
 use quote::quote;
-use std::ffi::OsString;
 use std::iter::Peekable;
+use std::str::Chars;
 
-// Scan string literal to tokenstream, used by most of the macros
-//
-// - support ${var} or $var for interpolation
-//   - to escape '$' itself, use "$$"
-// - support normal rust character escapes:
-//   https://doc.rust-lang.org/reference/tokens.html#ascii-escapes
+/// Scan string literal to tokenstream, used by most of the macros
+///
+/// - support $var, ${var} or ${var:fmt} for interpolation, where `fmt` can be any
+///   of the standard Rust formatting specifiers (e.g., `?`, `x`, `X`, `o`, `b`, `p`, `e`, `E`).
+///   - to escape '$' itself, use "$$"
+/// - support normal rust character escapes:
+///   https://doc.rust-lang.org/reference/tokens.html#ascii-escapes
 pub fn scan_str_lit(lit: &Literal) -> TokenStream {
     let s = lit.to_string();
+
+    // If the literal is not a string (e.g., a number literal), treat it as a direct CmdString.
     if !s.starts_with('\"') {
         return quote!(::cmd_lib::CmdString::from(#lit));
     }
-    let mut iter = s[1..s.len() - 1] // To trim outside ""
-        .chars()
-        .peekable();
+
+    // Extract the inner string by trimming the surrounding quotes.
+    let inner_str = &s[1..s.len() - 1];
+    let mut chars = inner_str.chars().peekable();
     let mut output = quote!(::cmd_lib::CmdString::default());
-    let mut last_part = OsString::new();
-    fn seal_last_part(last_part: &mut OsString, output: &mut TokenStream) {
+    let mut current_literal_part = String::new();
+
+    // Helper function to append the accumulated literal part to the output TokenStream
+    // and clear the current_literal_part.
+    let seal_current_literal_part = |output: &mut TokenStream, last_part: &mut String| {
         if !last_part.is_empty() {
-            let lit_str = format!("\"{}\"", last_part.to_str().unwrap());
-            let l = syn::parse_str::<Literal>(&lit_str).unwrap();
-            output.extend(quote!(.append(#l)));
+            let lit_str = format!("\"{}\"", last_part);
+            // It's safe to unwrap parse_str because we are constructing a valid string literal.
+            let literal_token = syn::parse_str::<Literal>(&lit_str).unwrap();
+            output.extend(quote!(.append(#literal_token)));
             last_part.clear();
         }
-    }
+    };
 
-    while let Some(ch) = iter.next() {
+    while let Some(ch) = chars.next() {
         if ch == '$' {
-            if iter.peek() == Some(&'$') {
-                iter.next();
-                last_part.push("$");
+            // Handle "$$" for escaping '$'
+            if chars.peek() == Some(&'$') {
+                chars.next(); // Consume the second '$'
+                current_literal_part.push('$');
                 continue;
             }
 
-            seal_last_part(&mut last_part, &mut output);
-            let mut with_brace = false;
-            if iter.peek() == Some(&'{') {
-                with_brace = true;
-                iter.next();
+            // Before handling a variable, append any accumulated literal part.
+            seal_current_literal_part(&mut output, &mut current_literal_part);
+
+            let mut format_specifier = String::new(); // To store the fmt specifier (e.g., "?", "x", "#x")
+            let mut is_braced_interpolation = false;
+
+            // Check for '{' to start a braced interpolation
+            if chars.peek() == Some(&'{') {
+                is_braced_interpolation = true;
+                chars.next(); // Consume '{'
             }
-            let mut var = String::new();
-            while let Some(&c) = iter.peek() {
-                if !c.is_ascii_alphanumeric() && c != '_' {
-                    break;
+
+            let var_name = parse_variable_name(&mut chars);
+
+            if is_braced_interpolation {
+                // If it's braced, we might have a format specifier or it might just be empty braces.
+                if chars.peek() == Some(&':') {
+                    chars.next(); // Consume ':'
+                                  // Read the format specifier until '}'
+                    while let Some(&c) = chars.peek() {
+                        if c == '}' {
+                            break;
+                        }
+                        format_specifier.push(c);
+                        chars.next(); // Consume the character of the specifier
+                    }
                 }
-                if var.is_empty() && c.is_ascii_digit() {
-                    break;
+
+                // Expect '}' to close the braced interpolation
+                if chars.next() != Some('}') {
+                    abort!(lit.span(), "bad substitution: expected '}'");
                 }
-                var.push(c);
-                iter.next();
             }
-            if with_brace {
-                if iter.peek() != Some(&'}') {
-                    abort!(lit.span(), "bad substitution");
+
+            if !var_name.is_empty() {
+                let var_ident = syn::parse_str::<Ident>(&var_name).unwrap();
+
+                // To correctly handle all format specifiers (like {:02X}), we need to insert the
+                // entire format string *as a literal* into the format! macro.
+                // The `format_specifier` string itself needs to be embedded.
+                let format_macro_call = if format_specifier.is_empty() {
+                    quote! {
+                        .append(format!("{}", #var_ident))
+                    }
                 } else {
-                    iter.next();
-                }
-            }
-            if !var.is_empty() {
-                let var = syn::parse_str::<Ident>(&var).unwrap();
-                output.extend(quote!(.append(#var.as_os_str())));
+                    let format_literal_str = format!("{{:{}}}", format_specifier);
+                    let format_literal_token = Literal::string(&format_literal_str);
+                    quote! {
+                        .append(format!(#format_literal_token, #var_ident))
+                    }
+                };
+                output.extend(format_macro_call);
             } else {
+                // This covers cases like "${}" or "${:?}" with empty variable name
                 output.extend(quote!(.append("$")));
             }
         } else {
-            last_part.push(ch.to_string());
+            current_literal_part.push(ch);
         }
     }
-    seal_last_part(&mut last_part, &mut output);
+
+    // Append any remaining literal part after the loop finishes.
+    seal_current_literal_part(&mut output, &mut current_literal_part);
     output
+}
+
+/// Parses a variable name from the character iterator.
+/// A variable name consists of alphanumeric characters and underscores,
+/// and cannot start with a digit.
+fn parse_variable_name(chars: &mut Peekable<Chars<'_>>) -> String {
+    let mut var = String::new();
+    while let Some(&c) = chars.peek() {
+        if !(c.is_ascii_alphanumeric() || c == '_') {
+            break;
+        }
+        if var.is_empty() && c.is_ascii_digit() {
+            // Variable names cannot start with a digit
+            break;
+        }
+        var.push(c);
+        chars.next(); // Consume the character
+    }
+    var
 }
 
 enum SepToken {
