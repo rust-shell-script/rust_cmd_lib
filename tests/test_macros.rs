@@ -233,10 +233,9 @@ fn test_pipe() -> CmdResult {
         test_cases_for_entry_point!((spawn_with_output!(...))
             .unwrap()
             .wait_with_raw_output(&mut vec![])),
-        // FIXME: wait_with_pipe() is currently busted
-        // test_cases_for_entry_point!((spawn_with_output!(...))
-        //     .unwrap()
-        //     .wait_with_pipe(&mut |_stdout| {})),
+        test_cases_for_entry_point!((spawn_with_output!(...))
+            .unwrap()
+            .wait_with_borrowed_pipe(&mut |_stdout| {})),
     ];
 
     macro_rules! check_eq {
