@@ -339,7 +339,9 @@ That said, there are some limitations to be aware of:
   each thread will have its own independent version of the variable
 - [`set_debug`](https://docs.rs/cmd_lib/latest/cmd_lib/fn.set_debug.html) and
   [`set_pipefail`](https://docs.rs/cmd_lib/latest/cmd_lib/fn.set_pipefail.html) are *global* and affect all threads;
-  there is currently no way to change those settings without affecting other threads
+  to change those settings without affecting other threads, use
+  [`ScopedDebug`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.ScopedDebug.html) and
+  [`ScopedPipefail`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.ScopedPipefail.html)
 
 [std::env::set_var]: https://doc.rust-lang.org/std/env/fn.set_var.html
 [std::env::remove_var]: https://doc.rust-lang.org/std/env/fn.remove_var.html

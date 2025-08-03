@@ -108,6 +108,7 @@ fn test_vars_in_str3() {
 }
 
 #[test]
+// FIXME: doctests have no effect here, and we need to split these into one test per error
 /// ```compile_fail
 /// run_cmd!(echo "${msg0}").unwrap();
 /// assert_eq!(run_fun!(echo "${ msg }").unwrap(), "${ msg }");
@@ -274,6 +275,7 @@ fn test_pipe() {
 }
 
 #[test]
+// FIXME: doctests have no effect here, and we need to split these into one test per error
 /// ```compile_fail
 /// run_cmd!(ls > >&1).unwrap();
 /// run_cmd!(ls >>&1).unwrap();
@@ -345,6 +347,7 @@ fn test_current_dir() {
 }
 
 #[test]
+// FIXME: doctests have no effect here, and we need to split these into one test per error
 /// ```compile_fail
 /// run_cmd!(ls / /x &>>> /tmp/f).unwrap();
 /// run_cmd!(ls / /x &> > /tmp/f).unwrap();

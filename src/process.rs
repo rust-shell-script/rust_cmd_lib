@@ -6,11 +6,13 @@ use crate::{CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
 use lazy_static::lazy_static;
 use os_pipe::{self, PipeReader, PipeWriter};
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Result};
+use std::marker::PhantomData;
 use std::mem::take;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -91,15 +93,19 @@ pub fn register_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(OsString::from(cmd), func);
 }
 
+/// Whether debug mode is enabled globally.
+/// Can be overridden by the thread-local setting in [`DEBUG_OVERRIDE`].
 static DEBUG_ENABLED: LazyLock<AtomicBool> =
     LazyLock::new(|| AtomicBool::new(std::env::var("CMD_LIB_DEBUG") == Ok("1".into())));
 
+/// Whether debug mode is enabled globally.
+/// Can be overridden by the thread-local setting in [`PIPEFAIL_OVERRIDE`].
 static PIPEFAIL_ENABLED: LazyLock<AtomicBool> =
     LazyLock::new(|| AtomicBool::new(std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into())));
 
 /// Set debug mode or not, false by default.
 ///
-/// This is **global**, and affects all threads.
+/// This is **global**, and affects all threads. To set it for the current thread only, use [`ScopedDebug`].
 ///
 /// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect, but the environment variable is only
 /// checked once at an unspecified time, so the only reliable way to do that is when the program is first started.
@@ -109,7 +115,7 @@ pub fn set_debug(enable: bool) {
 
 /// Set pipefail or not, true by default.
 ///
-/// This is **global**, and affects all threads.
+/// This is **global**, and affects all threads. To set it for the current thread only, use [`ScopedPipefail`].
 ///
 /// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect, but the environment variable is only
 /// checked once at an unspecified time, so the only reliable way to do that is when the program is first started.
@@ -118,11 +124,99 @@ pub fn set_pipefail(enable: bool) {
 }
 
 pub(crate) fn debug_enabled() -> bool {
-    DEBUG_ENABLED.load(SeqCst)
+    DEBUG_OVERRIDE
+        .get()
+        .unwrap_or_else(|| DEBUG_ENABLED.load(SeqCst))
 }
 
 pub(crate) fn pipefail_enabled() -> bool {
-    PIPEFAIL_ENABLED.load(SeqCst)
+    PIPEFAIL_OVERRIDE
+        .get()
+        .unwrap_or_else(|| PIPEFAIL_ENABLED.load(SeqCst))
+}
+
+thread_local! {
+    /// Whether debug mode is enabled in the current thread.
+    /// None means to use the global setting in [`DEBUG_ENABLED`].
+    static DEBUG_OVERRIDE: Cell<Option<bool>> = Cell::new(None);
+
+    /// Whether pipefail mode is enabled in the current thread.
+    /// None means to use the global setting in [`PIPEFAIL_ENABLED`].
+    static PIPEFAIL_OVERRIDE: Cell<Option<bool>> = Cell::new(None);
+}
+
+/// Overrides the debug mode in the current thread, while the value is in scope.
+///
+/// Each override restores the previous value when dropped, so they can be nested.
+/// Since overrides are thread-local, these values can’t be sent across threads.
+///
+/// ```
+/// # use cmd_lib::{ScopedDebug, run_cmd};
+/// // Must give the variable a name, not just `_`
+/// let _debug = ScopedDebug::set(true);
+/// run_cmd!(echo hello world)?; // Will have debug on
+/// # Ok::<(), std::io::Error>(())
+/// ```
+// PhantomData field is equivalent to `impl !Send for Self {}`
+pub struct ScopedDebug(Option<bool>, PhantomData<*const ()>);
+
+/// Overrides the pipefail mode in the current thread, while the value is in scope.
+///
+/// Each override restores the previous value when dropped, so they can be nested.
+/// Since overrides are thread-local, these values can’t be sent across threads.
+// PhantomData field is equivalent to `impl !Send for Self {}`
+///
+/// ```
+/// # use cmd_lib::{ScopedPipefail, run_cmd};
+/// // Must give the variable a name, not just `_`
+/// let _debug = ScopedPipefail::set(false);
+/// run_cmd!(false | true)?; // Will have pipefail off
+/// # Ok::<(), std::io::Error>(())
+/// ```
+pub struct ScopedPipefail(Option<bool>, PhantomData<*const ()>);
+
+impl ScopedDebug {
+    /// ```compile_fail
+    /// let _: Box<dyn Send> = Box::new(cmd_lib::ScopedDebug::set(true));
+    /// ```
+    /// ```compile_fail
+    /// let _: Box<dyn Sync> = Box::new(cmd_lib::ScopedDebug::set(true));
+    /// ```
+    #[doc(hidden)]
+    pub fn test_not_send_not_sync() {}
+
+    pub fn set(enabled: bool) -> Self {
+        let result = Self(DEBUG_OVERRIDE.get(), PhantomData);
+        DEBUG_OVERRIDE.set(Some(enabled));
+        result
+    }
+}
+impl Drop for ScopedDebug {
+    fn drop(&mut self) {
+        DEBUG_OVERRIDE.set(self.0)
+    }
+}
+
+impl ScopedPipefail {
+    /// ```compile_fail
+    /// let _: Box<dyn Send> = Box::new(cmd_lib::ScopedPipefail::set(true));
+    /// ```
+    /// ```compile_fail
+    /// let _: Box<dyn Sync> = Box::new(cmd_lib::ScopedPipefail::set(true));
+    /// ```
+    #[doc(hidden)]
+    pub fn test_not_send_not_sync() {}
+
+    pub fn set(enabled: bool) -> Self {
+        let result = Self(PIPEFAIL_OVERRIDE.get(), PhantomData);
+        PIPEFAIL_OVERRIDE.set(Some(enabled));
+        result
+    }
+}
+impl Drop for ScopedPipefail {
+    fn drop(&mut self) {
+        PIPEFAIL_OVERRIDE.set(self.0)
+    }
 }
 
 #[doc(hidden)]
