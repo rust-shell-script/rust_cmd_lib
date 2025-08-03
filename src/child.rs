@@ -171,12 +171,14 @@ impl FunChildren {
         let last_child_res = if let Some(stdout) = last_child.stdout {
             let mut stdout: Box<dyn Read> = Box::new(stdout);
             f(&mut stdout);
+            // The provided function may have left some of stdout unread.
+            // Continue reading stdout on its behalf, until the child exits.
             let mut buf = vec![0; 65536];
-            let status: Box<dyn ChildOutcome> = loop {
+            let outcome: Box<dyn ChildOutcome> = loop {
                 match last_child.handle {
                     CmdChildHandle::Proc(ref mut child) => {
-                        if let Ok(Some(status)) = child.try_wait() {
-                            break Box::new(status);
+                        if let Some(result) = child.try_wait().transpose() {
+                            break Box::new(ProcWaitOutcome::from(result));
                         }
                     }
                     CmdChildHandle::Thread(ref mut join_handle) => {
@@ -194,16 +196,7 @@ impl FunChildren {
                 }
                 let _ = stdout.read(&mut buf);
             };
-            if status.success() {
-                Ok(())
-            } else {
-                Err(CmdChildHandle::outcome_to_io_error(
-                    &*status,
-                    &last_child.cmd,
-                    &last_child.file,
-                    last_child.line,
-                ))
-            }
+            outcome.to_io_result(&last_child.cmd, &last_child.file, last_child.line)
         } else {
             last_child.wait(true)
         };
@@ -330,6 +323,29 @@ pub(crate) enum CmdChildHandle {
 }
 
 #[derive(Debug)]
+struct ProcWaitOutcome(std::io::Result<ExitStatus>);
+impl From<std::io::Result<ExitStatus>> for ProcWaitOutcome {
+    fn from(result: std::io::Result<ExitStatus>) -> Self {
+        Self(result)
+    }
+}
+impl Display for ProcWaitOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Ok(status) => {
+                if status.success() {
+                    write!(f, "Command process succeeded")
+                } else if let Some(code) = status.code() {
+                    write!(f, "Command process exited normally with status code {code}")
+                } else {
+                    write!(f, "Command process exited abnormally: {status}")
+                }
+            }
+            Err(error) => write!(f, "Failed to wait for command process: {error:?}"),
+        }
+    }
+}
+#[derive(Debug)]
 enum ThreadJoinOutcome {
     Ok,
     Err(std::io::Error),
@@ -362,86 +378,47 @@ impl Display for SyncFnOutcome {
 }
 trait ChildOutcome: Display {
     fn success(&self) -> bool;
-    fn code(&self) -> Option<i32>;
-}
-impl ChildOutcome for ExitStatus {
-    fn success(&self) -> bool {
-        self.success()
+    fn to_io_result(&self, cmd: &str, file: &str, line: u32) -> std::io::Result<()> {
+        if self.success() {
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorKind::Other,
+                format!("Running [{cmd}] exited with error; {self} at {file}:{line}"),
+            ))
+        }
     }
-    fn code(&self) -> Option<i32> {
-        self.code()
+}
+impl ChildOutcome for ProcWaitOutcome {
+    fn success(&self) -> bool {
+        self.0.as_ref().is_ok_and(|status| status.success())
     }
 }
 impl ChildOutcome for ThreadJoinOutcome {
     fn success(&self) -> bool {
         matches!(self, Self::Ok)
     }
-    fn code(&self) -> Option<i32> {
-        None
-    }
 }
 impl ChildOutcome for SyncFnOutcome {
     fn success(&self) -> bool {
         true
     }
-    fn code(&self) -> Option<i32> {
-        None
-    }
 }
 
 impl CmdChildHandle {
     fn wait(self, cmd: &str, file: &str, line: u32) -> CmdResult {
-        match self {
-            CmdChildHandle::Proc(mut proc) => {
-                let status = proc.wait();
-                match status {
-                    Err(e) => return Err(process::new_cmd_io_error(&e, cmd, file, line)),
-                    Ok(status) => {
-                        if !status.success() {
-                            return Err(Self::outcome_to_io_error(&status, cmd, file, line));
-                        }
-                    }
-                }
-            }
+        let outcome: Box<dyn ChildOutcome> = match self {
+            CmdChildHandle::Proc(mut proc) => Box::new(ProcWaitOutcome::from(proc.wait())),
             CmdChildHandle::Thread(mut thread) => {
                 if let Some(thread) = thread.take() {
-                    let status = thread.join();
-                    match status {
-                        Ok(result) => {
-                            if let Err(e) = result {
-                                return Err(process::new_cmd_io_error(&e, cmd, file, line));
-                            }
-                        }
-                        Err(e) => {
-                            return Err(Error::new(
-                                ErrorKind::Other,
-                                format!(
-                                "Running [{cmd}] thread joined with error: {e:?} at {file}:{line}"
-                            ),
-                            ))
-                        }
-                    }
+                    Box::new(ThreadJoinOutcome::from(thread.join()))
+                } else {
+                    unreachable!()
                 }
             }
-            CmdChildHandle::SyncFn => {}
-        }
-        Ok(())
-    }
-
-    fn outcome_to_io_error(outcome: &dyn ChildOutcome, cmd: &str, file: &str, line: u32) -> Error {
-        if let Some(code) = outcome.code() {
-            Error::new(
-                ErrorKind::Other,
-                format!("Running [{cmd}] exited with error; status code: {code} at {file}:{line}"),
-            )
-        } else {
-            Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Running [{cmd}] exited with error; terminated by {outcome} at {file}:{line}"
-                ),
-            )
-        }
+            CmdChildHandle::SyncFn => return Ok(()),
+        };
+        outcome.to_io_result(cmd, file, line)
     }
 
     fn kill(self, cmd: &str, file: &str, line: u32) -> CmdResult {
