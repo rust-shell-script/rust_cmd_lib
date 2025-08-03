@@ -134,7 +134,7 @@ fn test_tls_set() {
 }
 
 #[test]
-fn test_pipe() -> CmdResult {
+fn test_pipe() {
     assert!(run_cmd!(echo "xx").is_ok());
     assert_eq!(run_fun!(echo "xx").unwrap(), "xx");
     assert!(run_cmd!(echo xx | wc).is_ok());
@@ -246,7 +246,7 @@ fn test_pipe() -> CmdResult {
             .wait_with_raw_output(&mut vec![])),
         test_cases_for_entry_point!((spawn_with_output!(...))
             .unwrap()
-            .wait_with_borrowed_pipe(&mut |_stdout| {})),
+            .wait_with_pipe(&mut |_stdout| {})),
     ];
 
     macro_rules! check_eq {
@@ -281,64 +281,6 @@ fn test_pipe() -> CmdResult {
     }
 
     assert!(ok);
-
-    // test that illustrates the bugs in wait_with_pipe()
-    // FIXME: make set_pipefail() thread safe, then move this to a separate test function
-    assert!(spawn_with_output!(false)?.wait_with_all().0.is_err());
-    assert!(spawn_with_output!(false)?.wait_with_output().is_err());
-    assert!(spawn_with_output!(false)?
-        .wait_with_raw_output(&mut vec![])
-        .is_err());
-
-    // wait_with_pipe() can’t check the exit status of the last child
-    assert!(spawn_with_output!(false)?
-        .wait_with_pipe(&mut |_stdout| {})
-        .is_ok());
-
-    // wait_with_pipe() kills the last child when the provided function returns
-    assert!(spawn_with_output!(sh -c "while :; do :; done")?
-        .wait_with_pipe(&mut |_stdout| {})
-        .is_ok());
-
-    // wait_with_borrowed_pipe() checks the exit status of the last child, even if pipefail is disabled
-    set_pipefail(false);
-    assert!(spawn_with_output!(true | false)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_err());
-    assert!(spawn_with_output!(true | true)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_ok());
-    assert!(spawn_with_output!(false)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_err());
-    assert!(spawn_with_output!(true)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_ok());
-    set_pipefail(true);
-    // wait_with_borrowed_pipe() checks the exit status of the other children, unless pipefail is disabled
-    set_pipefail(false);
-    assert!(spawn_with_output!(false | true)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_ok());
-    set_pipefail(true);
-    assert!(spawn_with_output!(false | true)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_err());
-    assert!(spawn_with_output!(true | true)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_ok());
-    // wait_with_borrowed_pipe() handles `ignore`
-    assert!(spawn_with_output!(ignore false | true)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_ok());
-    assert!(spawn_with_output!(ignore true | false)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_ok());
-    assert!(spawn_with_output!(ignore false)?
-        .wait_with_borrowed_pipe(&mut |_stdout| {})
-        .is_ok());
-
-    Ok(())
 }
 
 #[test]

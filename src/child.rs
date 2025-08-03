@@ -120,46 +120,9 @@ impl FunChildren {
     /// Pipes stdout from the last child in the pipeline to the given function, which runs in
     /// the current thread, then waits for all of the children to exit.
     ///
-    /// <div class=warning>
-    ///
-    /// # Bugs
-    ///
-    /// The exit status of the last child is **ignored**. If the function returns early, without
-    /// reading from stdout until the last child exits, then the last child may be killed instead
-    /// of being waited for. To avoid these limitations, use [`Self::wait_with_stdout_thread`].
-    /// </div>
-    pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(Box<dyn Read>)) -> CmdResult {
-        let child = self.children.pop().unwrap();
-        let stderr_thread =
-            StderrThread::new(&child.cmd, &child.file, child.line, child.stderr, false);
-        match child.handle {
-            CmdChildHandle::Proc(mut proc) => {
-                if let Some(stdout) = child.stdout {
-                    f(Box::new(stdout));
-                    let _ = proc.kill();
-                }
-            }
-            CmdChildHandle::Thread(_) => {
-                if let Some(stdout) = child.stdout {
-                    f(Box::new(stdout));
-                }
-            }
-            CmdChildHandle::SyncFn => {
-                if let Some(stdout) = child.stdout {
-                    f(Box::new(stdout));
-                }
-            }
-        };
-        drop(stderr_thread);
-        CmdChildren::wait_children(&mut self.children)
-    }
-
-    /// Pipes stdout from the last child in the pipeline to the given function, which runs in
-    /// the current thread, then waits for all of the children to exit.
-    ///
     /// If the function returns early, without reading from stdout until the last child exits,
     /// then the rest of stdout is automatically read and discarded to allow the child to finish.
-    pub fn wait_with_borrowed_pipe(&mut self, f: &mut dyn FnMut(&mut Box<dyn Read>)) -> CmdResult {
+    pub fn wait_with_pipe(&mut self, f: &mut dyn FnMut(&mut Box<dyn Read>)) -> CmdResult {
         let mut last_child = self.children.pop().unwrap();
         let mut stderr_thread = StderrThread::new(
             &last_child.cmd,
