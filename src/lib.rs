@@ -394,7 +394,7 @@ pub use log as inner_log;
 pub use logger::try_init_default_logger;
 #[doc(hidden)]
 pub use process::{register_cmd, AsOsStr, Cmd, CmdString, Cmds, GroupCmds, Redirect};
-pub use process::{set_debug, set_pipefail, CmdEnv};
+pub use process::{set_debug, set_pipefail, CmdEnv, ScopedDebug, ScopedPipefail};
 
 mod builtins;
 mod child;

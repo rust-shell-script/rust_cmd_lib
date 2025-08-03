@@ -108,6 +108,7 @@ fn test_vars_in_str3() {
 }
 
 #[test]
+// FIXME: doctests have no effect here, and we need to split these into one test per error
 /// ```compile_fail
 /// run_cmd!(echo "${msg0}").unwrap();
 /// assert_eq!(run_fun!(echo "${ msg }").unwrap(), "${ msg }");
@@ -144,15 +145,16 @@ fn test_pipe() {
     assert!(run_cmd!(false | wc).is_err());
     assert!(run_cmd!(echo xx | false | wc | wc | wc).is_err());
 
-    set_pipefail(false);
+    let _pipefail = ScopedPipefail::set(false);
     assert!(run_cmd!(du -ah . | sort -hr | head -n 10).is_ok());
-    set_pipefail(true);
+    let _pipefail = ScopedPipefail::set(true);
 
     let wc_cmd = "wc";
     assert!(run_cmd!(ls | $wc_cmd).is_ok());
+}
 
-    // test `ignore` command and pipefail mode
-    // FIXME: make set_pipefail() thread safe, then move this to a separate test_ignore_and_pipefail()
+#[test]
+fn test_ignore_and_pipefail() {
     struct TestCase {
         /// Run the test case, returning whether the result `.is_ok()`.
         code: fn() -> bool,
@@ -270,20 +272,21 @@ fn test_pipe() {
             "{} when pipefail is on",
             case.code_str
         );
-        set_pipefail(false);
+        let _pipefail = ScopedPipefail::set(false);
         ok &= check_eq!(
             (case.code)(),
             case.expected_ok_pipefail_off,
             "{} when pipefail is off",
             case.code_str
         );
-        set_pipefail(true);
+        let _pipefail = ScopedPipefail::set(true);
     }
 
     assert!(ok);
 }
 
 #[test]
+// FIXME: doctests have no effect here, and we need to split these into one test per error
 /// ```compile_fail
 /// run_cmd!(ls > >&1).unwrap();
 /// run_cmd!(ls >>&1).unwrap();
@@ -355,6 +358,7 @@ fn test_current_dir() {
 }
 
 #[test]
+// FIXME: doctests have no effect here, and we need to split these into one test per error
 /// ```compile_fail
 /// run_cmd!(ls / /x &>>> /tmp/f).unwrap();
 /// run_cmd!(ls / /x &> > /tmp/f).unwrap();
