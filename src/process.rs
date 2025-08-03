@@ -460,7 +460,7 @@ impl Cmd {
             if pipe_out || with_output {
                 let handle = thread::Builder::new().spawn(move || internal_cmd(&mut env))?;
                 Ok(CmdChild::new(
-                    CmdChildHandle::Thread(handle),
+                    CmdChildHandle::Thread(Some(handle)),
                     full_cmds,
                     self.file,
                     self.line,

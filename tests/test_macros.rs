@@ -217,6 +217,17 @@ fn test_pipe() -> CmdResult {
                 test_case!(true, true, ($macro $bang (ignore true | false)) $($after)*),
                 test_case!(true, true, ($macro $bang (ignore false | true)) $($after)*),
                 test_case!(true, true, ($macro $bang (ignore false | false)) $($after)*),
+                // Built-ins should work too, without locking up.
+                test_case!(true, true, ($macro $bang (echo)) $($after)*),
+                test_case!(true, true, ($macro $bang (echo | true)) $($after)*),
+                test_case!(false, false, ($macro $bang (echo | false)) $($after)*),
+                test_case!(true, true, ($macro $bang (true | echo)) $($after)*),
+                test_case!(false, true, ($macro $bang (false | echo)) $($after)*),
+                test_case!(true, true, ($macro $bang (cd /)) $($after)*),
+                test_case!(true, true, ($macro $bang (cd / | true)) $($after)*),
+                test_case!(false, false, ($macro $bang (cd / | false)) $($after)*),
+                test_case!(true, true, ($macro $bang (true | cd /)) $($after)*),
+                test_case!(false, true, ($macro $bang (false | cd /)) $($after)*),
             ]
         };
     }

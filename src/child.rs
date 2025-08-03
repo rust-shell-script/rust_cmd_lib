@@ -1,6 +1,8 @@
 use crate::{info, warn};
 use crate::{process, CmdResult, FunResult};
 use os_pipe::PipeReader;
+use std::any::Any;
+use std::fmt::Display;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result};
 use std::process::{Child, ExitStatus};
 use std::thread::JoinHandle;
@@ -170,10 +172,24 @@ impl FunChildren {
             let mut stdout: Box<dyn Read> = Box::new(stdout);
             f(&mut stdout);
             let mut buf = vec![0; 65536];
-            let status = loop {
-                if let CmdChildHandle::Proc(child) = &mut last_child.handle {
-                    if let Ok(Some(status)) = child.try_wait() {
-                        break status;
+            let status: Box<dyn ChildOutcome> = loop {
+                match last_child.handle {
+                    CmdChildHandle::Proc(ref mut child) => {
+                        if let Ok(Some(status)) = child.try_wait() {
+                            break Box::new(status);
+                        }
+                    }
+                    CmdChildHandle::Thread(ref mut join_handle) => {
+                        if let Some(handle) = join_handle.take() {
+                            if handle.is_finished() {
+                                break Box::new(ThreadJoinOutcome::from(handle.join()));
+                            } else {
+                                join_handle.replace(handle);
+                            }
+                        }
+                    }
+                    CmdChildHandle::SyncFn => {
+                        break Box::new(SyncFnOutcome);
                     }
                 }
                 let _ = stdout.read(&mut buf);
@@ -181,8 +197,8 @@ impl FunChildren {
             if status.success() {
                 Ok(())
             } else {
-                Err(CmdChildHandle::status_to_io_error(
-                    status,
+                Err(CmdChildHandle::outcome_to_io_error(
+                    &*status,
                     &last_child.cmd,
                     &last_child.file,
                     last_child.line,
@@ -309,8 +325,68 @@ impl CmdChild {
 
 pub(crate) enum CmdChildHandle {
     Proc(Child),
-    Thread(JoinHandle<CmdResult>),
+    Thread(Option<JoinHandle<CmdResult>>),
     SyncFn,
+}
+
+#[derive(Debug)]
+enum ThreadJoinOutcome {
+    Ok,
+    Err(std::io::Error),
+    Panic(Box<dyn Any + Send + 'static>),
+}
+impl From<std::thread::Result<CmdResult>> for ThreadJoinOutcome {
+    fn from(result: std::thread::Result<CmdResult>) -> Self {
+        match result {
+            Ok(Ok(())) => Self::Ok,
+            Ok(Err(error)) => Self::Err(error),
+            Err(panic) => Self::Panic(panic),
+        }
+    }
+}
+impl Display for ThreadJoinOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ok => write!(f, "Command thread succeeded"),
+            Self::Err(error) => write!(f, "Command thread returned error: {error:?}"),
+            Self::Panic(panic) => write!(f, "Command thread panicked: {panic:?}"),
+        }
+    }
+}
+#[derive(Debug)]
+struct SyncFnOutcome;
+impl Display for SyncFnOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Command finished")
+    }
+}
+trait ChildOutcome: Display {
+    fn success(&self) -> bool;
+    fn code(&self) -> Option<i32>;
+}
+impl ChildOutcome for ExitStatus {
+    fn success(&self) -> bool {
+        self.success()
+    }
+    fn code(&self) -> Option<i32> {
+        self.code()
+    }
+}
+impl ChildOutcome for ThreadJoinOutcome {
+    fn success(&self) -> bool {
+        matches!(self, Self::Ok)
+    }
+    fn code(&self) -> Option<i32> {
+        None
+    }
+}
+impl ChildOutcome for SyncFnOutcome {
+    fn success(&self) -> bool {
+        true
+    }
+    fn code(&self) -> Option<i32> {
+        None
+    }
 }
 
 impl CmdChildHandle {
@@ -322,26 +398,28 @@ impl CmdChildHandle {
                     Err(e) => return Err(process::new_cmd_io_error(&e, cmd, file, line)),
                     Ok(status) => {
                         if !status.success() {
-                            return Err(Self::status_to_io_error(status, cmd, file, line));
+                            return Err(Self::outcome_to_io_error(&status, cmd, file, line));
                         }
                     }
                 }
             }
-            CmdChildHandle::Thread(thread) => {
-                let status = thread.join();
-                match status {
-                    Ok(result) => {
-                        if let Err(e) = result {
-                            return Err(process::new_cmd_io_error(&e, cmd, file, line));
+            CmdChildHandle::Thread(mut thread) => {
+                if let Some(thread) = thread.take() {
+                    let status = thread.join();
+                    match status {
+                        Ok(result) => {
+                            if let Err(e) = result {
+                                return Err(process::new_cmd_io_error(&e, cmd, file, line));
+                            }
                         }
-                    }
-                    Err(e) => {
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            format!(
+                        Err(e) => {
+                            return Err(Error::new(
+                                ErrorKind::Other,
+                                format!(
                                 "Running [{cmd}] thread joined with error: {e:?} at {file}:{line}"
                             ),
-                        ))
+                            ))
+                        }
                     }
                 }
             }
@@ -350,8 +428,8 @@ impl CmdChildHandle {
         Ok(())
     }
 
-    fn status_to_io_error(status: ExitStatus, cmd: &str, file: &str, line: u32) -> Error {
-        if let Some(code) = status.code() {
+    fn outcome_to_io_error(outcome: &dyn ChildOutcome, cmd: &str, file: &str, line: u32) -> Error {
+        if let Some(code) = outcome.code() {
             Error::new(
                 ErrorKind::Other,
                 format!("Running [{cmd}] exited with error; status code: {code} at {file}:{line}"),
@@ -360,7 +438,7 @@ impl CmdChildHandle {
             Error::new(
                 ErrorKind::Other,
                 format!(
-                    "Running [{cmd}] exited with error; terminated by {status} at {file}:{line}"
+                    "Running [{cmd}] exited with error; terminated by {outcome} at {file}:{line}"
                 ),
             )
         }
