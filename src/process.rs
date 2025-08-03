@@ -14,7 +14,9 @@ use std::io::{Error, ErrorKind, Result};
 use std::mem::take;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::SeqCst;
+use std::sync::{LazyLock, Mutex};
 use std::thread;
 
 const CD_CMD: &str = "cd";
@@ -89,26 +91,38 @@ pub fn register_cmd(cmd: &'static str, func: FnFun) {
     CMD_MAP.lock().unwrap().insert(OsString::from(cmd), func);
 }
 
+static DEBUG_ENABLED: LazyLock<AtomicBool> =
+    LazyLock::new(|| AtomicBool::new(std::env::var("CMD_LIB_DEBUG") == Ok("1".into())));
+
+static PIPEFAIL_ENABLED: LazyLock<AtomicBool> =
+    LazyLock::new(|| AtomicBool::new(std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into())));
+
 /// Set debug mode or not, false by default.
 ///
-/// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect
+/// This is **global**, and affects all threads.
+///
+/// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect, but the environment variable is only
+/// checked once at an unspecified time, so the only reliable way to do that is when the program is first started.
 pub fn set_debug(enable: bool) {
-    std::env::set_var("CMD_LIB_DEBUG", if enable { "1" } else { "0" });
+    DEBUG_ENABLED.store(enable, SeqCst);
 }
 
 /// Set pipefail or not, true by default.
 ///
-/// Setting environment variable CMD_LIB_PIPEFAIL=0|1 has the same effect
+/// This is **global**, and affects all threads.
+///
+/// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect, but the environment variable is only
+/// checked once at an unspecified time, so the only reliable way to do that is when the program is first started.
 pub fn set_pipefail(enable: bool) {
-    std::env::set_var("CMD_LIB_PIPEFAIL", if enable { "1" } else { "0" });
+    PIPEFAIL_ENABLED.store(enable, SeqCst);
 }
 
 pub(crate) fn debug_enabled() -> bool {
-    std::env::var("CMD_LIB_DEBUG") == Ok("1".into())
+    DEBUG_ENABLED.load(SeqCst)
 }
 
 pub(crate) fn pipefail_enabled() -> bool {
-    std::env::var("CMD_LIB_PIPEFAIL") != Ok("0".into())
+    PIPEFAIL_ENABLED.load(SeqCst)
 }
 
 #[doc(hidden)]
