@@ -88,7 +88,7 @@ let dir = "/var/log";
 run_cmd!(du -ah $dir | sort -hr | head -n 10)?;
 
 // or a group of commands
-// if any command fails, just return Err(...)
+// if any command fails, just return Err(...), which is similar to bash's `set -euo pipefail`
 let file = "/tmp/f";
 let keyword = "rust";
 run_cmd! {
@@ -104,7 +104,7 @@ run_cmd! {
 - [`run_fun!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.run_fun.html) -> [`FunResult`](https://docs.rs/cmd_lib/latest/cmd_lib/type.FunResult.html)
 
 ```rust
-let version = run_fun!(rustc --version)?;
+let version = run_fun!(rustc --version | awk r"{print $2}")?;
 eprintln!("Your rust version is {}", version);
 
 // with pipes
@@ -346,6 +346,5 @@ That said, there are some limitations to be aware of:
 [std::env::set_var]: https://doc.rust-lang.org/std/env/fn.set_var.html
 [std::env::remove_var]: https://doc.rust-lang.org/std/env/fn.remove_var.html
 [must not be called]: https://doc.rust-lang.org/nightly/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
-
 
 License: MIT OR Apache-2.0

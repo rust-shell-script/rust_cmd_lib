@@ -109,6 +109,22 @@ static PIPEFAIL_ENABLED: LazyLock<AtomicBool> =
 ///
 /// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect, but the environment variable is only
 /// checked once at an unspecified time, so the only reliable way to do that is when the program is first started.
+///
+/// ## Example
+/// ```console
+/// λ  test_cmd_lib git:(master) ✗ cat src/main.rs
+/// use cmd_lib::*;
+///
+/// #[cmd_lib::main]
+/// fn main() -> CmdResult {
+///     run_cmd!(cat src/main.rs | wc -l)
+/// }
+/// λ  test_cmd_lib git:(master) ✗ RUST_LOG=debug CMD_LIB_DEBUG=1 cargo r
+///     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+///      Running `target/debug/test_cmd_lib`
+/// [DEBUG] Running ["cat" "src/main.rs" | "wc" "-l"] at src/main.rs:5 ...
+/// 6
+/// ```
 pub fn set_debug(enable: bool) {
     DEBUG_ENABLED.store(enable, SeqCst);
 }
@@ -117,7 +133,7 @@ pub fn set_debug(enable: bool) {
 ///
 /// This is **global**, and affects all threads. To set it for the current thread only, use [`ScopedPipefail`].
 ///
-/// Setting environment variable CMD_LIB_DEBUG=0|1 has the same effect, but the environment variable is only
+/// Setting environment variable CMD_LIB_PIPEFAIL=0|1 has the same effect, but the environment variable is only
 /// checked once at an unspecified time, so the only reliable way to do that is when the program is first started.
 pub fn set_pipefail(enable: bool) {
     PIPEFAIL_ENABLED.store(enable, SeqCst);

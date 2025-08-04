@@ -96,7 +96,7 @@
 //! run_cmd!(du -ah $dir | sort -hr | head -n 10)?;
 //!
 //! // or a group of commands
-//! // if any command fails, just return Err(...)
+//! // if any command fails, just return Err(...), which is similar to bash's `set -euo pipefail`
 //! let file = "/tmp/f";
 //! let keyword = "rust";
 //! run_cmd! {
@@ -114,7 +114,7 @@
 //!
 //! ```
 //! # use cmd_lib::run_fun;
-//! let version = run_fun!(rustc --version)?;
+//! let version = run_fun!(rustc --version | awk r"{print $2}")?;
 //! eprintln!("Your rust version is {}", version);
 //!
 //! // with pipes
@@ -369,11 +369,13 @@
 //! - [std::env::set_var] and [std::env::remove_var] **[must not be called]** in a multi-threaded program
 //! - [`tls_init!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_init.html),
 //!   [`tls_get!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_get.html), and
-//!   [`tls_set!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_set.html) create *thread-local* variables, which
-//!   means each thread will have its own independent version of the variable
+//!   [`tls_set!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_set.html) create *thread-local* variables, which means
+//!   each thread will have its own independent version of the variable
 //! - [`set_debug`](https://docs.rs/cmd_lib/latest/cmd_lib/fn.set_debug.html) and
 //!   [`set_pipefail`](https://docs.rs/cmd_lib/latest/cmd_lib/fn.set_pipefail.html) are *global* and affect all threads;
-//!   there is currently no way to change those settings without affecting other threads
+//!   to change those settings without affecting other threads, use
+//!   [`ScopedDebug`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.ScopedDebug.html) and
+//!   [`ScopedPipefail`](https://docs.rs/cmd_lib/latest/cmd_lib/struct.ScopedPipefail.html)
 //!
 //! [std::env::set_var]: https://doc.rust-lang.org/std/env/fn.set_var.html
 //! [std::env::remove_var]: https://doc.rust-lang.org/std/env/fn.remove_var.html
