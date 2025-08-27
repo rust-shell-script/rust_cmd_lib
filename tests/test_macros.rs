@@ -108,25 +108,6 @@ fn test_vars_in_str3() {
 }
 
 #[test]
-// FIXME: doctests have no effect here, and we need to split these into one test per error
-/// ```compile_fail
-/// run_cmd!(echo "${msg0}").unwrap();
-/// assert_eq!(run_fun!(echo "${ msg }").unwrap(), "${ msg }");
-/// assert_eq!(run_fun!(echo "${}").unwrap(), "${}");
-/// assert_eq!(run_fun!(echo "${").unwrap(), "${");
-/// assert_eq!(run_fun!(echo "${msg").unwrap(), "${msg");
-/// assert_eq!(run_fun!(echo "$}").unwrap(), "$}");
-/// assert_eq!(run_fun!(echo "${}").unwrap(), "${}");
-/// assert_eq!(run_fun!(echo "${").unwrap(), "${");
-/// assert_eq!(run_fun!(echo "${0}").unwrap(), "${0}");
-/// assert_eq!(run_fun!(echo "${ 0 }").unwrap(), "${ 0 }");
-/// assert_eq!(run_fun!(echo "${0msg}").unwrap(), "${0msg}");
-/// assert_eq!(run_fun!(echo "${msg 0}").unwrap(), "${msg 0}");
-/// assert_eq!(run_fun!(echo "${msg 0}").unwrap(), "${msg 0}");
-/// ```
-fn test_vars_in_str4() {}
-
-#[test]
 fn test_tls_set() {
     tls_init!(V, Vec<String>, vec![]);
     tls_set!(V, |v| v.push("a".to_string()));
@@ -286,12 +267,6 @@ fn test_ignore_and_pipefail() {
 }
 
 #[test]
-// FIXME: doctests have no effect here, and we need to split these into one test per error
-/// ```compile_fail
-/// run_cmd!(ls > >&1).unwrap();
-/// run_cmd!(ls >>&1).unwrap();
-/// run_cmd!(ls >>&2).unwrap();
-/// ```
 fn test_redirect() {
     let tmp_file = "/tmp/f";
     assert!(run_cmd!(echo xxxx > $tmp_file).is_ok());
@@ -356,16 +331,6 @@ fn test_current_dir() {
         std::fs::canonicalize("/tmp").unwrap()
     );
 }
-
-#[test]
-// FIXME: doctests have no effect here, and we need to split these into one test per error
-/// ```compile_fail
-/// run_cmd!(ls / /x &>>> /tmp/f).unwrap();
-/// run_cmd!(ls / /x &> > /tmp/f).unwrap();
-/// run_cmd!(ls / /x > > /tmp/f).unwrap();
-/// run_cmd!(ls / /x >> > /tmp/f).unwrap();
-/// ```
-fn test_redirect_fail() {}
 
 #[test]
 fn test_buitin_stdout_redirect() {

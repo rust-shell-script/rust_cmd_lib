@@ -1,3 +1,107 @@
+//! cmd_lib_macros - Procedural macros for cmd_lib
+//!
+//! ## Invalid syntax examples that should fail to compile
+//!
+//! This section contains documentation tests that demonstrate invalid macro syntax
+//! which should result in compilation errors. These serve as tests to ensure
+//! the macros properly reject invalid input.
+//!
+//! ### Invalid variable expansion syntax
+//!
+//! Variable names cannot start with numbers:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_cmd!(echo "${msg0}");
+//! ```
+//!
+//! Invalid spacing in variable expansion:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_fun!(echo "${ msg }");
+//! ```
+//!
+//! Unclosed variable expansion:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_fun!(echo "${");
+//! ```
+//!
+//! Unclosed variable name:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_fun!(echo "${msg");
+//! ```
+//!
+//! Variable names cannot be numbers:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_fun!(echo "${0}");
+//! ```
+//!
+//! Variable names cannot have spaces:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_fun!(echo "${ 0 }");
+//! ```
+//!
+//! Variable names cannot start with numbers:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_fun!(echo "${0msg}");
+//! ```
+//!
+//! Variable names cannot contain spaces:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_fun!(echo "${msg 0}");
+//! ```
+//!
+//! ### Invalid redirect syntax
+//!
+//! Invalid redirect operator spacing:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_cmd!(ls > >&1);
+//! ```
+//!
+//! Invalid redirect to stdout:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_cmd!(ls >>&1);
+//! ```
+//!
+//! Invalid redirect to stderr:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_cmd!(ls >>&2);
+//! ```
+//!
+//! ### Double redirect errors
+//!
+//! Triple redirect operator:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_cmd!(ls / /x &>>> /tmp/f);
+//! ```
+//!
+//! Double redirect with space:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_cmd!(ls / /x &> > /tmp/f);
+//! ```
+//!
+//! Double output redirect:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_cmd!(ls / /x > > /tmp/f);
+//! ```
+//!
+//! Append and output redirect:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! run_cmd!(ls / /x >> > /tmp/f);
+//! ```
+
 use proc_macro2::{TokenStream, TokenTree};
 use proc_macro_error2::{abort, proc_macro_error};
 use quote::quote;
