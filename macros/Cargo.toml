@@ -7,7 +7,7 @@ repository = "https://github.com/rust-shell-script/rust_cmd_lib"
 keywords = ["shell", "script", "cli", "process", "pipe"]
 version = "1.9.6"
 authors = ["Tao Guo <tao.guo.code@gmail.com>"]
-edition = "2018"
+edition = "2024"
 rust-version = "1.88"
 
 [lib]

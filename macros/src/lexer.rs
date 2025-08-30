@@ -291,7 +291,7 @@ impl Lexer {
         } else {
             let mut is_redirect = false;
             if s == "1" || s == "2" {
-                if let Some(TokenTree::Punct(ref p)) = self.iter.peek_no_gap() {
+                if let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap() {
                     if p.as_char() == '>' {
                         self.iter.next();
                         self.scan_redirect_out(if s == "1" { 1 } else { 2 });
