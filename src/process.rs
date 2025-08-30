@@ -4,7 +4,6 @@ use crate::io::{CmdIn, CmdOut};
 use crate::{debug, warn};
 use crate::{CmdResult, FunResult};
 use faccess::{AccessMode, PathExt};
-use lazy_static::lazy_static;
 use os_pipe::{self, PipeReader, PipeWriter};
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -72,21 +71,18 @@ impl CmdEnv {
 
 type FnFun = fn(&mut CmdEnv) -> CmdResult;
 
-lazy_static! {
-    static ref CMD_MAP: Mutex<HashMap<OsString, FnFun>> = {
-        // needs explicit type, or it won't compile
-        let mut m: HashMap<OsString, FnFun> = HashMap::new();
-        m.insert("echo".into(), builtin_echo);
-        m.insert("trace".into(), builtin_trace);
-        m.insert("debug".into(), builtin_debug);
-        m.insert("info".into(), builtin_info);
-        m.insert("warn".into(), builtin_warn);
-        m.insert("error".into(), builtin_error);
-        m.insert("".into(), builtin_empty);
+static CMD_MAP: LazyLock<Mutex<HashMap<OsString, FnFun>>> = LazyLock::new(|| {
+    let mut m: HashMap<OsString, FnFun> = HashMap::new();
+    m.insert("echo".into(), builtin_echo);
+    m.insert("trace".into(), builtin_trace);
+    m.insert("debug".into(), builtin_debug);
+    m.insert("info".into(), builtin_info);
+    m.insert("warn".into(), builtin_warn);
+    m.insert("error".into(), builtin_error);
+    m.insert("".into(), builtin_empty);
 
-        Mutex::new(m)
-    };
-}
+    Mutex::new(m)
+});
 
 #[doc(hidden)]
 pub fn register_cmd(cmd: &'static str, func: FnFun) {

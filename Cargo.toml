@@ -17,7 +17,6 @@ members = ["macros"]
 
 [dependencies]
 cmd_lib_macros = { version = "1.9.6", path = "./macros" }
-lazy_static = "1.4.0"
 log = "0.4.20"
 faccess = "0.2.4"
 os_pipe = "1.1.4"
