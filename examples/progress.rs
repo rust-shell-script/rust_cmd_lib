@@ -1,4 +1,4 @@
-use cmd_lib::{run_cmd, CmdResult};
+use cmd_lib::{CmdResult, run_cmd};
 
 #[cmd_lib::main]
 fn main() -> CmdResult {

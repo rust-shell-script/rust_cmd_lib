@@ -65,8 +65,7 @@ tls_init!(SETS, Vec<char>, vec![]);
 // pipes'
 tls_init!(x, Vec<i32>, vec![]); // current position
 tls_init!(y, Vec<i32>, vec![]);
-tls_init!(l, Vec<i32>, vec![]); // current directions
-                                // 0: up, 1: right, 2: down, 3: left
+tls_init!(l, Vec<i32>, vec![]); // current directions, 0: up, 1: right, 2: down, 3: left
 tls_init!(n, Vec<i32>, vec![]); // new directions
 tls_init!(v, Vec<i32>, vec![]); // current types
 tls_init!(c, Vec<String>, vec![]); // current escape codes

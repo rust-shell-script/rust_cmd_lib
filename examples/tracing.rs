@@ -1,6 +1,6 @@
-use cmd_lib::{run_cmd, CmdResult};
+use cmd_lib::{CmdResult, run_cmd};
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 #[cmd_lib::main]
 fn main() -> CmdResult {

@@ -1,8 +1,8 @@
 use crate::builtins::*;
 use crate::child::{CmdChild, CmdChildHandle, CmdChildren, FunChildren};
 use crate::io::{CmdIn, CmdOut};
-use crate::{debug, warn};
 use crate::{CmdResult, FunResult};
+use crate::{debug, warn};
 use faccess::{AccessMode, PathExt};
 use os_pipe::{self, PipeReader, PipeWriter};
 use std::cell::Cell;
@@ -246,10 +246,10 @@ impl GroupCmds {
 
     pub fn run_cmd(&mut self) -> CmdResult {
         for cmds in self.group_cmds.iter_mut() {
-            if let Err(e) = cmds.run_cmd(&mut self.current_dir) {
-                if !cmds.ignore_error {
-                    return Err(e);
-                }
+            if let Err(e) = cmds.run_cmd(&mut self.current_dir)
+                && !cmds.ignore_error
+            {
+                return Err(e);
             }
         }
         Ok(())
@@ -449,11 +449,11 @@ impl Cmd {
 
         let arg_str = arg.to_string_lossy().to_string();
         if arg_str != IGNORE_CMD && !self.args.iter().any(|cmd| *cmd != IGNORE_CMD) {
-            if let Some((key, value)) = arg_str.split_once('=') {
-                if key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                    self.vars.insert(key.into(), value.into());
-                    return self;
-                }
+            if let Some((key, value)) = arg_str.split_once('=')
+                && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                self.vars.insert(key.into(), value.into());
+                return self;
             }
             self.in_cmd_map = CMD_MAP.lock().unwrap().contains_key(arg);
         }
@@ -779,11 +779,13 @@ mod tests {
     #[test]
     fn test_run_piped_cmds() {
         let mut current_dir = PathBuf::new();
-        assert!(Cmds::default()
-            .pipe(Cmd::default().add_args(["echo", "rust"]))
-            .pipe(Cmd::default().add_args(["wc"]))
-            .run_cmd(&mut current_dir)
-            .is_ok());
+        assert!(
+            Cmds::default()
+                .pipe(Cmd::default().add_args(["echo", "rust"]))
+                .pipe(Cmd::default().add_args(["wc"]))
+                .run_cmd(&mut current_dir)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -814,10 +816,12 @@ mod tests {
         let tmp_file = "/tmp/file_echo_rust";
         let mut write_cmd = Cmd::default().add_args(["echo", "rust"]);
         write_cmd = write_cmd.add_redirect(Redirect::StdoutToFile(PathBuf::from(tmp_file), false));
-        assert!(Cmds::default()
-            .pipe(write_cmd)
-            .run_cmd(&mut current_dir)
-            .is_ok());
+        assert!(
+            Cmds::default()
+                .pipe(write_cmd)
+                .run_cmd(&mut current_dir)
+                .is_ok()
+        );
 
         let read_cmd = Cmd::default().add_args(["cat", tmp_file]);
         assert_eq!(
@@ -829,9 +833,11 @@ mod tests {
         );
 
         let cleanup_cmd = Cmd::default().add_args(["rm", tmp_file]);
-        assert!(Cmds::default()
-            .pipe(cleanup_cmd)
-            .run_cmd(&mut current_dir)
-            .is_ok());
+        assert!(
+            Cmds::default()
+                .pipe(cleanup_cmd)
+                .run_cmd(&mut current_dir)
+                .is_ok()
+        );
     }
 }

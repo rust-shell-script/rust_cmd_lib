@@ -17,22 +17,26 @@ fn test_run_single_cmd_with_quote() {
 
 #[test]
 fn test_cd_fails() {
-    assert!(run_cmd! {
-        cd /bad_dir;
-        ls | wc -l;
-    }
-    .is_err());
+    assert!(
+        run_cmd! {
+            cd /bad_dir;
+            ls | wc -l;
+        }
+        .is_err()
+    );
 }
 
 #[test]
 fn test_run_cmds() {
-    assert!(run_cmd! {
-        cd /tmp;
-        touch xxff;
-        ls | wc -l;
-        rm xxff;
-    }
-    .is_ok());
+    assert!(
+        run_cmd! {
+            cd /tmp;
+            touch xxff;
+            ls | wc -l;
+            rm xxff;
+        }
+        .is_ok()
+    );
 }
 
 #[test]
@@ -220,16 +224,22 @@ fn test_ignore_and_pipefail() {
         test_cases_for_entry_point!((run_fun!(...)).map(|_stdout| ())),
         test_cases_for_entry_point!((spawn!(...)).unwrap().wait()),
         test_cases_for_entry_point!((spawn_with_output!(...)).unwrap().wait_with_all().0),
-        test_cases_for_entry_point!((spawn_with_output!(...))
-            .unwrap()
-            .wait_with_output()
-            .map(|_stdout| ())),
-        test_cases_for_entry_point!((spawn_with_output!(...))
-            .unwrap()
-            .wait_with_raw_output(&mut vec![])),
-        test_cases_for_entry_point!((spawn_with_output!(...))
-            .unwrap()
-            .wait_with_pipe(&mut |_stdout| {})),
+        test_cases_for_entry_point!(
+            (spawn_with_output!(...))
+                .unwrap()
+                .wait_with_output()
+                .map(|_stdout| ())
+        ),
+        test_cases_for_entry_point!(
+            (spawn_with_output!(...))
+                .unwrap()
+                .wait_with_raw_output(&mut vec![])
+        ),
+        test_cases_for_entry_point!(
+            (spawn_with_output!(...))
+                .unwrap()
+                .wait_with_pipe(&mut |_stdout| {})
+        ),
     ];
 
     macro_rules! check_eq {
@@ -271,13 +281,15 @@ fn test_redirect() {
     let tmp_file = "/tmp/f";
     assert!(run_cmd!(echo xxxx > $tmp_file).is_ok());
     assert!(run_cmd!(echo yyyy >> $tmp_file).is_ok());
-    assert!(run_cmd!(
-        ignore ls /x 2>/tmp/lsx.log;
-        echo "dump file:";
-        cat /tmp/lsx.log;
-        rm /tmp/lsx.log;
-    )
-    .is_ok());
+    assert!(
+        run_cmd!(
+            ignore ls /x 2>/tmp/lsx.log;
+            echo "dump file:";
+            cat /tmp/lsx.log;
+            rm /tmp/lsx.log;
+        )
+        .is_ok()
+    );
     assert!(run_cmd!(ignore ls /x 2>/dev/null).is_ok());
     assert!(run_cmd!(ignore ls /x &>$tmp_file).is_ok());
     assert!(run_cmd!(wc -w < $tmp_file).is_ok());

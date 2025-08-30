@@ -77,9 +77,10 @@ const filled_cell: &str = "[]"; // how we draw filled cell
 tls_init!(use_color, bool, true); // true if we use color, false if not
 tls_init!(score, i32, 0); // score variable initialization
 tls_init!(level, i32, 1); // level variable initialization
-tls_init!(lines_completed, i32, 0); // completed lines counter initialization
-                                    // screen_buffer is variable, that accumulates all screen changes
-                                    // this variable is printed in controller once per game cycle
+// completed lines counter initialization
+// screen_buffer is variable, that accumulates all screen changes
+// this variable is printed in controller once per game cycle
+tls_init!(lines_completed, i32, 0);
 tls_init!(screen_buffer, String, "".to_string());
 
 fn puts(changes: &str) {

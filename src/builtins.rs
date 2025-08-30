@@ -1,5 +1,5 @@
-use crate::{debug, error, info, trace, warn};
 use crate::{CmdEnv, CmdResult};
+use crate::{debug, error, info, trace, warn};
 use std::io::{Read, Write};
 
 pub(crate) fn builtin_echo(env: &mut CmdEnv) -> CmdResult {

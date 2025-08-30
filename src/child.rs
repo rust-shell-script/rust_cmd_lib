@@ -1,5 +1,5 @@
+use crate::{CmdResult, FunResult, process};
 use crate::{info, warn};
-use crate::{process, CmdResult, FunResult};
 use os_pipe::PipeReader;
 use std::any::Any;
 use std::fmt::Display;
@@ -90,10 +90,10 @@ impl FunChildren {
     /// Waits for the children processes to exit completely, returning the stdout output.
     pub fn wait_with_output(&mut self) -> FunResult {
         let (res, stdout, _) = self.inner_wait_with_all(false);
-        if let Err(e) = res {
-            if !self.ignore_error {
-                return Err(e);
-            }
+        if let Err(e) = res
+            && !self.ignore_error
+        {
+            return Err(e);
         }
         Ok(stdout)
     }
@@ -110,11 +110,7 @@ impl FunChildren {
             }
             Ok(_) => {
                 let ret = CmdChildren::wait_children(&mut self.children);
-                if self.ignore_error {
-                    Ok(())
-                } else {
-                    ret
-                }
+                if self.ignore_error { Ok(()) } else { ret }
             }
         }
     }
@@ -234,10 +230,10 @@ impl CmdChild {
         let _stderr_thread =
             StderrThread::new(&self.cmd, &self.file, self.line, self.stderr.take(), false);
         let res = self.handle.wait(&self.cmd, &self.file, self.line);
-        if let Err(e) = res {
-            if is_last || process::pipefail_enabled() {
-                return Err(e);
-            }
+        if let Err(e) = res
+            && (is_last || process::pipefail_enabled())
+        {
+            return Err(e);
         }
         Ok(())
     }
@@ -265,10 +261,10 @@ impl CmdChild {
             capture_stderr,
         );
         let mut stdout_res = Ok(());
-        if let Some(mut stdout) = self.stdout.take() {
-            if let Err(e) = stdout.read_to_end(stdout_buf) {
-                stdout_res = Err(e)
-            }
+        if let Some(mut stdout) = self.stdout.take()
+            && let Err(e) = stdout.read_to_end(stdout_buf)
+        {
+            stdout_res = Err(e)
         }
         *stderr_buf = stderr_thread.join();
         let wait_res = self.handle.wait(&self.cmd, &self.file, self.line);

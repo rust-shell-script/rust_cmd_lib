@@ -1,6 +1,6 @@
 use crate::parser::{ParseArg, Parser};
-use proc_macro2::{token_stream, Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
 use proc_macro_error2::abort;
+use proc_macro2::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree, token_stream};
 use quote::quote;
 use std::iter::Peekable;
 use std::str::Chars;
@@ -65,7 +65,7 @@ pub fn scan_str_lit(lit: &Literal) -> TokenStream {
                 // If it's braced, we might have a format specifier or it might just be empty braces.
                 if chars.peek() == Some(&':') {
                     chars.next(); // Consume ':'
-                                  // Read the format specifier until '}'
+                    // Read the format specifier until '}'
                     while let Some(&c) = chars.peek() {
                         if c == '}' {
                             break;
@@ -290,14 +290,13 @@ impl Lexer {
             self.extend_last_arg(quote!(#ss.into_os_string()));
         } else {
             let mut is_redirect = false;
-            if s == "1" || s == "2" {
-                if let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap() {
-                    if p.as_char() == '>' {
-                        self.iter.next();
-                        self.scan_redirect_out(if s == "1" { 1 } else { 2 });
-                        is_redirect = true;
-                    }
-                }
+            if (s == "1" || s == "2")
+                && let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap()
+                && p.as_char() == '>'
+            {
+                self.iter.next();
+                self.scan_redirect_out(if s == "1" { 1 } else { 2 });
+                is_redirect = true;
             }
             if !is_redirect {
                 self.extend_last_arg(quote!(#s));
@@ -306,15 +305,15 @@ impl Lexer {
     }
 
     fn scan_pipe(&mut self) {
-        if let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap() {
-            if p.as_char() == '&' {
-                if let Some(ref redirect) = self.last_redirect {
-                    abort!(redirect.1, "invalid '&': found previous redirect");
-                }
-                Self::check_set_redirect(&mut self.seen_redirect.2, "stderr", p.span());
-                self.args.push(ParseArg::RedirectFd(2, 1));
-                self.iter.next();
+        if let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap()
+            && p.as_char() == '&'
+        {
+            if let Some(ref redirect) = self.last_redirect {
+                abort!(redirect.1, "invalid '&': found previous redirect");
             }
+            Self::check_set_redirect(&mut self.seen_redirect.2, "stderr", p.span());
+            self.args.push(ParseArg::RedirectFd(2, 1));
+            self.iter.next();
         }
 
         // expect new command
@@ -342,29 +341,29 @@ impl Lexer {
                 RedirectFd::Stderr { append }
             },
         );
-        if let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap() {
-            if p.as_char() == '&' {
-                if append {
-                    abort!(p.span(), "raw fd not allowed for append redirection");
+        if let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap()
+            && p.as_char() == '&'
+        {
+            if append {
+                abort!(p.span(), "raw fd not allowed for append redirection");
+            }
+            self.iter.next();
+            if let Some(TokenTree::Literal(lit)) = self.iter.peek_no_gap() {
+                let s = lit.to_string();
+                if s.starts_with('\"') || s.starts_with('r') {
+                    abort!(lit.span(), "invalid literal string after &");
                 }
-                self.iter.next();
-                if let Some(TokenTree::Literal(lit)) = self.iter.peek_no_gap() {
-                    let s = lit.to_string();
-                    if s.starts_with('\"') || s.starts_with('r') {
-                        abort!(lit.span(), "invalid literal string after &");
-                    }
-                    if &s == "1" {
-                        self.args.push(ParseArg::RedirectFd(fd, 1));
-                    } else if &s == "2" {
-                        self.args.push(ParseArg::RedirectFd(fd, 2));
-                    } else {
-                        abort!(lit.span(), "Only &1 or &2 is supported");
-                    }
-                    self.last_redirect = None;
-                    self.iter.next();
+                if &s == "1" {
+                    self.args.push(ParseArg::RedirectFd(fd, 1));
+                } else if &s == "2" {
+                    self.args.push(ParseArg::RedirectFd(fd, 2));
                 } else {
-                    abort!(self.iter.span(), "expect &1 or &2");
+                    abort!(lit.span(), "Only &1 or &2 is supported");
                 }
+                self.last_redirect = None;
+                self.iter.next();
+            } else {
+                abort!(self.iter.span(), "expect &1 or &2");
             }
         }
     }
@@ -436,11 +435,11 @@ impl Lexer {
 
     fn check_append(&mut self) -> bool {
         let mut append = false;
-        if let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap() {
-            if p.as_char() == '>' {
-                append = true;
-                self.iter.next();
-            }
+        if let Some(TokenTree::Punct(p)) = self.iter.peek_no_gap()
+            && p.as_char() == '>'
+        {
+            append = true;
+            self.iter.next();
         }
         append
     }
