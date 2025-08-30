@@ -11,6 +11,7 @@ readme = "README.md"
 version = "1.9.6"
 authors = ["rust-shell-script <rust-shell-script@gmail.com>"]
 edition = "2018"
+rust-version = "1.88"
 
 [workspace]
 members = ["macros"]

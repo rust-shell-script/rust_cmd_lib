@@ -8,6 +8,7 @@ keywords = ["shell", "script", "cli", "process", "pipe"]
 version = "1.9.6"
 authors = ["Tao Guo <tao.guo.code@gmail.com>"]
 edition = "2018"
+rust-version = "1.88"
 
 [lib]
 proc-macro = true
@@ -15,7 +16,7 @@ proc-macro = true
 [dependencies]
 syn = { version = "2", features = ["full"] }
 quote = "1"
-proc-macro2 = "1"
+proc-macro2 = { version = "1.0.86", features = ["span-locations"] }
 proc-macro-error2 = "2"
 
 [dev-dependencies]

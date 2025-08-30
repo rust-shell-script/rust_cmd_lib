@@ -473,12 +473,10 @@ impl<I: Iterator<Item = TokenTree>> TokenStreamPeekable<I> {
         match self.peekable.peek() {
             None => None,
             Some(item) => {
-                let (_, cur_end) = Self::span_location(&self.span);
-                let (new_start, _) = Self::span_location(&item.span());
-                if new_start > cur_end {
-                    None
-                } else {
+                if self.span.end() == item.span().start() {
                     Some(item)
+                } else {
+                    None
                 }
             }
         }
@@ -486,30 +484,5 @@ impl<I: Iterator<Item = TokenTree>> TokenStreamPeekable<I> {
 
     fn span(&self) -> Span {
         self.span
-    }
-
-    // helper function to get (start, end) of Span
-    fn span_location(span: &Span) -> (usize, usize) {
-        let mut start = 0;
-        let mut end = 0;
-        let mut parse_start = true;
-        format!("{:?}", span) // output is like this: #0 bytes(95..97)
-            .chars()
-            .skip_while(|c| *c != '(')
-            .skip(1)
-            .take_while(|c| *c != ')')
-            .for_each(|c| {
-                if c == '.' {
-                    parse_start = false;
-                } else if c.is_ascii_digit() {
-                    let digit = c.to_digit(10).unwrap() as usize;
-                    if parse_start {
-                        start = start * 10 + digit;
-                    } else {
-                        end = end * 10 + digit;
-                    }
-                }
-            });
-        (start, end)
     }
 }
