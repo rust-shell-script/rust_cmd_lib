@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{File, OpenOptions};
-use std::io::{Error, ErrorKind, Result};
+use std::io::{Error, Result};
 use std::marker::PhantomData;
 use std::mem::take;
 use std::path::{Path, PathBuf};
@@ -150,11 +150,11 @@ pub(crate) fn pipefail_enabled() -> bool {
 thread_local! {
     /// Whether debug mode is enabled in the current thread.
     /// None means to use the global setting in [`DEBUG_ENABLED`].
-    static DEBUG_OVERRIDE: Cell<Option<bool>> = Cell::new(None);
+    static DEBUG_OVERRIDE: Cell<Option<bool>> = const { Cell::new(None) };
 
     /// Whether pipefail mode is enabled in the current thread.
     /// None means to use the global setting in [`PIPEFAIL_ENABLED`].
-    static PIPEFAIL_OVERRIDE: Cell<Option<bool>> = Cell::new(None);
+    static PIPEFAIL_OVERRIDE: Cell<Option<bool>> = const { Cell::new(None) };
 }
 
 /// Overrides the debug mode in the current thread, while the value is in scope.
@@ -622,19 +622,16 @@ impl Cmd {
 
     fn run_cd_cmd(&self, current_dir: &mut PathBuf, file: &str, line: u32) -> CmdResult {
         if self.args.len() == 1 {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "{CD_CMD}: missing directory at {file}:{line}",
-            ));
+            return Err(Error::other("{CD_CMD}: missing directory at {file}:{line}"));
         } else if self.args.len() > 2 {
             let err_msg = format!("{CD_CMD}: too many arguments at {file}:{line}");
-            return Err(Error::new(ErrorKind::Other, err_msg));
+            return Err(Error::other(err_msg));
         }
 
         let dir = current_dir.join(&self.args[1]);
         if !dir.is_dir() {
             let err_msg = format!("{CD_CMD}: No such file or directory at {file}:{line}");
-            return Err(Error::new(ErrorKind::Other, err_msg));
+            return Err(Error::other(err_msg));
         }
 
         dir.access(AccessMode::EXECUTE)?;

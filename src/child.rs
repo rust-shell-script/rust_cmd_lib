@@ -3,7 +3,7 @@ use crate::{process, CmdResult, FunResult};
 use os_pipe::PipeReader;
 use std::any::Any;
 use std::fmt::Display;
-use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result};
+use std::io::{BufRead, BufReader, Error, Read, Result};
 use std::process::{Child, ExitStatus};
 use std::thread::JoinHandle;
 
@@ -37,9 +37,11 @@ impl CmdChildren {
         let last_child_res = last_child.wait(true);
         let other_children_res = Self::wait_children(&mut self.children);
 
-        self.ignore_error
-            .then_some(Ok(()))
-            .unwrap_or(last_child_res.and(other_children_res))
+        if self.ignore_error {
+            Ok(())
+        } else {
+            last_child_res.and(other_children_res)
+        }
     }
 
     fn wait_children(children: &mut Vec<CmdChild>) -> CmdResult {
@@ -166,9 +168,11 @@ impl FunChildren {
         let other_children_res = CmdChildren::wait_children(&mut self.children);
         let _ = stderr_thread.join();
 
-        self.ignore_error
-            .then_some(Ok(()))
-            .unwrap_or(last_child_res.and(other_children_res))
+        if self.ignore_error {
+            Ok(())
+        } else {
+            last_child_res.and(other_children_res)
+        }
     }
 
     /// Returns the OS-assigned process identifiers associated with these children processes.
@@ -183,10 +187,11 @@ impl FunChildren {
         let last_child = self.children.pop().unwrap();
         let last_child_res = last_child.wait_with_all(capture_stderr, &mut stdout, &mut stderr);
         let other_children_res = CmdChildren::wait_children(&mut self.children);
-        let cmd_result = self
-            .ignore_error
-            .then_some(Ok(()))
-            .unwrap_or(last_child_res.and(other_children_res));
+        let cmd_result = if self.ignore_error {
+            Ok(())
+        } else {
+            last_child_res.and(other_children_res)
+        };
 
         let mut stdout: String = String::from_utf8_lossy(&stdout).into();
         if stdout.ends_with('\n') {
@@ -345,10 +350,9 @@ trait ChildOutcome: Display {
         if self.success() {
             Ok(())
         } else {
-            Err(Error::new(
-                ErrorKind::Other,
-                format!("Running [{cmd}] exited with error; {self} at {file}:{line}"),
-            ))
+            Err(Error::other(format!(
+                "Running [{cmd}] exited with error; {self} at {file}:{line}"
+            )))
         }
     }
 }
@@ -392,10 +396,9 @@ impl CmdChildHandle {
                     format!("Killing process [{cmd}] failed with error: {e} at {file}:{line}"),
                 )
             }),
-            CmdChildHandle::Thread(_thread) => Err(Error::new(
-                ErrorKind::Other,
-                format!("Killing thread [{cmd}] failed: not supported at {file}:{line}"),
-            )),
+            CmdChildHandle::Thread(_thread) => Err(Error::other(format!(
+                "Killing thread [{cmd}] failed: not supported at {file}:{line}"
+            ))),
             CmdChildHandle::SyncFn => Ok(()),
         }
     }
