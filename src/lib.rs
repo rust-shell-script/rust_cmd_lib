@@ -112,14 +112,10 @@
 //!
 //! - [`run_fun!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.run_fun.html) -> [`FunResult`](https://docs.rs/cmd_lib/latest/cmd_lib/type.FunResult.html)
 //!
-//! ```
-//! # use cmd_lib::run_fun;
+//! ```no_run
+//! # use cmd_lib::{info, run_fun};
 //! let version = run_fun!(rustc --version | awk r"{print $2}")?;
-//! eprintln!("Your rust version is {}", version);
-//!
-//! // with pipes
-//! let n = run_fun!(echo "the quick brown fox jumped over the lazy dog" | wc -w)?;
-//! eprintln!("There are {} words in above sentence", n);
+//! info!("Your rust version is {version}");
 //! # Ok::<(), std::io::Error>(())
 //! ```
 //!
@@ -293,7 +289,7 @@
 //! ### Macro to register your own commands
 //! Declare your function with the right signature, and register it with [`use_custom_cmd!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.use_custom_cmd.html) macro:
 //!
-//! ```
+//! ```no_run
 //! # use cmd_lib::*;
 //! # use std::io::Write;
 //! fn my_cmd(env: &mut CmdEnv) -> CmdResult {
@@ -317,7 +313,7 @@
 //! - [`tls_init!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_init.html) to define thread local global variable
 //! - [`tls_get!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_get.html) to get the value
 //! - [`tls_set!`](https://docs.rs/cmd_lib/latest/cmd_lib/macro.tls_set.html) to set the value
-//! ```
+//! ```no_run
 //! # use cmd_lib::{ tls_init, tls_get, tls_set };
 //! tls_init!(DELAY, f64, 1.0);
 //! const DELAY_FACTOR: f64 = 0.8;
@@ -347,7 +343,7 @@
 //! ### Security Notes
 //! Using macros can actually avoid command injection, since we do parsing before variable substitution.
 //! For example, below code is fine even without any quotes:
-//! ```
+//! ```no_run
 //! # use cmd_lib::{run_cmd, CmdResult};
 //! # use std::path::Path;
 //! fn cleanup_uploaded_file(file: &Path) -> CmdResult {

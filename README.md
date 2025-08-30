@@ -105,11 +105,7 @@ run_cmd! {
 
 ```rust
 let version = run_fun!(rustc --version | awk r"{print $2}")?;
-eprintln!("Your rust version is {}", version);
-
-// with pipes
-let n = run_fun!(echo "the quick brown fox jumped over the lazy dog" | wc -w)?;
-eprintln!("There are {} words in above sentence", n);
+info!("Your rust version is {version}");
 ```
 
 #### Abstraction without overhead
