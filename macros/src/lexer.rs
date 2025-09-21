@@ -418,7 +418,10 @@ impl Lexer {
                         self.extend_last_arg(quote!(#var.as_os_str()));
                     } else {
                         if !self.last_arg_str.is_empty() {
-                            abort!(span, "vector variable can only be used alone");
+                            abort!(
+                                span,
+                                "vector variable cannot have content immediately before it"
+                            );
                         }
                         self.args.push(ParseArg::ArgVec(quote!(#var)));
                     }

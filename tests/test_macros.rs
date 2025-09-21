@@ -372,3 +372,9 @@ fn test_empty_arg() {
 fn test_env_var_with_equal_sign() {
     assert!(run_cmd!(A="-c B=c" echo).is_ok());
 }
+
+#[test]
+fn test_vector_variable() {
+    let opts = ["-n", "hello"];
+    assert!(run_cmd!(echo $[opts]).is_ok())
+}

@@ -56,6 +56,28 @@
 //! run_fun!(echo "${msg 0}");
 //! ```
 //!
+//! ### Invalid vector variable syntax
+//!
+//! Vector variables cannot have text immediately before them:
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! let opts = ["-a", "-f"];
+//! run_cmd!(ls xxx$[opts]);
+//! ```
+//!
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! let msg = "hello";
+//! let opts = ["-a", "-f"];
+//! run_cmd!(ls $msg$[opts]);
+//! ```
+//!
+//! ```compile_fail
+//! # use cmd_lib::*;
+//! let opts = ["-a", "-f"];
+//! run_cmd!(echo$[opts]);
+//! ```
+//!
 //! ### Invalid redirect syntax
 //!
 //! Invalid redirect operator spacing:
