@@ -17,7 +17,6 @@ proc-macro = true
 syn = { version = "2", features = ["full"] }
 quote = "1"
 proc-macro2 = { version = "1.0.86", features = ["span-locations"] }
-proc-macro-error2 = "2"
 
 [dev-dependencies]
 cmd_lib = { path = ".." }

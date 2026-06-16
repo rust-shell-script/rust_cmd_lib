@@ -124,9 +124,14 @@
 //! run_cmd!(ls / /x >> > /tmp/f);
 //! ```
 
-use proc_macro_error2::{abort, proc_macro_error};
 use proc_macro2::{TokenStream, TokenTree};
 use quote::quote;
+
+macro_rules! bail {
+    ($span:expr, $($arg:tt)*) => {
+        return Err(syn::Error::new($span, format!($($arg)*)))
+    };
+}
 
 /// Mark main function to log error result by default.
 ///
@@ -182,24 +187,27 @@ pub fn main(
 /// ```
 /// Here we import the previous defined `my_cmd` command, so we can run it like a normal command.
 #[proc_macro]
-#[proc_macro_error]
 pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let item: proc_macro2::TokenStream = item.into();
     let mut cmd_fns = vec![];
     for t in item {
         if let TokenTree::Punct(ref ch) = t {
             if ch.as_char() != ',' {
-                abort!(t, "only comma is allowed");
+                return syn::Error::new(t.span(), "only comma is allowed")
+                    .to_compile_error()
+                    .into();
             }
         } else if let TokenTree::Ident(cmd) = t {
             let cmd_name = cmd.to_string();
             cmd_fns.push(quote!(&#cmd_name, #cmd));
         } else {
-            abort!(t, "expect a list of comma separated commands");
+            return syn::Error::new(t.span(), "expect a list of comma separated commands")
+                .to_compile_error()
+                .into();
         }
     }
 
-    quote! (
+    quote!(
         #(::cmd_lib::register_cmd(#cmd_fns);)*
     )
     .into()
@@ -232,10 +240,12 @@ pub fn use_custom_cmd(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
 /// # Ok::<(), std::io::Error>(())
 /// ```
 #[proc_macro]
-#[proc_macro_error]
 pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::Lexer::new(input.into()).scan().parse(false);
-    quote! ({
+    let cmds = match lexer::Lexer::new(input.into()).scan() {
+        Ok(p) => p.parse(false),
+        Err(e) => return e.to_compile_error().into(),
+    };
+    quote!({
         use ::cmd_lib::AsOsStr;
         #cmds.run_cmd()
     })
@@ -254,10 +264,12 @@ pub fn run_cmd(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// # Ok::<(), std::io::Error>(())
 /// ```
 #[proc_macro]
-#[proc_macro_error]
 pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::Lexer::new(input.into()).scan().parse(false);
-    quote! ({
+    let cmds = match lexer::Lexer::new(input.into()).scan() {
+        Ok(p) => p.parse(false),
+        Err(e) => return e.to_compile_error().into(),
+    };
+    quote!({
         use ::cmd_lib::AsOsStr;
         #cmds.run_fun()
     })
@@ -275,10 +287,12 @@ pub fn run_fun(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// }
 /// # Ok::<(), std::io::Error>(())
 #[proc_macro]
-#[proc_macro_error]
 pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::Lexer::new(input.into()).scan().parse(true);
-    quote! ({
+    let cmds = match lexer::Lexer::new(input.into()).scan() {
+        Ok(p) => p.parse(true),
+        Err(e) => return e.to_compile_error().into(),
+    };
+    quote!({
         use ::cmd_lib::AsOsStr;
         #cmds.spawn(false)
     })
@@ -304,18 +318,18 @@ pub fn spawn(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// # Ok::<(), std::io::Error>(())
 /// ```
 #[proc_macro]
-#[proc_macro_error]
 pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let cmds = lexer::Lexer::new(input.into()).scan().parse(true);
-    quote! ({
+    let cmds = match lexer::Lexer::new(input.into()).scan() {
+        Ok(p) => p.parse(true),
+        Err(e) => return e.to_compile_error().into(),
+    };
+    quote!({
         use ::cmd_lib::AsOsStr;
         #cmds.spawn_with_output()
     })
     .into()
 }
 
-#[proc_macro]
-#[proc_macro_error]
 /// Log a fatal message at the error level, and exit process.
 ///
 /// e.g:
@@ -330,8 +344,12 @@ pub fn spawn_with_output(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 /// Note that this macro is just for convenience. The process will exit with 1 and print
 /// "FATAL: ..." messages to error console. If you want to exit with other code, you
 /// should probably define your own macro or functions.
+#[proc_macro]
 pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let msg = parse_msg(input.into());
+    let msg = match parse_msg(input.into()) {
+        Ok(m) => m,
+        Err(e) => return e.to_compile_error().into(),
+    };
     quote!({
         ::cmd_lib::error!("FATAL: {} at {}:{}", #msg, file!(), line!());
         std::process::exit(1)
@@ -339,31 +357,27 @@ pub fn cmd_die(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
-fn parse_msg(input: TokenStream) -> TokenStream {
+fn parse_msg(input: TokenStream) -> syn::Result<TokenStream> {
     let mut iter = input.into_iter();
     let mut output = TokenStream::new();
-    let mut valid = false;
-    if let Some(ref tt) = iter.next() {
-        if let TokenTree::Literal(lit) = tt {
+    if let Some(tt) = iter.next() {
+        let mut valid = false;
+        if let TokenTree::Literal(lit) = &tt {
             let s = lit.to_string();
             if s.starts_with('\"') || s.starts_with('r') {
-                let str_lit = lexer::scan_str_lit(lit);
+                let str_lit = lexer::scan_str_lit(lit)?;
                 output.extend(quote!(#str_lit));
                 valid = true;
             }
         }
         if !valid {
-            abort!(tt, "invalid format: expect string literal");
+            bail!(tt.span(), "invalid format: expect string literal");
         }
-        if let Some(tt) = iter.next() {
-            abort!(
-                tt,
-                "expect string literal only, found extra {}",
-                tt.to_string()
-            );
+        if let Some(extra) = iter.next() {
+            bail!(extra.span(), "expect string literal only, found extra {}", extra);
         }
     }
-    output
+    Ok(output)
 }
 
 mod lexer;
