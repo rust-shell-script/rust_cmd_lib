@@ -374,7 +374,11 @@ fn parse_msg(input: TokenStream) -> syn::Result<TokenStream> {
             bail!(tt.span(), "invalid format: expect string literal");
         }
         if let Some(extra) = iter.next() {
-            bail!(extra.span(), "expect string literal only, found extra {}", extra);
+            bail!(
+                extra.span(),
+                "expect string literal only, found extra {}",
+                extra
+            );
         }
     }
     Ok(output)

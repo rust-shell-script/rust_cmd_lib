@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format is loosely
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-09-14
+
+- Emit CRLF in log output when stderr is a terminal, so log lines stay aligned
+  while a child process (e.g. `sudo` with a pty) holds the terminal in raw
+  mode. Closes #91.
+- Drop the `proc-macro-error2` dependency from `cmd_lib_macros`; macro errors
+  are now reported with `syn::Error`.
+
 ## [2.0.0] - 2025-08-30
 
 - Bump Rust edition to 2024; minimum supported Rust version raised accordingly.
