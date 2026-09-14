@@ -8,7 +8,7 @@ documentation = "https://docs.rs/cmd_lib"
 keywords = ["shell", "script", "cli", "process", "pipe"]
 categories = ["command-line-interface", "command-line-utilities"]
 readme = "README.md"
-version = "2.0.0"
+version = "2.0.1"
 authors = ["rust-shell-script <rust-shell-script@gmail.com>"]
 edition = "2024"
 rust-version = "1.88"
@@ -17,7 +17,7 @@ rust-version = "1.88"
 members = ["macros"]
 
 [dependencies]
-cmd_lib_macros = { version = "2.0.0", path = "./macros" }
+cmd_lib_macros = { version = "2.0.1", path = "./macros" }
 log = "0.4.27"
 faccess = "0.2.4"
 os_pipe = "1.2.2"
